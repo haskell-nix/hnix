@@ -3,6 +3,7 @@
 -- | Code that configures presentation parser for the CLI options
 module Nix.Options.Parser where
 
+import           Nix.Prelude
 import           Relude.Unsafe                  ( read )
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Char                      ( isDigit )

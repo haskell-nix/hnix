@@ -7,6 +7,7 @@
 module Nix.Var ()
 where
 
+import           Nix.Prelude
 import           Control.Monad.Ref
 import           Data.GADT.Compare  ( GEq(..) )
 import           Data.STRef         ( STRef )

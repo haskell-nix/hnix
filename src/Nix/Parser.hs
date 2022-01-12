@@ -40,7 +40,7 @@ module Nix.Parser
   )
 where
 
-import           Prelude                 hiding ( (<|>)
+import           Nix.Prelude             hiding ( (<|>)
                                                 , some
                                                 , many
                                                 )

@@ -13,6 +13,7 @@
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
+
 -- | Code that implements Nix builtins. Lists the functions that are built into the Nix expression evaluator. Some built-ins (aka `derivation`), are always in the scope, so they can be accessed by the name. To keap the namespace clean, most built-ins are inside the `builtins` scope - a set that contains all what is a built-in.
 module Nix.Builtins
   ( withNixContext
@@ -20,7 +21,7 @@ module Nix.Builtins
   )
 where
 
-
+import           Nix.Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )

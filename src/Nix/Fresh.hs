@@ -8,6 +8,7 @@
 
 module Nix.Fresh where
 
+import           Nix.Prelude
 import           Control.Monad.Base   ( MonadBase(..) )
 import           Control.Monad.Catch  ( MonadCatch
                                       , MonadMask

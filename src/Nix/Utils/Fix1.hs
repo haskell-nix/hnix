@@ -7,13 +7,15 @@
 
 module Nix.Utils.Fix1 where
 
+import           Nix.Prelude
 import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.Ref              ( MonadAtomicRef(..)
                                                 , MonadRef(..)
                                                 )
 import           Control.Monad.Catch            ( MonadCatch
                                                 , MonadMask
-                                                , MonadThrow )
+                                                , MonadThrow
+                                                )
 
 -- | The fixpoint combinator.
 -- Courtesy of Gregory Malecha.

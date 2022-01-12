@@ -1,4 +1,5 @@
 {-# language TypeFamilies #-}
+
 module Nix.Type.Env
   ( Env(..)
   , empty
@@ -15,7 +16,7 @@ module Nix.Type.Env
   )
 where
 
-import           Prelude                 hiding ( empty
+import           Nix.Prelude             hiding ( empty
                                                 , toList
                                                 , fromList
                                                 )

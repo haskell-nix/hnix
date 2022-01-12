@@ -12,7 +12,7 @@
 
 module Nix.Exec where
 
-import           Prelude                 hiding ( putStr
+import           Nix.Prelude             hiding ( putStr
                                                 , putStrLn
                                                 , print
                                                 )
@@ -44,7 +44,7 @@ import           Nix.Value.Monad
 import           Prettyprinter
 import qualified Text.Show.Pretty              as PS
 
-#ifdef MIN_VERSION_ghc_datasize
+#ifdef MIN_VERSION_ghc_datasize 
 import           GHC.DataSize
 #endif
 

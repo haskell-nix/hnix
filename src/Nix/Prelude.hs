@@ -3,7 +3,7 @@
 -- between our custom code ("Nix.Utils") that shadows over the outside prelude that is in use ("Relude")
 -- "Prelude" module has a problem of being imported & used by other projects.
 -- "Nix.Utils" as a module with a regular name does not have that problem.
-module Prelude
+module Nix.Prelude
     ( module Nix.Utils
     , module Relude
     ) where

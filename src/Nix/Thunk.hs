@@ -4,6 +4,7 @@
 
 module Nix.Thunk where
 
+import           Nix.Prelude
 import           Control.Monad.Trans.Writer ( WriterT )
 import qualified Text.Show
 

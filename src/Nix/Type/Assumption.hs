@@ -1,6 +1,7 @@
+{-# language TypeFamilies #-}
+
 -- | Basing on the Nix (Hindley–Milner) type system (that provides decidable type inference):
 -- gathering assumptions (inference evidence) about polymorphic types.
-{-# language TypeFamilies #-}
 module Nix.Type.Assumption
   ( Assumption(..)
   , empty
@@ -13,7 +14,7 @@ module Nix.Type.Assumption
   )
 where
 
-import           Prelude                 hiding ( Type
+import           Nix.Prelude             hiding ( Type
                                                 , empty
                                                 )
 
@@ -36,6 +37,7 @@ instance One Assumption where
   type OneItem Assumption = (VarName, Type)
   one vt = Assumption $ one vt
 
+--  2022-01-12: NOTE: `empty` implies Alternative. Either have Alternative or use `mempty`
 empty :: Assumption
 empty = Assumption mempty
 

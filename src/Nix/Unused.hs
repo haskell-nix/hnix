@@ -8,6 +8,7 @@
 module Nix.Unused
  where
 
+import           Nix.Prelude
 import           Control.Monad.Free             ( Free(..) )
 import           Data.Fix                       ( Fix(..) )
 import           Lens.Family2.TH                ( makeLensesBy )

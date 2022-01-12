@@ -18,14 +18,14 @@ module Nix.Type.Infer
   )
 where
 
+import           Nix.Prelude             hiding ( Constraint
+                                                , Type
+                                                , TVar
+                                                )
 import           Control.Monad.Catch            ( MonadThrow(..)
                                                 , MonadCatch(..)
                                                 )
 import           Control.Monad.Except           ( MonadError(throwError,catchError) )
-import           Prelude                 hiding ( Type
-                                                , TVar
-                                                , Constraint
-                                                )
 import           Control.Monad.Logic     hiding ( fail )
 import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadAtomicRef(..)
@@ -58,10 +58,6 @@ import           Nix.String
 import           Nix.Scope
 import           Nix.Type.Assumption     hiding ( extend )
 import qualified Nix.Type.Assumption           as Assumption
-                                                ( remove
-                                                , lookup
-                                                , keys
-                                                )
 import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type

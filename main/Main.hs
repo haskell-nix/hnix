@@ -4,6 +4,7 @@
 
 module Main ( main ) where
 
+import           Nix.Prelude
 import           Relude                        as Prelude ( force )
 import           Control.Comonad                ( extract )
 import qualified Control.Exception             as Exception

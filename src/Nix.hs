@@ -1,4 +1,3 @@
-
 module Nix
   ( module Nix.Cache
   , module Nix.Exec
@@ -25,6 +24,7 @@ module Nix
   )
 where
 
+import           Nix.Prelude
 import           Relude.Unsafe                  ( (!!) )
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Fix                       ( Fix )

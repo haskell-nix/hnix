@@ -1,12 +1,11 @@
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
 
-
 {-# options_ghc -fno-warn-name-shadowing #-}
 
 module Nix.Pretty where
 
-import           Prelude                  hiding ( toList, group )
+import           Nix.Prelude             hiding ( toList, group )
 import           Control.Monad.Free             ( Free(Free) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )

@@ -2,6 +2,7 @@
 
 module Main where
 
+import           Nix.Prelude
 import           Relude (force)
 import           Relude.Unsafe (read)
 import qualified Control.Exception as Exc

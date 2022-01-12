@@ -2,6 +2,7 @@
 
 module Nix.String.Coerce where
 
+import           Nix.Prelude
 import           Control.Monad.Catch            ( MonadThrow )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashMap.Lazy             as M

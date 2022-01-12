@@ -5,7 +5,7 @@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
-import           Prelude                 hiding ( readFile )
+import           Nix.Prelude             hiding ( readFile )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum

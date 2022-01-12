@@ -1,10 +1,10 @@
-
 -- | Shorthands for making Nix expressions.
 --
 -- Functions with an @F@ suffix return a more general type (base functor @F a@) without the outer
 -- 'Fix' wrapper that creates @a@.
 module Nix.Expr.Shorthands where
 
+import           Nix.Prelude
 import           Data.Fix
 import           Nix.Atoms
 import           Nix.Expr.Types

@@ -6,7 +6,7 @@
 
 module Nix.Value.Equal where
 
-import           Prelude                 hiding ( Comparison )
+import           Nix.Prelude             hiding ( Comparison )
 import           Control.Comonad                ( Comonad(extract))
 import           Control.Monad.Free             ( Free(Pure,Free) )
 import           Control.Monad.Trans.Except     ( throwE )

@@ -6,6 +6,7 @@
 
 module PrettyParseTests where
 
+import           Nix.Prelude
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Char

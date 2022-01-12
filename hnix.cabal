@@ -341,8 +341,8 @@ flag profiling
 
 library
   exposed-modules:
-    Prelude
     Nix
+    Nix.Prelude
     Nix.Utils
     Nix.Atoms
     Nix.Builtins
@@ -398,9 +398,6 @@ library
     Paths_hnix
   hs-source-dirs:
     src
-  mixins:
-      base hiding (Prelude)
-    , relude
   ghc-options:
     -Wall
     -fprint-potential-instances
@@ -469,7 +466,8 @@ library
     , vector >= 0.12.0 && < 0.13
     , xml >= 1.3.14 && < 1.4
   default-extensions:
-      OverloadedStrings
+      NoImplicitPrelude
+    , OverloadedStrings
     , DeriveGeneric
     , DeriveDataTypeable
     , DeriveFunctor
@@ -532,11 +530,9 @@ executable hnix
     , serialise
     , template-haskell
     , time
-  mixins:
-      base hiding (Prelude)
-    , relude
   default-extensions:
-      OverloadedStrings
+      NoImplicitPrelude
+    , OverloadedStrings
     , DeriveGeneric
     , DeriveDataTypeable
     , DeriveFunctor
@@ -579,9 +575,6 @@ test-suite hnix-tests
     PrettyTests
     ReduceExprTests
     TestCommon
-  mixins:
-      base hiding (Prelude)
-    , relude
   hs-source-dirs:
     tests
   ghc-options:
@@ -615,7 +608,8 @@ test-suite hnix-tests
     , time
     , unix-compat
   default-extensions:
-      OverloadedStrings
+      NoImplicitPrelude
+    , OverloadedStrings
     , DeriveGeneric
     , DeriveDataTypeable
     , DeriveFunctor
@@ -650,9 +644,6 @@ benchmark hnix-benchmarks
     ParserBench
   hs-source-dirs:
     benchmarks
-  mixins:
-      base hiding (Prelude)
-    , relude
   ghc-options:
     -Wall
   build-depends:
@@ -668,7 +659,8 @@ benchmark hnix-benchmarks
     , template-haskell
     , time
   default-extensions:
-      OverloadedStrings
+      NoImplicitPrelude
+    , OverloadedStrings
     , DeriveGeneric
     , DeriveDataTypeable
     , DeriveFunctor

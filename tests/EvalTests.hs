@@ -4,8 +4,12 @@
 {-# options_ghc -Wno-missing-signatures #-}
 
 
-module EvalTests (tests, genEvalCompareTests) where
+module EvalTests
+  ( tests
+  , genEvalCompareTests
+  ) where
 
+import           Nix.Prelude
 import           Control.Monad.Catch
 import           Data.List ((\\))
 import qualified Data.Set as S

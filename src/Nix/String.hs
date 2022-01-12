@@ -32,6 +32,7 @@ where
 
 
 
+import           Nix.Prelude             hiding ( Type, TVar )
 import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell))
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S

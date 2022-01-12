@@ -3,9 +3,9 @@
 {-# language RankNTypes #-}
 
 
-
 module Nix.Eval where
 
+import           Nix.Prelude
 import           Relude.Extra                   ( set )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )

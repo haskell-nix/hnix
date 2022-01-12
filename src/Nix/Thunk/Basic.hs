@@ -10,6 +10,7 @@ module Nix.Thunk.Basic
   , MonadBasicThunk
   ) where
 
+import           Nix.Prelude
 import           Control.Monad.Ref              ( MonadRef(Ref, newRef, readRef, writeRef)
                                                 , MonadAtomicRef(atomicModifyRef)
                                                 )

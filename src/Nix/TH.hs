@@ -5,6 +5,7 @@
 
 module Nix.TH where
 
+import           Nix.Prelude
 import           Data.Generics.Aliases          ( extQ )
 import qualified Data.Set                      as Set
 import           Language.Haskell.TH

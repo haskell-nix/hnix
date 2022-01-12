@@ -4,6 +4,7 @@
 
 module Nix.Cited.Basic where
 
+import           Nix.Prelude
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )

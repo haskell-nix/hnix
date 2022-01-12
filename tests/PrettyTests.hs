@@ -1,6 +1,8 @@
 {-# language TemplateHaskell #-}
-module PrettyTests (tests) where
 
+module PrettyTests  ( tests ) where
+
+import           Nix.Prelude
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.TH

@@ -13,6 +13,7 @@
 module Nix.Value
 where
 
+import           Nix.Prelude
 import           Control.Comonad                ( Comonad
                                                 , extract
                                                 )
