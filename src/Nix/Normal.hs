@@ -10,6 +10,7 @@
 -- And so do not converge into a normal form.
 module Nix.Normal where
 
+import           Nix.Prelude
 import           Control.Monad.Free        ( Free(..) )
 import           Data.Set                  ( member
                                            , insert

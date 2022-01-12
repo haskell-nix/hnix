@@ -11,6 +11,7 @@
 
 module Nix.Lint where
 
+import           Nix.Prelude
 import           Relude.Unsafe                 as Unsafe ( head )
 import           Control.Exception              ( throw )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )

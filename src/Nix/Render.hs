@@ -9,6 +9,7 @@
 
 module Nix.Render where
 
+import           Nix.Prelude
 import qualified Data.Set                      as Set
 import           Nix.Utils.Fix1                 ( Fix1T
                                                 , MonadFix1T
@@ -24,7 +25,7 @@ import qualified Data.Text                     as Text
 class (MonadFail m, MonadIO m) => MonadFile m where
     readFile :: Path -> m Text
     default readFile :: (MonadTrans t, MonadIO m', MonadFile m', m ~ t m') => Path -> m Text
-    readFile = liftIO . Prelude.readFile
+    readFile = liftIO . Nix.Prelude.readFile
     listDirectory :: Path -> m [Path]
     default listDirectory :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m [Path]
     listDirectory = lift . listDirectory
@@ -51,7 +52,7 @@ class (MonadFail m, MonadIO m) => MonadFile m where
     getSymbolicLinkStatus = lift . getSymbolicLinkStatus
 
 instance MonadFile IO where
-  readFile              = Prelude.readFile
+  readFile              = Nix.Prelude.readFile
   listDirectory         = coerce S.listDirectory
   getCurrentDirectory   = coerce S.getCurrentDirectory
   canonicalizePath      = coerce S.canonicalizePath

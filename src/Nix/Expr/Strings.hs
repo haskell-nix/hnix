@@ -1,7 +1,7 @@
-
 -- | Functions for manipulating nix strings.
 module Nix.Expr.Strings where
 
+import           Nix.Prelude
 import           Relude.Unsafe                 as Unsafe
 -- Please, switch things to NonEmpty
 import           Data.List                      ( dropWhileEnd

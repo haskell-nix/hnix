@@ -1,8 +1,9 @@
-{-# language CPP            #-}
-{-# language DeriveAnyClass #-}
+{-# language CPP               #-}
+{-# language DeriveAnyClass    #-}
 
 module Nix.Atoms where
 
+import           Nix.Prelude
 import           Codec.Serialise                ( Serialise )
 
 import           Data.Data                      ( Data)

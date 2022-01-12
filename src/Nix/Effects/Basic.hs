@@ -2,7 +2,7 @@
 
 module Nix.Effects.Basic where
 
-import           Prelude                 hiding ( head
+import           Nix.Prelude             hiding ( head
                                                 )
 import           Relude.Unsafe                  ( head )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )

@@ -15,6 +15,7 @@
 
 module Nix.Convert where
 
+import           Nix.Prelude
 import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
 import           Nix.Atoms

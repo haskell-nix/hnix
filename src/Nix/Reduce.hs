@@ -20,6 +20,7 @@ module Nix.Reduce
   , reducingEvalExpr
   ) where
 
+import           Nix.Prelude
 import           Control.Monad.Catch            ( MonadCatch(catch) )
 #if !MIN_VERSION_base(4,13,0)
 import           Prelude                 hiding ( fail )

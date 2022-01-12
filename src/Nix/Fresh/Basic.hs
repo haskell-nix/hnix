@@ -8,6 +8,7 @@ module Nix.Fresh.Basic where
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail ( MonadFail )
 #endif
+import           Nix.Prelude
 import           Nix.Effects
 import           Nix.Render
 import           Nix.Fresh

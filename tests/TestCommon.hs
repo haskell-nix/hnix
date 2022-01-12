@@ -1,6 +1,6 @@
-
 module TestCommon where
 
+import           Nix.Prelude
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
 import           Data.Time

@@ -16,6 +16,7 @@ module Nix.Expr.Types.Annotated
   )
 where
 
+import           Nix.Prelude
 import           Codec.Serialise
 import           Control.DeepSeq
 import           Data.Aeson                     ( ToJSON(..)

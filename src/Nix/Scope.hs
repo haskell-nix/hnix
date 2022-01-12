@@ -1,4 +1,4 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# language UndecidableInstances #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
@@ -6,6 +6,7 @@
 
 module Nix.Scope where
 
+import           Nix.Prelude
 import qualified Data.HashMap.Lazy             as M
 import qualified Text.Show
 import           Lens.Family2

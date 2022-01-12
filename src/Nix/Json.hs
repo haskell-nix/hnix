@@ -2,6 +2,7 @@
 
 module Nix.Json where
 
+import           Nix.Prelude
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.Vector                   as V

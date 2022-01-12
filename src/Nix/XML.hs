@@ -1,8 +1,8 @@
-
 module Nix.XML
   ( toXML )
 where
 
+import           Nix.Prelude
 import qualified Data.HashMap.Lazy             as M
 import           Nix.Atoms
 import           Nix.Expr.Types

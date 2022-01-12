@@ -15,6 +15,7 @@ module Nix.Frames
   )
 where
 
+import           Nix.Prelude
 import           Data.Typeable           hiding ( typeOf )
 import           Control.Monad.Catch            ( MonadThrow(..) )
 import qualified Text.Show

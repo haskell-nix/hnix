@@ -12,9 +12,10 @@
 
 module Nix.Effects where
 
-import           Prelude                 hiding ( putStrLn
+import           Nix.Prelude             hiding ( putStrLn
                                                 , print
                                                 )
+import qualified Nix.Prelude                   as Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text

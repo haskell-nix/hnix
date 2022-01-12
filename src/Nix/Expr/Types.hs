@@ -20,7 +20,8 @@
 -- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations.
 module Nix.Expr.Types where
 
-import qualified Codec.Serialise                as Serialise
+import           Nix.Prelude
+import qualified Codec.Serialise               as Serialise
 import           Codec.Serialise                ( Serialise )
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson

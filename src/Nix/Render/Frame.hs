@@ -9,7 +9,7 @@
 -- | Code for rendering/representation of the messages packaged with their context (Frames).
 module Nix.Render.Frame where
 
-import           Prelude             hiding ( Comparison )
+import           Nix.Prelude         hiding ( Comparison )
 import           GHC.Exception              ( ErrorCall )
 import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval            hiding ( addMetaInfo )

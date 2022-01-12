@@ -5,6 +5,7 @@
 
 module Nix.Cited where
 
+import           Nix.Prelude
 import           Control.Comonad
 import           Control.Comonad.Env
 import           Lens.Family2.TH

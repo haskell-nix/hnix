@@ -1,6 +1,6 @@
-
 module NixLanguageTests (genTests) where
 
+import           Nix.Prelude
 import           Control.Exception
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.ST

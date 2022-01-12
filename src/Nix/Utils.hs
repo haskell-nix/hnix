@@ -1,4 +1,3 @@
-{-# language NoImplicitPrelude #-}
 {-# language CPP #-}
 {-# language GeneralizedNewtypeDeriving #-}
 

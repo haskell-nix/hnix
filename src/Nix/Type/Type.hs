@@ -3,7 +3,7 @@
 --   Therefore -> from this the type inference follows.
 module Nix.Type.Type where
 
-import           Prelude                 hiding (Type, TVar)
+import           Nix.Prelude                 hiding ( Type, TVar )
 import           Nix.Expr.Types
 
 -- | Hindrey-Milner type interface

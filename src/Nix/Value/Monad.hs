@@ -1,4 +1,3 @@
-
 module Nix.Value.Monad where
 
 -- * @MonadValue@ - a main implementation class

@@ -1,6 +1,6 @@
-
 module Nix.Context where
 
+import           Nix.Prelude
 import           Nix.Options                    ( Options )
 import           Nix.Scope                      ( Scopes )
 import           Nix.Frames                     ( Frames )

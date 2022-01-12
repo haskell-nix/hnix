@@ -3,6 +3,7 @@
 -- | Definitions & defaults for the CLI options
 module Nix.Options where
 
+import           Nix.Prelude
 import           Data.Time
 
 --  2021-07-15: NOTE: What these are? They need to be documented.

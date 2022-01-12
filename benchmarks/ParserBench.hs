@@ -1,5 +1,6 @@
 module ParserBench (benchmarks) where
 
+import           Nix.Prelude
 import           Nix.Parser
 
 import           Criterion

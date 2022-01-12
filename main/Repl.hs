@@ -14,16 +14,16 @@ module Repl
   , main'
   ) where
 
-import           Prelude                 hiding ( state )
+import           Nix.Prelude             hiding ( state )
 import           Nix                     hiding ( exec )
 import           Nix.Scope
 import           Nix.Value.Monad                ( demand )
 
-import qualified Data.HashMap.Lazy           as M
+import qualified Data.HashMap.Lazy             as M
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
-import qualified Data.Text                   as Text
-import qualified Data.Text.IO                as Text
+import qualified Data.Text                     as Text
+import qualified Data.Text.IO                  as Text
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -33,7 +33,7 @@ import           Prettyprinter                  ( Doc
                                                 , space
                                                 )
 import qualified Prettyprinter
-import qualified Prettyprinter.Render.Text    as Prettyprinter
+import qualified Prettyprinter.Render.Text     as Prettyprinter
 
 import           System.Console.Haskeline.Completion
                                                 ( Completion(isFinished)
@@ -49,9 +49,9 @@ import           System.Console.Repline         ( Cmd
                                                 , HaskelineT
                                                 , evalRepl
                                                 )
-import qualified System.Console.Repline      as Console
-import qualified System.Exit                 as Exit
-import qualified System.IO.Error             as Error
+import qualified System.Console.Repline        as Console
+import qualified System.Exit                   as Exit
+import qualified System.IO.Error               as Error
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
