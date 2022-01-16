@@ -9,6 +9,8 @@ import qualified Data.Text.Lazy.Encoding       as TL
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key                as AKM
 import qualified Data.Aeson.KeyMap             as AKM
+#else
+import           Nix.Expr.Types
 #endif
 import qualified Data.Vector                   as V
 import           Nix.Atoms
