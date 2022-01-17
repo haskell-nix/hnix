@@ -56,20 +56,28 @@ groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 -- previously passed.
 newFailingTests :: Set String
 newFailingTests = Set.fromList
-  [ 
-    "eval-okay-hash"
-  , "eval-okay-path"  -- #128
+  [ "eval-okay-path"  -- #128
   , "eval-okay-fromTOML"
-  , "eval-okay-ind-string" -- #1000 #610 
+  , "eval-okay-zipAttrsWith"
+  , "eval-okay-tojson"
+  , "eval-okay-search-path"
+  , "eval-okay-sort"
+  , "eval-okay-path-antiquotation"
+  , "eval-okay-groupBy"
+  , "eval-okay-getattrpos-functionargs"
+  , "eval-okay-floor-ceil"
+  , "eval-okay-attrs6"
   ]
 
 -- | Upstream tests that test cases that HNix disaded as a misfeature that is used so rarely
 -- that it more effective to fix it & lint it out of existance.
 deprecatedRareNixQuirkTests :: Set String
-deprecatedRareNixQuirkTests = Set.fromList $
-  one
-    -- A rare quirk of Nix that is proper to fix&enforce then to support (see git commit history)
+deprecatedRareNixQuirkTests = Set.fromList
+  [ -- A rare quirk of Nix that is proper to fix&enforce then to support (see git commit history)
     "eval-okay-strings-as-attrs-names"
+    -- Nix upstream removed this test alltogather
+  , "eval-okay-hash"
+  ]
 
 genTests :: IO TestTree
 genTests =
