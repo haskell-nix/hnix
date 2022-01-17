@@ -46,6 +46,7 @@ import           Data.Char                      ( isDigit )
 import           Data.Foldable                  ( foldrM )
 import           Data.Fix                       ( foldFix )
 import           Data.List                      ( partition )
+import qualified Data.HashSet                  as HS
 import qualified Data.HashMap.Lazy             as M
 import           Data.Scientific
 import qualified Data.Set                      as S
@@ -470,6 +471,20 @@ getAttrNix x y =
     (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
 
     attrsetGet key aset
+
+unsafeDiscardOutputDependencyNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> m (NValue t f m)
+unsafeDiscardOutputDependencyNix nv =
+  do
+    (nc, ns) <- (getStringContext &&& ignoreContext) <$> fromValue nv
+    toValue $ mkNixString (HS.map discard nc) ns
+ where
+  discard :: StringContext -> StringContext
+  discard (StringContext AllOutputs a) = StringContext DirectPath a
+  discard x                            = x
 
 unsafeGetAttrPosNix
   :: forall e t f m
@@ -1906,7 +1921,7 @@ builtinsList =
     , add0 Normal   "true"             (pure $ mkNVBool True)
     , add  Normal   "tryEval"          tryEvalNix
     , add  Normal   "typeOf"           typeOfNix
-    --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
+    , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependencyNix
     , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
     , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
     , add  Normal   "valueSize"        getRecursiveSizeNix
