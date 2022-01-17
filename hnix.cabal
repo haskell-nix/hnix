@@ -12,21 +12,10 @@ license:        BSD-3-Clause
 license-file:   License
 build-type:     Simple
 data-dir:       data/
-data-files:
-  nix/corepkgs/buildenv.nix
-  nix/corepkgs/unpack-channel.nix
-  nix/corepkgs/derivation.nix
-  nix/corepkgs/fetchurl.nix
-  nix/corepkgs/imported-drv-to-derivation.nix
 extra-source-files:
   ChangeLog.md
   ReadMe.md
   License
-  data/nix/corepkgs/buildenv.nix
-  data/nix/corepkgs/unpack-channel.nix
-  data/nix/corepkgs/derivation.nix
-  data/nix/corepkgs/fetchurl.nix
-  data/nix/corepkgs/imported-drv-to-derivation.nix
   data/nix/tests/lang/binary-data
   data/nix/tests/lang/data
   data/nix/tests/lang/dir1/a.nix
@@ -38,7 +27,6 @@ extra-source-files:
   data/nix/tests/lang/dir4/a.nix
   data/nix/tests/lang/dir4/c.nix
   data/nix/tests/lang/eval-fail-abort.nix
-  data/nix/tests/lang/eval-fail-antiquoted-path.nix
   data/nix/tests/lang/eval-fail-assert.nix
   data/nix/tests/lang/eval-fail-bad-antiquote-1.nix
   data/nix/tests/lang/eval-fail-bad-antiquote-2.nix
