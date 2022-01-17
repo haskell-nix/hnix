@@ -1833,6 +1833,7 @@ builtinsList =
     , add2 Normal   "bitXor"           bitXorNix
     , add0 Normal   "builtins"         builtinsBuiltinNix
     , add2 Normal   "catAttrs"         catAttrsNix
+    , add' Normal   "ceil"             (arity1 (ceiling @Float @Integer))
     , add2 Normal   "compareVersions"  compareVersionsNix
     , add  Normal   "concatLists"      concatListsNix
     , add2 Normal   "concatMap"        concatMapNix
@@ -1852,6 +1853,7 @@ builtinsList =
     , add2 Normal   "filter"           filterNix
     --, add  Normal   "filterSource"     filterSource
     , add2 Normal   "findFile"         findFileNix
+    , add' Normal   "floor"            (arity1 (floor @Float @Integer))
     , add3 Normal   "foldl'"           foldl'Nix
     , add  Normal   "fromJSON"         fromJSONNix
     --, add  Normal   "fromTOML"         fromTOML
