@@ -885,6 +885,50 @@ builtinsBuiltinNix
   => m (NValue t f m)
 builtinsBuiltinNix = throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred"
 
+attrGetOr'
+  :: forall e t f m v a
+   . (MonadNix e t f m, FromValue v m (NValue t f m))
+  => AttrSet (NValue t f m)
+  -> VarName
+  -> m a
+  -> (v -> m a)
+  -> m a
+attrGetOr' attrs n d f =
+  maybe
+    d
+    (f <=< fromValue)
+    (M.lookup n attrs)
+
+attrGetOr
+  :: forall e t f m v a
+   . (MonadNix e t f m, FromValue v m (NValue t f m))
+  => AttrSet (NValue t f m)
+  -> VarName
+  -> a
+  -> (v -> m a)
+  -> m a
+attrGetOr attrs name fallback = attrGetOr' attrs name (pure fallback)
+
+--  NOTE: It is a part of the implementation taken from:
+--  https://github.com/haskell-nix/hnix/pull/755
+--  look there for `sha256` and/or `filterSource`
+pathNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
+pathNix arg =
+  do
+    attrs <- fromValue @(AttrSet (NValue t f m)) arg
+    path      <- fmap (coerce . toString) $ fromStringNoContext =<< coerceToPath =<< attrsetGet "path" attrs
+
+    -- TODO: Fail on extra args
+    -- XXX: This is a very common pattern, we could factor it out
+    name      <- toText <$> attrGetOr attrs "name"      (takeFileName path) (fmap (coerce . toString) . fromStringNoContext)
+    recursive <- attrGetOr attrs "recursive" True          pure
+
+    Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name path recursive False
+    -- TODO: Ensure that s matches sha256 when not empty
+    pure $ mkNVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
+ where
+  coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
+
 dirOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOfNix nvdir =
   do
@@ -1899,7 +1943,7 @@ builtinsList =
     , add0 Normal   "null"             (pure nvNull)
     , add  Normal   "parseDrvName"     parseDrvNameNix
     , add2 Normal   "partition"        partitionNix
-    --, add  Normal   "path"             path
+    , add  Normal   "path"             pathNix
     , add  Normal   "pathExists"       pathExistsNix
     , add  Normal   "readDir"          readDirNix
     , add  Normal   "readFile"         readFileNix
