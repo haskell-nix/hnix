@@ -1440,12 +1440,19 @@ hashFileNix nsAlgo nvfilepath = Prim $ hash =<< fileContent
 -- each element. It returns an attribute set where each attribute value contains the 
 -- elements of list that are mapped to the same corresponding attribute name returned by f.
 groupByNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> NValue t f m -> m (NValue t f m)
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
 groupByNix nvfun nvlist = do
   list   <- demand nvlist
   fun    <- demand nvfun
   (f, l) <- extractP (fun, list)
-  mkNVSet mempty . fmap (mkNVList . reverse) . M.fromListWith (<>) <$> traverse (app f) l
+  mkNVSet mempty
+    .   fmap (mkNVList . reverse)
+    .   M.fromListWith (<>)
+    <$> traverse (app f) l
  where
   app f x = do
     name <- fromValue @Text =<< f x
