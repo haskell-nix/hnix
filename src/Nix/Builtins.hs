@@ -1435,6 +1435,31 @@ hashFileNix nsAlgo nvfilepath = Prim $ hash =<< fileContent
   fileContent = mkNixStringWithoutContext <$> Nix.Render.readFile nvfilepath
 
 
+-- | groupByNix
+-- Groups elements of list together by the string returned from the function f called on 
+-- each element. It returns an attribute set where each attribute value contains the 
+-- elements of list that are mapped to the same corresponding attribute name returned by f.
+groupByNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> NValue t f m -> m (NValue t f m)
+groupByNix nvfun nvlist =
+  do
+    fun <- demand nvfun
+    list <- demand nvlist
+    case (fun, list) of
+      (NVClosure _ f, NVList list) -> mkNVSet M.empty <$> result
+        where
+          g :: NValue t f m -> m (VarName, [NValue t f m])
+          g x = do
+            r <- f x
+            case r of
+              (NVStr nvName) -> do
+                name <- fromStringNoContext nvName
+                pure (VarName name, one x)
+              _v ->  throwError $ ErrorCall $ "builtins.groupBy: expect function to return attribute name, got " <> show _v
+          result = fmap (mkNVList . reverse) . M.fromListWith (<>) <$> sequence (g <$> list)
+      _v -> throwError $ ErrorCall $ "builtins.groupBy: expected function and list, got " <> show _v
+
+
 placeHolderNix :: forall t f m e . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolderNix p =
   do
@@ -1863,6 +1888,7 @@ builtinsList =
     , add2 Normal   "getAttr"          getAttrNix
     , add  Normal   "getContext"       getContextNix
     , add  Normal   "getEnv"           getEnvNix
+    , add2 Normal   "groupBy"          groupByNix
     , add2 Normal   "hasAttr"          hasAttrNix
     , add  Normal   "hasContext"       hasContextNix
     , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
