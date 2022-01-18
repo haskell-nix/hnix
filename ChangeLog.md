@@ -1,6 +1,37 @@
 
 # ChangeLog
 
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.15.0...0.16.0#files_bucket) 0.16.0
+
+On update problems, please reach out to us. For support refere to: https://github.com/haskell-nix/hnix/issues/984
+
+Partial log (for now):
+
+* Breaking:
+  * Where `coerce` should work, removed `newtype` accessors.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/1006/files), [(link)](https://github.com/haskell-nix/hnix/pull/1009/files) Incomprehensible record accessors zoo like: `arg`, `options`, `unStore`, `scFlavor`, `nsContext` `_provenance` - was organized, now all record accessors start with `get*`, and their names tend to have according unique sematic meaning of data action they do.
+  * Builder names got unified. Now they all start with `mk*`. So a lof of `nvSet` became `mkNVSet`.
+  * `Nix.String` builders/destructors instead of `make` use `mk`, & where mentioning of `string` is superflous - dropped it from the name, so `stringIgnoreContext`, became `ignoreContext`.
+  * Type system:
+    * Things that are paths are now `newtype Path = Path String`.
+    * Things that are indentifier names are now `newtype VarName = VarName Text`.
+    * Function signatures changed accordingly.
+
+* Additional:
+  * [(link)](https://github.com/haskell-nix/hnix/pull/1019) Matched expression escaping & its representation to breaking changes in Nix `2.4`.
+  * `Builtins` (`builtins` function set) gained functions:
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1032) `path`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1020) `isPathNix`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1032) `unsafeDiscardOutputDependency`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1031) `ceil`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1031) `floor`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1021) `hashFile`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1033) `groupBy`
+  * [(link)](https://github.com/haskell-nix/hnix/pull/1029) `data/nix` submodule (& its tests) updated to 2022-01-17.
+
+* Other notes:
+  * `Shorthands` was kept untouched.
+
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.14.0...0.15.0#files_bucket) 0.15.0
 
 For support refere to: https://github.com/haskell-nix/hnix/issues/984
