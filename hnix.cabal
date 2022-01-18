@@ -1,6 +1,6 @@
 cabal-version:  2.2
 name:           hnix
-version:        0.15.0
+version:        0.16.0
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
@@ -392,7 +392,7 @@ library
   build-depends:
       aeson >= 1.4.2 && < 1.6 || >= 2.0 && < 2.1
     , array >= 0.4 && < 0.6
-    , base >= 4.12 && < 5
+    , base >= 4.12 && < 4.16
     , base16-bytestring >= 0.1.1 && < 1.1
     , binary >= 0.8.5 && < 0.9
     , bytestring >= 0.10.8 && < 0.12
