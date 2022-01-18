@@ -33,10 +33,10 @@ import qualified "hashing" Crypto.Hash.SHA1    as SHA1
 import qualified "hashing" Crypto.Hash.SHA256  as SHA256
 import qualified "hashing" Crypto.Hash.SHA512  as SHA512
 import qualified Data.Aeson                    as A
-#if MIN_VERSION_aeson(2,0,0)
-import qualified Data.Aeson.Key                as AKM
-import qualified Data.Aeson.KeyMap             as AKM
-#endif
+
+
+
+
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
@@ -1441,23 +1441,25 @@ hashFileNix nsAlgo nvfilepath = Prim $ hash =<< fileContent
 -- elements of list that are mapped to the same corresponding attribute name returned by f.
 groupByNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> NValue t f m -> m (NValue t f m)
-groupByNix nvfun nvlist =
-  do
-    fun <- demand nvfun
-    list <- demand nvlist
-    case (fun, list) of
-      (NVClosure _ f, NVList list) -> mkNVSet M.empty <$> result
-        where
-          g :: NValue t f m -> m (VarName, [NValue t f m])
-          g x = do
-            r <- f x
-            case r of
-              (NVStr nvName) -> do
-                name <- fromStringNoContext nvName
-                pure (VarName name, one x)
-              _v ->  throwError $ ErrorCall $ "builtins.groupBy: expect function to return attribute name, got " <> show _v
-          result = fmap (mkNVList . reverse) . M.fromListWith (<>) <$> sequence (g <$> list)
-      _v -> throwError $ ErrorCall $ "builtins.groupBy: expected function and list, got " <> show _v
+groupByNix nvfun nvlist = do
+  list   <- demand nvlist
+  fun    <- demand nvfun
+  (f, l) <- extractP (fun, list)
+  mkNVSet M.empty . fmap (mkNVList . reverse) . M.fromListWith (<>) <$> sequence
+    (app f <$> l)
+ where
+  app f x = do
+    name <- fromValue @Text =<< f x
+    pure (VarName name, one x)
+  extractP (NVBuiltin _ f, NVList l) = pure (f, l)
+  extractP (NVClosure _ f, NVList l) = pure (f, l)
+  extractP _v =
+    throwError
+      $  ErrorCall
+      $  "builtins.groupBy: expected function and list, got "
+      <> show _v
+
+
 
 
 placeHolderNix :: forall t f m e . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1475,14 +1477,14 @@ placeHolderNix p =
       $ Base32.encode
       -- Please, stop Text -> Bytestring here after migration to Text
       $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
-#if MIN_VERSION_base16_bytestring(1,0,0)
+
         -- Please, stop Text -> String here after migration to Text
         Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
         Right d -> d
-#else
-        (d, "") -> d
-        (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
-#endif
+
+
+
+
     where
       bytes :: NixString -> ByteString
       bytes = encodeUtf8 . body
@@ -1564,11 +1566,11 @@ fromJSONNix nvjson =
       A.Object m ->
         traverseToNValue
           (mkNVSet mempty)
-#if MIN_VERSION_aeson(2,0,0)
-          (M.mapKeys (coerce . AKM.toText)  $ AKM.toHashMap m)
-#else
+
+
+
           (M.mapKeys coerce m)
-#endif
+
       A.Array  l -> traverseToNValue mkNVList (V.toList l)
       A.String s -> pure $ mkNVStrWithoutContext s
       A.Number n ->
