@@ -56,8 +56,7 @@ groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 -- previously passed.
 newFailingTests :: Set String
 newFailingTests = Set.fromList
-  [ "eval-okay-path"  -- #128
-  , "eval-okay-fromTOML"
+  [ "eval-okay-fromTOML"
   , "eval-okay-zipAttrsWith"
   , "eval-okay-tojson"
   , "eval-okay-search-path"
@@ -74,7 +73,7 @@ deprecatedRareNixQuirkTests :: Set String
 deprecatedRareNixQuirkTests = Set.fromList
   [ -- A rare quirk of Nix that is proper to fix&enforce then to support (see git commit history)
     "eval-okay-strings-as-attrs-names"
-    -- Nix upstream removed this test alltogather
+    -- Nix upstream removed this test altogether
   , "eval-okay-hash"
   ]
 

@@ -46,6 +46,7 @@ import           Data.Char                      ( isDigit )
 import           Data.Foldable                  ( foldrM )
 import           Data.Fix                       ( foldFix )
 import           Data.List                      ( partition )
+import qualified Data.HashSet                  as HS
 import qualified Data.HashMap.Lazy             as M
 import           Data.Scientific
 import qualified Data.Set                      as S
@@ -471,6 +472,20 @@ getAttrNix x y =
 
     attrsetGet key aset
 
+unsafeDiscardOutputDependencyNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> m (NValue t f m)
+unsafeDiscardOutputDependencyNix nv =
+  do
+    (nc, ns) <- (getStringContext &&& ignoreContext) <$> fromValue nv
+    toValue $ mkNixString (HS.map discard nc) ns
+ where
+  discard :: StringContext -> StringContext
+  discard (StringContext AllOutputs a) = StringContext DirectPath a
+  discard x                            = x
+
 unsafeGetAttrPosNix
   :: forall e t f m
    . MonadNix e t f m
@@ -869,6 +884,42 @@ builtinsBuiltinNix
    . MonadNix e t f m
   => m (NValue t f m)
 builtinsBuiltinNix = throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred"
+
+-- a safer version of `attrsetGet`
+attrGetOr
+  :: forall e t f m v a
+   . (MonadNix e t f m, FromValue v m (NValue t f m))
+  => a
+  -> (v -> m a)
+  -> VarName
+  -> AttrSet (NValue t f m)
+  -> m a
+attrGetOr fallback fun name attrs =
+  maybe
+    (pure fallback)
+    (fun <=< fromValue)
+    (M.lookup name attrs)
+
+
+--  NOTE: It is a part of the implementation taken from:
+--  https://github.com/haskell-nix/hnix/pull/755
+--  look there for `sha256` and/or `filterSource`
+pathNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
+pathNix arg =
+  do
+    attrs <- fromValue @(AttrSet (NValue t f m)) arg
+    path      <- fmap (coerce . toString) $ fromStringNoContext =<< coerceToPath =<< attrsetGet "path" attrs
+
+    -- TODO: Fail on extra args
+    -- XXX: This is a very common pattern, we could factor it out
+    name      <- toText <$> attrGetOr (takeFileName path) (fmap (coerce . toString) . fromStringNoContext) "name" attrs
+    recursive <- attrGetOr True pure "recursive" attrs
+
+    Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name path recursive False
+    -- TODO: Ensure that s matches sha256 when not empty
+    pure $ mkNVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
+ where
+  coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
 
 dirOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOfNix nvdir =
@@ -1886,7 +1937,7 @@ builtinsList =
     , add0 Normal   "null"             (pure nvNull)
     , add  Normal   "parseDrvName"     parseDrvNameNix
     , add2 Normal   "partition"        partitionNix
-    --, add  Normal   "path"             path
+    , add  Normal   "path"             pathNix
     , add  Normal   "pathExists"       pathExistsNix
     , add  Normal   "readDir"          readDirNix
     , add  Normal   "readFile"         readFileNix
@@ -1908,7 +1959,7 @@ builtinsList =
     , add0 Normal   "true"             (pure $ mkNVBool True)
     , add  Normal   "tryEval"          tryEvalNix
     , add  Normal   "typeOf"           typeOfNix
-    --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
+    , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependencyNix
     , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
     , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
     , add  Normal   "valueSize"        getRecursiveSizeNix
