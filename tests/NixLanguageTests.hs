@@ -62,7 +62,6 @@ newFailingTests = Set.fromList
   , "eval-okay-search-path"
   , "eval-okay-sort"
   , "eval-okay-path-antiquotation"
-  , "eval-okay-groupBy"
   , "eval-okay-getattrpos-functionargs"
   , "eval-okay-attrs6"
   ]
