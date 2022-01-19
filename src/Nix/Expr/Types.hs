@@ -60,6 +60,38 @@ import           Instances.TH.Lift              ()  -- importing Lift Text for G
 
 -- * utils
 
+newtype NPos = NPos Pos
+ deriving
+   ( Eq, Ord
+   , Read, Show
+   , Data, NFData
+   , Generic
+   )
+
+instance Semigroup NPos where
+  (NPos x) <> (NPos y) = NPos (x <> y)
+
+-- | Represents source positions.
+-- Source line & column positions change intensively during parsing,
+-- so they are declared strict to avoid memory leaks.
+--
+-- The data type is a reimplementation of 'Text.Megaparsec.Pos' 'SourcePos'.
+data NSourcePos =
+  NSourcePos
+  { -- | Name of source file
+    getSourceName :: Path,
+    -- | Line number
+    getSourceLine :: !NPos,
+    -- | Column number
+    getSourceColumn :: !NPos
+  }
+ deriving
+   ( Eq, Ord
+   , Read, Show
+   , Data, NFData
+   , Generic
+   )
+
 --  2021-07-16: NOTE: Should replace @ParamSet@ List
 -- | > Hashmap VarName -- type synonym
 type AttrSet = HashMap VarName
