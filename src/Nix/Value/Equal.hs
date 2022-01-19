@@ -82,7 +82,7 @@ isDerivationM f m =
       -- We should probably really make sure the context is empty here
       -- but the C++ implementation ignores it.
       False
-      ((==) "derivation" . ignoreContext)
+      ((==) "derivation" . getStringIgnoreContext)
       <$> f t
 
 isDerivation
@@ -113,7 +113,7 @@ valueFEqM attrsEq eq =
       (NVConstantF (NFloat x), NVConstantF (NInt   y)) -> pure $             x == fromInteger y
       (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
       (NVConstantF lc        , NVConstantF rc        ) -> pure $            lc == rc
-      (NVStrF      ls        , NVStrF      rs        ) -> pure $  (\ i -> i ls == i rs) ignoreContext
+      (NVStrF      ls        , NVStrF      rs        ) -> pure $  (\ i -> i ls == i rs) getStringIgnoreContext
       (NVListF     ls        , NVListF     rs        ) ->          alignEqM eq ls rs
       (NVSetF      _      lm , NVSetF      _      rm ) ->          attrsEq lm rm
       (NVPathF     lp        , NVPathF     rp        ) ->             pure $ lp == rp

@@ -144,7 +144,7 @@ findPathBy finder ls name =
                 tryPath path $
                   whenJust
                     (\ nsPfx ->
-                      let pfx = ignoreContext nsPfx in
+                      let pfx = getStringIgnoreContext nsPfx in
                       pure $ coerce $ toString pfx `whenFalse` Text.null pfx
                     )
                     mns
@@ -191,7 +191,7 @@ fetchTarball =
     -> m (NValue t f m)
   fetchFromString msha =
     \case
-      NVStr ns -> fetch (ignoreContext ns) msha
+      NVStr ns -> fetch (getStringIgnoreContext ns) msha
       v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or string, got " <> show v
 
 {- jww (2018-04-11): This should be written using pipes in another module
@@ -216,7 +216,7 @@ fetchTarball =
         do
           nsSha <- fromValue =<< demand v
 
-          let sha = ignoreContext nsSha
+          let sha = getStringIgnoreContext nsSha
 
           nixInstantiateExpr $
             "builtins.fetchTarball { " <> "url    = \"" <> uri <> "\"; " <> "sha256 = \"" <> sha <> "\"; }"

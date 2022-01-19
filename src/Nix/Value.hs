@@ -157,7 +157,7 @@ instance Show r => Show (NValueF p m r) where
   showsPrec d =
     \case
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
-      (NVStrF      ns       ) -> showsCon1 "NVStr"      $ ignoreContext ns
+      (NVStrF      ns       ) -> showsCon1 "NVStr"      $ getStringIgnoreContext ns
       (NVListF     lst      ) -> showsCon1 "NVList"     lst
       (NVSetF      _   attrs) -> showsCon1 "NVSet"      attrs
       (NVClosureF  params _ ) -> showsCon1 "NVClosure"  params
@@ -285,7 +285,7 @@ instance (Comonad f, Show a) => Show (NValue' t f m a) where
 instance Comonad f => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
     NVConstant' atom  -> showsUnaryWith showsPrec             "NVConstantF" p atom
-    NVStr' ns         -> showsUnaryWith showsPrec             "NVStrF"      p $ ignoreContext ns
+    NVStr' ns         -> showsUnaryWith showsPrec             "NVStrF"      p $ getStringIgnoreContext ns
     NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF"     p lst
     NVSet'  _   attrs -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF"      p attrs
     NVPath' path      -> showsUnaryWith showsPrec             "NVPathF"     p path

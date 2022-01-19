@@ -185,8 +185,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
       -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
       printer'
-        | isXml     = out (ignoreContext . toXML)                    normalForm
-        | isJson    = out (ignoreContext . mempty . toJSONNixString) normalForm
+        | isXml     = out (getStringIgnoreContext . toXML)                    normalForm
+        | isJson    = out (getStringIgnoreContext . mempty . toJSONNixString) normalForm
         | isStrict  = out (show . prettyNValue)                      normalForm
         | isValues  = out (show . prettyNValueProv)                  removeEffects
         | otherwise = out (show . prettyNValue)                      removeEffects

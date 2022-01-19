@@ -70,7 +70,7 @@ mkNVStrWithProvenance
   -> NixString
   -> NValue t f m
 mkNVStrWithProvenance scopes span x =
-  addProvenance (Provenance scopes . NStrAnnF span . DoubleQuoted . one . Plain . ignoreContext $ x) $ mkNVStr x
+  addProvenance (Provenance scopes . NStrAnnF span . DoubleQuoted . one . Plain . getStringIgnoreContext $ x) $ mkNVStr x
 
 mkNVPathWithProvenance
   :: MonadCited t f m
