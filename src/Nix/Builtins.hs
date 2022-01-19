@@ -1791,8 +1791,8 @@ currentTimeNix =
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
 
-getRecursiveSizeNix :: (MonadIntrospect m, Applicative f) => a -> m (NValue t f m)
-getRecursiveSizeNix = fmap (mkNVConstant . NInt . fromIntegral) . recursiveSize
+valueSizeNix :: (MonadIntrospect m, Applicative f) => a -> m (NValue t f m)
+valueSizeNix = fmap (mkNVConstant . NInt . fromIntegral) . recursiveSize
 
 getContextNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1994,7 +1994,7 @@ builtinsList =
     , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependencyNix
     , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
     , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
-    , add  Normal   "valueSize"        getRecursiveSizeNix
+    , add  Normal   "valueSize"        valueSizeNix
     ]
  where
 
