@@ -457,7 +457,7 @@ hasAttrNix x y =
     toValue $ M.member key aset
 
 hasContextNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-hasContextNix = inHask hasContext
+hasContextNix = inHask hasStringContext
 
 getAttrNix
   :: forall e t f m

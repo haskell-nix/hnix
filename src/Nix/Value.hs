@@ -736,7 +736,7 @@ valueType =
         NNull    -> TNull
     NVStrF ns  ->
       TString $
-        HasContext `whenTrue` hasContext ns
+        HasContext `whenTrue` hasStringContext ns
     NVListF{}    -> TList
     NVSetF{}     -> TSet
     NVClosureF{} -> TClosure
