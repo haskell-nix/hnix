@@ -58,14 +58,14 @@ renderFrames xss@(x : xs) =
   renderPosition :: NixFrame -> [Doc ann]
   renderPosition =
     whenJust
-      (\ pos -> one ("While evaluating at " <> pretty (sourcePosPretty pos) <> colon))
+      (\ pos -> one ("While evaluating at " <> pretty (sourcePosPretty $ toSourcePos pos) <> colon))
       . framePos @v @m
 
 framePos
   :: forall v (m :: Type -> Type)
    . (Typeable m, Typeable v)
   => NixFrame
-  -> Maybe SourcePos
+  -> Maybe NSourcePos
 framePos (NixFrame _ f) =
   (\case
     EvaluatingExpr _ (Ann (SrcSpan beg _) _) -> pure beg

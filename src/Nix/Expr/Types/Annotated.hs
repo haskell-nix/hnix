@@ -10,9 +10,6 @@
 module Nix.Expr.Types.Annotated
   ( module Nix.Expr.Types.Annotated
   , module Data.Functor.Compose
-  , SourcePos(..)
-  , unPos
-  , mkPos
   )
 where
 
@@ -35,10 +32,6 @@ import           Data.Ord.Deriving
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Text.Megaparsec                ( unPos
-                                                , mkPos
-                                                )
-import           Text.Megaparsec.Pos            ( SourcePos(..) )
 import           Text.Read.Deriving
 import           Text.Show.Deriving
 
@@ -46,8 +39,8 @@ import           Text.Show.Deriving
 
 -- | Demarcation of a chunk in a source file.
 data SrcSpan = SrcSpan
-  { spanBegin :: SourcePos
-  , spanEnd   :: SourcePos
+  { getSpanBegin :: NSourcePos
+  , getSpanEnd   :: NSourcePos
   }
  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
 
@@ -56,8 +49,8 @@ data SrcSpan = SrcSpan
 instance Semigroup SrcSpan where
   s1 <> s2 =
     SrcSpan
-      (on min spanBegin s1 s2)
-      (on max spanEnd   s1 s2)
+      (on min getSpanBegin s1 s2)
+      (on max getSpanEnd   s1 s2)
 
 instance Binary SrcSpan
 instance ToJSON SrcSpan
@@ -183,8 +176,8 @@ annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = NAbsAnn (s1 <> s2) ps e1
 annNStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
 annNStr (AnnUnit s1 s) = NStrAnn s1 s
 
-deltaInfo :: SourcePos -> (Text, Int, Int)
-deltaInfo (SourcePos fp l c) = (fromString fp, unPos l, unPos c)
+deltaInfo :: NSourcePos -> (Text, Int, Int)
+deltaInfo (NSourcePos fp l c) = (fromString $ coerce fp, unPos $ coerce l, unPos $ coerce c)
 
 annNNull :: NExprLoc
 annNNull = NConstantAnn nullSpan NNull

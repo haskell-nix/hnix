@@ -649,7 +649,7 @@ case_comments =
 
 case_simpleLoc =
   let
-    mkSPos = on (SourcePos "<string>") mkPos
+    mkSPos = on (NSourcePos "<string>") (coerce . mkPos)
     mkSpan = on SrcSpan (uncurry mkSPos)
   in
     assertParseTextLoc [text|let
