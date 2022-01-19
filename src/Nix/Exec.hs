@@ -434,7 +434,7 @@ execBinaryOpForced scope span op lval rval =
           maybe
             (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
             (\ rs2 -> mkPathP <$> toAbsolutePath @t @f (ls <> coerce (toString rs2)))
-            (getStringNoContext rs)
+            (getStringIfNoContext rs)
         (NVPath ls, NVPath rs) -> mkPathP <$> toAbsolutePath @t @f (ls <> rs)
 
         (ls@NVSet{}, NVStr rs) ->
@@ -513,7 +513,7 @@ fromStringNoContext ns =
   maybe
     (throwError $ ErrorCall $ "expected string with no context, but got " <> show ns)
     pure
-    (getStringNoContext ns)
+    (getStringIfNoContext ns)
 
 addTracing
   ::( MonadNix e t f m

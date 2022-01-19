@@ -1749,7 +1749,7 @@ fetchurlNix =
     maybe
       (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
       pure
-      (getStringNoContext ns)
+      (getStringIfNoContext ns)
 
 partitionNix
   :: forall e t f m

@@ -12,7 +12,7 @@ module Nix.String
   , fromNixLikeContext
   , hasContext
   , intercalateNixString
-  , getStringNoContext
+  , getStringIfNoContext
   , getStringIgnoreContext
   , mkNixStringWithoutContext
   , mkNixStringWithSingletonContext
@@ -153,12 +153,9 @@ fromNixLikeContext =
   S.fromList . (uncurry toStringContexts <=< M.toList . getNixLikeContext)
 
 -- | Extract the string contents from a NixString that has no context
-getStringNoContext :: NixString -> Maybe Text
-getStringNoContext a@(NixString c s) =
-  bool
-    (pure s)
-    mempty
-    (hasContext a)
+getStringIfNoContext :: NixString -> Maybe Text
+getStringIfNoContext a@(NixString _ s) =
+  whenFalse (pure s) (hasStringContext a)
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
 getStringIgnoreContext :: NixString -> Text

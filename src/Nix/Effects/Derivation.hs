@@ -422,7 +422,7 @@ buildDerivationWithContext drvAttrs = do
       maybe
         (lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context.")
         pure
-        (getStringNoContext ns)
+        (getStringIfNoContext ns)
 
     assertNonNull :: MonadNix e t f m => Text -> WithStringContextT m Text
     assertNonNull t = do
