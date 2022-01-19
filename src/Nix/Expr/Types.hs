@@ -92,6 +92,16 @@ data NSourcePos =
    , Generic
    )
 
+-- | Helper for 'SourcePos' -> 'NSourcePos' coersion.
+toNSourcePos :: SourcePos -> NSourcePos
+toNSourcePos (SourcePos f l c) =
+  NSourcePos (coerce f) (coerce l) (coerce c)
+
+-- | Helper for 'NSourcePos' -> 'SourcePos' coersion.
+toSourcePos :: NSourcePos -> SourcePos
+toSourcePos (NSourcePos f l c) =
+  SourcePos (coerce f) (coerce l) (coerce c)
+
 --  2021-07-16: NOTE: Should replace @ParamSet@ List
 -- | > Hashmap VarName -- type synonym
 type AttrSet = HashMap VarName
