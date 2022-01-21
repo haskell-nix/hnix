@@ -238,7 +238,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVStr' ns -> encodeUtf8 <$> getStringNoContext ns
+        NVStr' ns -> encodeUtf8 <$> getStringIfNoContext ns
         _         -> mempty
 
   fromValue = fromMayToValue $ TString mempty
@@ -249,7 +249,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVStr' ns -> getStringNoContext ns
+        NVStr' ns -> getStringIfNoContext ns
         _         -> mempty
 
   fromValue = fromMayToValue $ TString mempty
@@ -262,7 +262,7 @@ instance ( Convertible e t f m
   fromValueMay =
     \case
       NVPath' p  -> pure $ pure $ coerce p
-      NVStr'  ns -> pure $ coerce . toString <$> getStringNoContext  ns
+      NVStr'  ns -> pure $ coerce . toString <$> getStringIfNoContext  ns
       NVSet' _ s ->
         maybe
           stub

@@ -168,7 +168,7 @@ assertLangOk opts fileBaseName =
 assertLangOkXml :: Options -> Path -> Assertion
 assertLangOkXml opts fileBaseName =
   do
-    actual <- ignoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
+    actual <- getStringIgnoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
     expected <- read fileBaseName ".exp.xml"
     assertEqual mempty expected actual
 

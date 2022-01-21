@@ -10,10 +10,10 @@ module Nix.String
   , NixLikeContextValue(..)
   , toNixLikeContext
   , fromNixLikeContext
-  , hasContext
+  , hasStringContext
   , intercalateNixString
-  , getStringNoContext
-  , ignoreContext
+  , getStringIfNoContext
+  , getStringIgnoreContext
   , mkNixStringWithoutContext
   , mkNixStringWithSingletonContext
   , modifyNixContents
@@ -142,8 +142,8 @@ mkNixString = NixString
 -- ** Checkers
 
 -- | Returns True if the NixString has an associated context
-hasContext :: NixString -> Bool
-hasContext (NixString c _) = not $ null c
+hasStringContext :: NixString -> Bool
+hasStringContext (NixString c _) = not $ null c
 
 
 -- ** Getters
@@ -153,14 +153,13 @@ fromNixLikeContext =
   S.fromList . (uncurry toStringContexts <=< M.toList . getNixLikeContext)
 
 -- | Extract the string contents from a NixString that has no context
-getStringNoContext :: NixString -> Maybe Text
-getStringNoContext (NixString c s)
-  | null c    = pure s
-  | otherwise = mempty
+getStringIfNoContext :: NixString -> Maybe Text
+getStringIfNoContext a@(NixString _ s) =
+  whenFalse (pure s) (hasStringContext a)
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
-ignoreContext :: NixString -> Text
-ignoreContext (NixString _ s) = s
+getStringIgnoreContext :: NixString -> Text
+getStringIgnoreContext (NixString _ s) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
