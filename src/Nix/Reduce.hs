@@ -383,7 +383,7 @@ pruneTree opts =
 
     NLet binds (Just body@(Ann _ x)) ->
       pure $
-        list
+        handlePresence
           x
           (`NLet` body)
           (mapMaybe pruneBinding binds)

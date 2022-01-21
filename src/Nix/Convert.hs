@@ -469,7 +469,7 @@ instance Convertible e t f m
         outputs = mkNixStringWithoutContext <$> nlcvOutputs nlcv
 
       ts :: [NValue t f m] <- traverseToValue outputs
-      list
+      handlePresence
         (pure Nothing)
         (fmap pure . toValue)
         ts

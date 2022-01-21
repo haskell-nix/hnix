@@ -307,7 +307,7 @@ splitDrvName s =
   -- list
   breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
   breakAfterFirstItem f =
-    list
+    handlePresence
       mempty
       (\ (h : t) -> let (a, b) = break f t in (h : a, b))
   (namePieces, versionPieces) =
@@ -963,7 +963,7 @@ elemNix x = inHaskM (anyMNix $ valueEqM x)
  where
   anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
   anyMNix p =
-    list
+    handlePresence
       (pure False)
       (\ (x : xss) ->
         bool
@@ -1028,7 +1028,7 @@ genericClosureNix c =
               bool
                 (do
                   checkComparable k $
-                    list
+                    handlePresence
                       k
                       (\ (WValue j:_) -> j)
                       (S.toList ks)

@@ -635,8 +635,8 @@ inferType env ex =
         (Set.difference `on` Set.fromList)
           (Assumption.keys as )
           (       Env.keys env)
-    unless
-      (Set.null unbounds)
+    when
+      (isPresent unbounds)
       $ typeError $ UnboundVariables $ ordNub $ Set.toList unbounds
 
     inferState <- get
@@ -765,9 +765,10 @@ runSolver (Solver s) =
  where
   report :: [a] -> [TypeError] -> Either [TypeError] [a]
   report xs e =
-    if null xs
-      then Left (ordNub e)
-      else pure xs
+    handlePresence
+      (Left $ ordNub e)
+      pure
+      xs
 
 -- ** Instances
 
@@ -829,7 +830,7 @@ nextSolvable = fromJust . find solvable . pickFirstOne
   solvable (EqConst{}     , _) = True
   solvable (ExpInstConst{}, _) = True
   solvable (ImpInstConst _t1 ms t2, cs) =
-    Set.null $ (ms `Set.difference` ftv t2) `Set.intersection` atv cs
+    null $ (ms `Set.difference` ftv t2) `Set.intersection` atv cs
 
 solve :: forall m . MonadState InferState m => [Constraint] -> Solver m Subst
 solve [] = stub

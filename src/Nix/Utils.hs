@@ -19,8 +19,9 @@ module Nix.Utils
   , whenTrue
   , whenFalse
   , whenJust
+  , isPresent
+  , handlePresence
   , whenText
-  , list
   , free
 
   , Path(..)
@@ -207,24 +208,25 @@ whenJust =
     mempty
 {-# inline whenJust #-}
 
--- | Analog for @bool@ or @maybe@, for list-like cons structures.
-list
-  :: Foldable t
-  => b -> (t a -> b) -> t a -> b
-list e f l =
+isPresent :: Foldable t => t a -> Bool
+isPresent = not . null
+
+
+-- | 'maybe'-like eliminator, for foldable empty/inhabited structures.
+handlePresence :: Foldable t => b -> (t a -> b) -> t a -> b
+handlePresence d f t =
   bool
-    (f l)
-    e
-    (null l)
-{-# inline list #-}
+    d
+    (f t)
+    (isPresent t)
 
 whenText
   :: a -> (Text -> a) -> Text -> a
 whenText e f t =
   bool
-    (f t)
     e
-    (Text.null t)
+    (f t)
+    (not $ Text.null t)
 
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b

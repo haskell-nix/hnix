@@ -342,7 +342,7 @@ quit _ = liftIO Exit.exitSuccess
 -- | @:set@ command
 setConfig :: (MonadNix e t f m, MonadIO m) => Text -> Repl e t f m ()
 setConfig args =
-  list
+  handlePresence
     (liftIO $ Text.putStrLn "No option to set specified")
     (\ (x:_xs)  ->
       case filter ((==x) . helpSetOptionName) helpSetOptions of
@@ -393,7 +393,7 @@ completeFunc reversedPrev word
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Text.split (== '.') (fromString word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (fromString word) , isPresent subFields =
     do
       state <- get
       maybe

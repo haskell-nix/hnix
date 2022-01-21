@@ -142,7 +142,7 @@ processResult h val =
  where
   processKeys :: [VarName] -> NValue t f m -> m a
   processKeys kys v =
-    list
+    handlePresence
       (h v)
       (\ ((k : ks) :: [VarName]) ->
         do

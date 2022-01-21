@@ -179,7 +179,7 @@ displayProvenance
   -> m a
   -> m a
 displayProvenance =
-  list
+  handlePresence
     id
     (\ (Provenance scope e@(AnnF s _) : _) ->
       withFrame Info $ ForcingExpr scope $ wrapExprLoc s e

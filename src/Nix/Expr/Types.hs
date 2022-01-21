@@ -728,7 +728,7 @@ ekey keys pos f e@(Fix x)
         do
           let keys' = NE.toList keys
           (ks, rest) <- zip (inits keys') (tails keys')
-          list
+          handlePresence
             mempty
             (\ (j : js) ->
               do

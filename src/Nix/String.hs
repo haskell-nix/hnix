@@ -143,7 +143,7 @@ mkNixString = NixString
 
 -- | Returns True if the NixString has an associated context
 hasContext :: NixString -> Bool
-hasContext (NixString c _) = not $ null c
+hasContext (NixString c _) = isPresent c
 
 
 -- ** Getters
@@ -183,7 +183,7 @@ toStringContexts path = go
         mkLstCtxFor DirectPath cv { nlcvPath = False }
       NixLikeContextValue _    True _ ->
         mkLstCtxFor AllOutputs cv { nlcvAllOutputs = False }
-      NixLikeContextValue _    _    ls | not (null ls) ->
+      NixLikeContextValue _    _    ls | isPresent ls ->
         mkCtxFor . DerivationOutput <$> ls
       _ -> mempty
    where
