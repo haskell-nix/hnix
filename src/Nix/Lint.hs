@@ -391,7 +391,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       _ <- unify (void e) cond =<< mkSymbolic (one $ TConstant $ one TBool)
       pure body'
 
-  evalApp = (fmap snd .) . lintApp (join (NBinary NApp) mempty)
+  evalApp = (fmap snd .) . lintApp (join (NApp NAppOp) mempty)
   evalAbs params _ = mkSymbolic (one $ TClosure $ void params)
 
   evalError = throwError
@@ -408,33 +408,31 @@ lintBinaryOp op lsym rarg =
     rsym <- rarg
     y    <- defer everyPossible
 
-    case op of
-      NApp    -> symerr "lintBinaryOp:NApp: should never get here"
-      _ -> check lsym rsym $
-        case op of
-          NEq     -> [TConstant [TInt, TBool, TNull], TStr, TList y]
-          NNEq    -> [TConstant [TInt, TBool, TNull], TStr, TList y]
+    check lsym rsym $
+      case op of
+        NEq     -> [TConstant [TInt, TBool, TNull], TStr, TList y]
+        NNEq    -> [TConstant [TInt, TBool, TNull], TStr, TList y]
 
-          NLt     -> one $ TConstant [TInt, TBool, TNull]
-          NLte    -> one $ TConstant [TInt, TBool, TNull]
-          NGt     -> one $ TConstant [TInt, TBool, TNull]
-          NGte    -> one $ TConstant [TInt, TBool, TNull]
+        NLt     -> one $ TConstant [TInt, TBool, TNull]
+        NLte    -> one $ TConstant [TInt, TBool, TNull]
+        NGt     -> one $ TConstant [TInt, TBool, TNull]
+        NGte    -> one $ TConstant [TInt, TBool, TNull]
 
-          NAnd    -> one $ TConstant $ one TBool
-          NOr     -> one $ TConstant $ one TBool
-          NImpl   -> one $ TConstant $ one TBool
+        NAnd    -> one $ TConstant $ one TBool
+        NOr     -> one $ TConstant $ one TBool
+        NImpl   -> one $ TConstant $ one TBool
 
-          -- jww (2018-04-01): NYI: Allow Path + Str
-          NPlus   -> [TConstant $ one TInt, TStr, TPath]
-          NMinus  -> one $ TConstant $ one TInt
-          NMult   -> one $ TConstant $ one TInt
-          NDiv    -> one $ TConstant $ one TInt
+        -- jww (2018-04-01): NYI: Allow Path + Str
+        NPlus   -> [TConstant $ one TInt, TStr, TPath]
+        NMinus  -> one $ TConstant $ one TInt
+        NMult   -> one $ TConstant $ one TInt
+        NDiv    -> one $ TConstant $ one TInt
 
-          NUpdate -> one $ TSet mempty
+        NUpdate -> one $ TSet mempty
 
-          NConcat -> one $ TList y
+        NConcat -> one $ TList y
 #if __GLASGOW_HASKELL__ < 900
-          _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
+        _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
 #endif
 
 

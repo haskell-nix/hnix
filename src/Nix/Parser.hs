@@ -20,6 +20,7 @@ module Nix.Parser
   , NAssoc(..)
   , NOperatorDef
   , getUnaryOperator
+  , getAppOperator
   , getBinaryOperator
   , getSpecialOperator
   , nixExpr
@@ -472,6 +473,7 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 
 data NOperatorDef
   = NUnaryDef          NUnaryOp   Text
+  | NAppDef            NAssoc     Text
   | NBinaryDef  NAssoc NBinaryOp  Text
   | NSpecialDef NAssoc NSpecialOp Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
@@ -548,7 +550,7 @@ nixOperators selector =
 
     {-  2 -}
     one
-      ( NBinaryDef NAssocLeft NApp " "
+      ( NAppDef NAssocLeft " "
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ annNApp <$ symbols mempty
@@ -639,6 +641,15 @@ getUnaryOperator = detectPrecedence spec
     \case
       (NUnaryDef op name, _) -> one (op, OperatorInfo i NAssocNone name)
       _                      -> mempty
+
+getAppOperator :: NAppOp -> OperatorInfo
+getAppOperator = detectPrecedence spec
+ where
+  spec :: Int -> (NOperatorDef, b) -> [(NAppOp, OperatorInfo)]
+  spec i =
+    \case
+      (NAppDef assoc name, _) -> one (NAppOp, OperatorInfo i assoc name)
+      _                             -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = detectPrecedence spec

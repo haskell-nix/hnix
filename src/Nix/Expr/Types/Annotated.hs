@@ -168,7 +168,7 @@ annNHasAttr :: NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 annNHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = NHasAttrAnn (s1 <> s2) e1 ats
 
 annNApp :: NExprLoc -> NExprLoc -> NExprLoc
-annNApp e1@(Ann s1 _) e2@(Ann s2 _) = NBinaryAnn (s1 <> s2) NApp e1 e2
+annNApp e1@(Ann s1 _) e2@(Ann s2 _) = NAppAnn (s1 <> s2) e1 e2
 
 annNAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = NAbsAnn (s1 <> s2) ps e1
@@ -187,7 +187,9 @@ nullSpan :: SrcSpan
 nullSpan = SrcSpan nullPos nullPos
 {-# inline nullSpan #-}
 
--- | Pattern systems for matching on @NExprLocF@ constructions.
+-- ** Patterns
+
+-- *** Patterns to match on 'NExprLocF' constructions (for 'SrcSpan'-based annotations).
 
 pattern NConstantAnnF    :: SrcSpan -> NAtom -> NExprLocF r
 pattern NConstantAnnF    ann x      = AnnF ann (NConstant x)
@@ -212,6 +214,9 @@ pattern NEnvPathAnnF     ann x      = AnnF ann (NEnvPath x)
 
 pattern NUnaryAnnF       :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
 pattern NUnaryAnnF       ann op x   = AnnF ann (NUnary op x)
+
+pattern NAppAnnF         :: SrcSpan -> r -> r -> NExprLocF r
+pattern NAppAnnF         ann x y    = AnnF ann (NApp NAppOp x y)
 
 pattern NBinaryAnnF      :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
 pattern NBinaryAnnF      ann op x y = AnnF ann (NBinary op x y)
@@ -242,6 +247,8 @@ pattern NSynHoleAnnF     ann x      = AnnF ann (NSynHole x)
 {-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHoleAnnF #-}
 
 
+-- *** Patterns to match on 'NExprLoc' constructions (for 'SrcSpan'-based annotations).
+
 pattern NConstantAnn    :: SrcSpan -> NAtom -> NExprLoc
 pattern NConstantAnn    ann x      = Ann ann (NConstant x)
 
@@ -265,6 +272,9 @@ pattern NEnvPathAnn     ann x      = Ann ann (NEnvPath x)
 
 pattern NUnaryAnn       :: SrcSpan -> NUnaryOp -> NExprLoc -> NExprLoc
 pattern NUnaryAnn       ann op x   = Ann ann (NUnary op x)
+
+pattern NAppAnn         :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NAppAnn         ann x y    = Ann ann (NApp NAppOp x y)
 
 pattern NBinaryAnn      :: SrcSpan -> NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 pattern NBinaryAnn      ann op x y = Ann ann (NBinary op x y)

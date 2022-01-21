@@ -677,9 +677,8 @@ unops u1 op =
 binops :: Type -> NBinaryOp -> [Constraint]
 binops u1 op =
   if
-    -- NApp in fact is handled separately
     -- Equality tells nothing about the types, because any two types are allowed.
-    | op `elem` [ NApp  , NEq  , NNEq        ] -> mempty
+    | op `elem` [ NEq   , NNEq               ] -> mempty
     | op `elem` [ NGt   , NGte , NLt  , NLte ] -> inequality
     | op `elem` [ NAnd  , NOr  , NImpl       ] -> gate
     | op ==       NConcat                      -> concatenation
