@@ -465,13 +465,9 @@ lintApp context fun arg =
       (args, ys) <- fmap unzip $ forM xs $ \case
         TClosure _params ->
           (\case
-            NAny -> do
-              error "NYI"
-
-            NMany [TSet (Just _)] -> do
-              error "NYI"
-
-            NMany _ -> throwError $ ErrorCall "NYI: lintApp NMany not set"
+            NAny                  -> error "NYI"
+            NMany [TSet (Just _)] -> error "NYI"
+            NMany _               -> throwError $ ErrorCall "NYI: lintApp NMany not set"
           ) =<< unpackSymbolic =<< arg
         TBuiltin _ _f -> throwError $ ErrorCall "NYI: lintApp builtin"
         TSet _m       -> throwError $ ErrorCall "NYI: lintApp Set"
