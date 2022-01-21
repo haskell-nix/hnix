@@ -15,6 +15,7 @@ module Nix.Parser
   , parseFromText
   , Result
   , reservedNames
+  , NOpName(..)
   , OperatorInfo(..)
   , NSpecialOp(..)
   , NAssoc(..)
@@ -465,24 +466,36 @@ nixSearchPath =
 
 -- ** Operators
 
+newtype NOpName = NOpName Text
+  deriving
+    (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+instance IsString NOpName where
+  fromString = coerce . fromString @Text
+
+instance ToString NOpName where
+  toString = toString @Text . coerce
+
+
 data NSpecialOp = NHasAttrOp | NSelectOp
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NAssoc = NAssocNone | NAssocLeft | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+--  2022-01-22: NOTE: NAppDef has only one associativity (left)
 data NOperatorDef
-  = NUnaryDef          NUnaryOp   Text
-  | NAppDef            NAssoc     Text
-  | NBinaryDef  NAssoc NBinaryOp  Text
-  | NSpecialDef NAssoc NSpecialOp Text
+  = NUnaryDef          NUnaryOp   NOpName
+  | NAppDef            NAssoc     NOpName
+  | NBinaryDef  NAssoc NBinaryOp  NOpName
+  | NSpecialDef NAssoc NSpecialOp NOpName
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
 
-operator :: Text -> Parser Text
-operator op =
+operator :: NOpName -> Parser Text
+operator (coerce -> op) =
   case op of
     c@"-" -> c `without` '>'
     c@"/" -> c `without` '/'
@@ -494,7 +507,7 @@ operator op =
   without opChar noNextChar =
     lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
 
-opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> Text -> Parser a
+opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> NOpName -> Parser a
 opWithLoc f op name =
   do
     AnnUnit ann _ <-
@@ -507,12 +520,12 @@ binary
   :: NAssoc
   -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
   -> NBinaryOp
-  -> Text
+  -> NOpName
   -> (NOperatorDef, b)
 binary assoc fixity op name =
   (NBinaryDef assoc op name, fixity $ opWithLoc annNBinary op name)
 
-binaryN, binaryL, binaryR :: NBinaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
+binaryN, binaryL, binaryR :: NBinaryOp -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
   binary NAssocNone InfixN
 binaryL =
@@ -520,7 +533,7 @@ binaryL =
 binaryR =
   binary NAssocRight InfixR
 
-prefix :: NUnaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
+prefix :: NUnaryOp -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 prefix op name =
   (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
 -- postfix name op = (NUnaryDef name op,
@@ -608,7 +621,7 @@ data OperatorInfo =
   OperatorInfo
     { precedence    :: Int
     , associativity :: NAssoc
-    , operatorName  :: Text
+    , operatorName  :: NOpName
     }
  deriving (Eq, Ord, Generic, Typeable, Data, Show)
 

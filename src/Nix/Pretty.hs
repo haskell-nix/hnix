@@ -262,7 +262,7 @@ exprFNixDoc = \case
       opInfo $
       hsep
         [ f NAssocLeft r1
-        , pretty $ operatorName opInfo
+        , pretty @Text $ coerce @NOpName $ operatorName opInfo
         , f NAssocRight r2
         ]
    where
@@ -277,7 +277,7 @@ exprFNixDoc = \case
   NUnary op r1 ->
     mkNixDoc
       opInfo $
-      pretty (operatorName opInfo) <> precedenceWrap opInfo r1
+      pretty @Text (coerce $ operatorName opInfo) <> precedenceWrap opInfo r1
    where
     opInfo = getUnaryOperator op
   NSelect o r' attr ->
