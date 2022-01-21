@@ -476,6 +476,20 @@ instance IsString NOpName where
 instance ToString NOpName where
   toString = toString @Text . coerce
 
+newtype NOpPrecedence = NOpPrecedence Int
+  deriving (Eq, Ord, Generic, Bounded, Typeable, Data, Show, NFData)
+
+instance Enum NOpPrecedence where
+  toEnum = coerce
+  fromEnum = coerce
+
+instance Num NOpPrecedence where
+  (+) = coerce ((+) @Int)
+  (*) = coerce ((*) @Int)
+  abs = coerce (abs @Int)
+  signum = coerce (signum @Int)
+  fromInteger = coerce (fromInteger @Int)
+  negate = coerce (negate @Int)
 
 data NSpecialOp = NHasAttrOp | NSelectOp
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
@@ -485,10 +499,10 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 
 --  2022-01-22: NOTE: NAppDef has only one associativity (left)
 data NOperatorDef
-  = NUnaryDef          NUnaryOp   NOpName
-  | NAppDef            NAssoc     NOpName
-  | NBinaryDef  NAssoc NBinaryOp  NOpName
-  | NSpecialDef NAssoc NSpecialOp NOpName
+  = NUnaryDef          NUnaryOp   NOpName NOpPrecedence
+  | NAppDef            NAssoc     NOpName NOpPrecedence
+  | NBinaryDef  NAssoc NBinaryOp  NOpName NOpPrecedence
+  | NSpecialDef NAssoc NSpecialOp NOpName NOpPrecedence
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -521,11 +535,12 @@ binary
   -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
   -> NBinaryOp
   -> NOpName
+  -> NOpPrecedence
   -> (NOperatorDef, b)
-binary assoc fixity op name =
-  (NBinaryDef assoc op name, fixity $ opWithLoc annNBinary op name)
+binary assoc fixity op name precedence =
+  (NBinaryDef assoc op name precedence, fixity $ opWithLoc annNBinary op name)
 
-binaryN, binaryL, binaryR :: NBinaryOp -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
+binaryN, binaryL, binaryR :: NBinaryOp -> NOpName -> NOpPrecedence -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
   binary NAssocNone InfixN
 binaryL =
@@ -533,9 +548,9 @@ binaryL =
 binaryR =
   binary NAssocRight InfixR
 
-prefix :: NUnaryOp -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
-prefix op name =
-  (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
+prefix :: NUnaryOp -> NOpName -> NOpPrecedence -> (NOperatorDef, Operator Parser NExprLoc)
+prefix op name precedence =
+  (NUnaryDef op name precedence, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc name op annNUnary))
 
@@ -563,48 +578,48 @@ nixOperators selector =
 
     {-  2 -}
     one
-      ( NAppDef NAssocLeft " "
+      ( NAppDef NAssocLeft " " 2
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ annNApp <$ symbols mempty
       )
   , {-  3 -}
-    one $ prefix  NNeg "-"
+    one $ prefix  NNeg "-" 3
   , {-  4 -}
     one
-      ( NSpecialDef NAssocLeft NHasAttrOp "?"
+      ( NSpecialDef NAssocLeft NHasAttrOp "?" 4
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
-    one $ binaryR NConcat "++"
+    one $ binaryR NConcat "++" 5
   , {-  6 -}
-    [ binaryL NMult "*"
-    , binaryL NDiv  "/"
+    [ binaryL NMult "*" 6
+    , binaryL NDiv  "/" 6
     ]
   , {-  7 -}
-    [ binaryL NPlus "+"
-    , binaryL NMinus "-"
+    [ binaryL NPlus "+" 7
+    , binaryL NMinus "-" 7
     ]
   , {-  8 -}
-    one $ prefix  NNot "!"
+    one $ prefix  NNot "!" 8
   , {-  9 -}
-    one $ binaryR NUpdate "//"
+    one $ binaryR NUpdate "//" 9
   , {- 10 -}
-    [ binaryL NLt "<"
-    , binaryL NGt ">"
-    , binaryL NLte "<="
-    , binaryL NGte ">="
+    [ binaryL NLt "<" 10
+    , binaryL NGt ">" 10
+    , binaryL NLte "<=" 10
+    , binaryL NGte ">=" 10
     ]
   , {- 11 -}
-    [ binaryN NEq "=="
-    , binaryN NNEq "!="
+    [ binaryN NEq "==" 11
+    , binaryN NNEq "!=" 11
     ]
   , {- 12 -}
-    one $ binaryL NAnd "&&"
+    one $ binaryL NAnd "&&" 12
   , {- 13 -}
-    one $ binaryL NOr "||"
+    one $ binaryL NOr "||" 13
   , {- 14 -}
-    one $ binaryR NImpl "->"
+    one $ binaryR NImpl "->" 14
   ]
 
 --  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
@@ -619,7 +634,7 @@ nixOperators selector =
 -- details: https://github.com/haskell-nix/hnix/issues/982
 data OperatorInfo =
   OperatorInfo
-    { precedence    :: Int
+    { precedence    :: NOpPrecedence
     , associativity :: NAssoc
     , operatorName  :: NOpName
     }
@@ -627,7 +642,7 @@ data OperatorInfo =
 
 detectPrecedence
   :: Ord a
-  => ( Int
+  => ( NOpPrecedence
     -> (NOperatorDef, Operator Parser NExprLoc)
     -> [(a, OperatorInfo)]
     )
@@ -649,10 +664,10 @@ detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
 getUnaryOperator :: NUnaryOp -> OperatorInfo
 getUnaryOperator = detectPrecedence spec
  where
-  spec :: Int -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
+  spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
   spec i =
     \case
-      (NUnaryDef op name, _) -> one (op, OperatorInfo i NAssocNone name)
+      (NUnaryDef op name _, _) -> one (op, OperatorInfo i NAssocNone name)
       _                      -> mempty
 
 getAppOperator :: OperatorInfo
@@ -666,20 +681,20 @@ getAppOperator =
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = detectPrecedence spec
  where
-  spec :: Int -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
+  spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
   spec i =
     \case
-      (NBinaryDef assoc op name, _) -> one (op, OperatorInfo i assoc name)
+      (NBinaryDef assoc op name _, _) -> one (op, OperatorInfo i assoc name)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
 getSpecialOperator o         = detectPrecedence spec o
  where
-  spec :: Int -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
+  spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
   spec i =
       \case
-        (NSpecialDef assoc op name, _) -> one (op, OperatorInfo i assoc name)
+        (NSpecialDef assoc op name _, _) -> one (op, OperatorInfo i assoc name)
         _                              -> mempty
 
 -- ** x: y lambda function
