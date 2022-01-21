@@ -116,11 +116,9 @@ type AttrSet = HashMap VarName
 -- A type synonym for @HashMap VarName NSourcePos@.
 type PositionSet = AttrSet NSourcePos
 
--- ** orphan instances
+-- ** Additional N{,Source}Pos instances
 
 -- Placed here because TH inference depends on declaration sequence.
-
--- Upstreaming so far was not pursued.
 
 instance Serialise NPos where
   encode = Serialise.encode . unPos . coerce
