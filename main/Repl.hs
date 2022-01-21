@@ -393,7 +393,7 @@ completeFunc reversedPrev word
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Text.split (== '.') (fromString word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (fromString word) , isPresent subFields =
     do
       state <- get
       maybe

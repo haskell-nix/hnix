@@ -241,7 +241,7 @@ attrSetAlter ks' pos m' p' val =
         )
         ((`M.lookup` m) k)
       )
-      (not $ null ks)
+      (isPresent ks)
    where
     insertVal :: m v -> (PositionSet, AttrSet (m v))
     insertVal v =

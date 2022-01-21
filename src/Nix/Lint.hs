@@ -170,9 +170,9 @@ renderSymbolic =
   ) <=< unpackSymbolic
  where
   between a b c = a <> b <> c
-  parens = between "(" ")"
+  parens   = between "(" ")"
   brackets = between "[" "]"
-  braces = between "{" "}"
+  braces   = between "{" "}"
 
 -- This function is order and uniqueness preserving (of types).
 merge
@@ -204,7 +204,7 @@ merge context = go
     (TSet x       , TSet Nothing ) -> (one (TSet x) <>) <$> rest
     (TSet Nothing , TSet x       ) -> (one (TSet x) <>) <$> rest
     (TSet (Just l), TSet (Just r)) -> do
-      m <- sequenceA $ M.intersectionWith
+      hm <- sequenceA $ M.intersectionWith
         (\ i j ->
           do
             i'' <- demand =<< i
@@ -213,10 +213,10 @@ merge context = go
         )
         (pure <$> l)
         (pure <$> r)
-      bool
+      handlePresence
         id
-        ((one (TSet $ pure m) <>) <$>)
-        (not $ M.null m)
+        (const ((one (TSet $ pure hm) <>) <$>))
+        hm
         rest
 
     (TClosure{}, TClosure{}) ->
@@ -261,30 +261,32 @@ unify context (SV x) (SV y) = do
   x' <- readRef x
   y' <- readRef y
   case (x', y') of
-    (NAny, _) -> do
-      writeRef x y'
-      pure $ SV y
-    (_, NAny) -> do
-      writeRef y x'
-      pure $ SV x
-    (NMany xs, NMany ys) -> do
-      m <- merge context xs ys
-      bool
-        (do
-          let
-           nm = NMany m
-          writeRef x   nm
-          writeRef y   nm
-          packSymbolic nm
-        )
+    (NAny, _) ->
+      do
+        writeRef x y'
+        pure $ SV y
+    (_, NAny) ->
+      do
+        writeRef y x'
+        pure $ SV x
+    (NMany xs, NMany ys) ->
+      handlePresence
         (
-              -- x' <- renderSymbolic (Symbolic x)
-              -- y' <- renderSymbolic (Symbolic y)
+          -- x' <- renderSymbolic (Symbolic x)
+          -- y' <- renderSymbolic (Symbolic y)
           throwError $ ErrorCall "Cannot unify "
                   -- <> show x' <> " with " <> show y'
                   --  <> " in context: " <> show context
         )
-        (null m)
+        (\ m ->
+          do
+            let
+              nm = NMany m
+            writeRef x   nm
+            writeRef y   nm
+            packSymbolic nm
+        )
+        =<< merge context xs ys
 unify _ _ _ = error "The unexpected hath transpired!"
 
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
@@ -323,7 +325,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" <> coerce var <> "'"
 
   attrMissing ks ms =
-    evalError @(Symbolic m) $ ErrorCall $ toString $
+    evalError @(Symbolic m) . ErrorCall . toString $
       maybe
         ("Inheriting unknown attribute: " <> attr)
         (\ s ->  "Could not look up attribute " <> attr <> " in " <> show s)
@@ -331,11 +333,12 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
    where
     attr = Text.intercalate "." $ NE.toList $ coerce ks
 
-  evalCurPos = do
-    f <- mkSymbolic $ one TPath
-    l <- mkSymbolic $ one $ TConstant $ one TInt
-    c <- mkSymbolic $ one $ TConstant $ one TInt
-    mkSymbolic $ one $ TSet (pure (M.fromList [("file", f), ("line", l), ("col", c)]))
+  evalCurPos =
+    do
+      f <- mkSymbolic $ one TPath
+      l <- mkSymbolic . one . TConstant $ one TInt
+      c <- mkSymbolic . one . TConstant $ one TInt
+      mkSymbolic . one . TSet . pure $ M.fromList [("file", f), ("line", l), ("col", c)]
 
   evalConstant c = mkSymbolic $ one $ fun c
    where
