@@ -330,7 +330,7 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
 -- * Nix binary operators
 
-($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
+(@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
 --  2021-07-10: NOTE: Probably the presedence of some operators is still needs to be tweaked.
 
@@ -348,7 +348,6 @@ infix 9 @.
 infix 9 @.<|>
 
 -- | Function application (@' '@ in @f x@)
-(@@) :: NExpr -> NExpr -> NExpr
 (@@) = mkApp
 infixl 8 @@
 
