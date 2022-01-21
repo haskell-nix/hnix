@@ -665,9 +665,9 @@ getUnaryOperator :: NUnaryOp -> OperatorInfo
 getUnaryOperator = detectPrecedence spec
  where
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
-  spec i =
+  spec _ =
     \case
-      (NUnaryDef op name _, _) -> one (op, OperatorInfo i NAssocNone name)
+      (NUnaryDef op name prec, _) -> one (op, OperatorInfo prec NAssocNone name)
       _                      -> mempty
 
 getAppOperator :: OperatorInfo
@@ -682,9 +682,9 @@ getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = detectPrecedence spec
  where
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
-  spec i =
+  spec _ =
     \case
-      (NBinaryDef assoc op name _, _) -> one (op, OperatorInfo i assoc name)
+      (NBinaryDef assoc op name prec, _) -> one (op, OperatorInfo prec assoc name)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
@@ -692,9 +692,9 @@ getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
 getSpecialOperator o         = detectPrecedence spec o
  where
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
-  spec i =
+  spec _ =
       \case
-        (NSpecialDef assoc op name _, _) -> one (op, OperatorInfo i assoc name)
+        (NSpecialDef assoc op name prec, _) -> one (op, OperatorInfo prec assoc name)
         _                              -> mempty
 
 -- ** x: y lambda function
