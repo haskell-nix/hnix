@@ -216,7 +216,7 @@ pattern NUnaryAnnF       :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
 pattern NUnaryAnnF       ann op x   = AnnF ann (NUnary op x)
 
 pattern NAppAnnF         :: SrcSpan -> r -> r -> NExprLocF r
-pattern NAppAnnF         ann x y    = AnnF ann (NApp NAppOp x y)
+pattern NAppAnnF         ann x y    = AnnF ann (NApp x y)
 
 pattern NBinaryAnnF      :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
 pattern NBinaryAnnF      ann op x y = AnnF ann (NBinary op x y)
@@ -274,7 +274,7 @@ pattern NUnaryAnn       :: SrcSpan -> NUnaryOp -> NExprLoc -> NExprLoc
 pattern NUnaryAnn       ann op x   = Ann ann (NUnary op x)
 
 pattern NAppAnn         :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
-pattern NAppAnn         ann x y    = Ann ann (NApp NAppOp x y)
+pattern NAppAnn         ann x y    = Ann ann (NApp x y)
 
 pattern NBinaryAnn      :: SrcSpan -> NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 pattern NBinaryAnn      ann op x y = Ann ann (NBinary op x y)

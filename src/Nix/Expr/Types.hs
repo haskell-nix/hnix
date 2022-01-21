@@ -527,15 +527,6 @@ data NUnaryOp
 
 $(makeTraversals ''NUnaryOp)
 
--- **
-
-data NAppOp = NAppOp
-  deriving
-    ( Eq, Ord, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
-    , Show, Hashable
-    )
-
 -- ** data NBinaryOp
 
 -- | Binary operators expressible in the nix language.
@@ -608,7 +599,7 @@ data NExprF r
   --
   -- > NUnary NNeg x                               ~  - x
   -- > NUnary NNot x                               ~  ! x
-  | NApp NAppOp !r !r
+  | NApp !r !r
   -- ^ Functional application (aka F.A., apply a function to an argument).
   --
   -- > NApp f x  ~  f x
@@ -821,7 +812,7 @@ getFreeVars e =
     (NLiteralPath _               ) -> mempty
     (NEnvPath     _               ) -> mempty
     (NUnary       _    expr       ) -> getFreeVars expr
-    (NApp         _    left right ) -> collectFreeVars left right
+    (NApp         left right      ) -> collectFreeVars left right
     (NBinary      _    left right ) -> collectFreeVars left right
     (NSelect      orExpr expr path) ->
       Set.unions

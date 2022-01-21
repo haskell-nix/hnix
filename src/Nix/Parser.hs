@@ -642,14 +642,13 @@ getUnaryOperator = detectPrecedence spec
       (NUnaryDef op name, _) -> one (op, OperatorInfo i NAssocNone name)
       _                      -> mempty
 
-getAppOperator :: NAppOp -> OperatorInfo
-getAppOperator = detectPrecedence spec
- where
-  spec :: Int -> (NOperatorDef, b) -> [(NAppOp, OperatorInfo)]
-  spec i =
-    \case
-      (NAppDef assoc name, _) -> one (NAppOp, OperatorInfo i assoc name)
-      _                             -> mempty
+getAppOperator :: OperatorInfo
+getAppOperator =
+  OperatorInfo
+    { precedence    = 1 -- inside the code it is 1, inside the Nix they are +1
+    , associativity = NAssocLeft
+    , operatorName  = " "
+    }
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = detectPrecedence spec

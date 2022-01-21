@@ -393,7 +393,7 @@ pruneTree opts =
 
     -- If the function was never called, it means its argument was in a
     -- thunk that was forced elsewhere.
-    NApp NAppOp Nothing (Just _) -> Nothing
+    NApp Nothing (Just _) -> Nothing
 
     -- These are the only short-circuiting binary operators
     NBinary NAnd (Just (Ann _ larg)) _ -> pure larg

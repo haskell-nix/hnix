@@ -85,9 +85,9 @@ mkNeg :: NExpr -> NExpr
 mkNeg = mkOp NNeg
 
 -- | Put a binary operator.
---  @since 0.15.0
+--  @since 0.16.0
 mkApp :: NExpr -> NExpr -> NExpr
-mkApp a = Fix . NApp NAppOp a
+mkApp a = Fix . NApp a
 
 -- | Put a binary operator.
 --  @since 0.15.0

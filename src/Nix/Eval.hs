@@ -119,7 +119,7 @@ eval (NLiteralPath p      ) = evalLiteralPath p
 eval (NEnvPath     p      ) = evalEnvPath p
 eval (NUnary op arg       ) = evalUnary op =<< arg
 
-eval (NApp NAppOp fun arg) =
+eval (NApp fun arg        ) =
   do
     f <- fun
     scope <- askScopes

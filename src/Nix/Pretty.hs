@@ -74,7 +74,7 @@ leastPrecedence =
   mkNixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
 
 appOp :: OperatorInfo
-appOp = getAppOperator NAppOp
+appOp = getAppOperator
 
 appOpNonAssoc :: OperatorInfo
 appOpNonAssoc = appOp { associativity = NAssocNone }
@@ -255,7 +255,7 @@ exprFNixDoc = \case
           [ prettyParams args <> ":"
           , getDoc body
           ]
-  NApp NAppOp fun arg ->
+  NApp fun arg ->
     mkNixDoc appOp (precedenceWrap appOp fun <> " " <> precedenceWrap appOpNonAssoc arg)
   NBinary op r1 r2 ->
     mkNixDoc
