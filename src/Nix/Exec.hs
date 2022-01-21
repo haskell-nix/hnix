@@ -103,6 +103,17 @@ mkNVUnaryOpWithProvenance
 mkNVUnaryOpWithProvenance scope span op val =
   addProvenance (Provenance scope $ NUnaryAnnF span op val)
 
+mkNVAppOpWithProvenance
+  :: MonadCited t f m
+  => Scopes m (NValue t f m)
+  -> SrcSpan
+  -> Maybe (NValue t f m)
+  -> Maybe (NValue t f m)
+  -> NValue t f m
+  -> NValue t f m
+mkNVAppOpWithProvenance scope span lval rval =
+  addProvenance (Provenance scope $ NAppAnnF span lval rval)
+
 mkNVBinaryOpWithProvenance
   :: MonadCited t f m
   => Scopes m (NValue t f m)
@@ -274,7 +285,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     do
       scope <- askScopes
       span  <- askSpan
-      mkNVBinaryOpWithProvenance scope span NApp (pure f) Nothing <$> (callFunc f =<< defer x)
+      mkNVAppOpWithProvenance scope span (pure f) Nothing <$> (callFunc f =<< defer x)
 
   evalAbs
     :: Params (m (NValue t f m))
@@ -444,8 +455,6 @@ execBinaryOpForced scope span op lval rval =
           mkStrP . (ls <>) <$>
             coerceAnyToNixString callFunc DontCopyToStore rs
         _ -> unsupportedTypes
-
-    NApp  -> throwError $ ErrorCall "NApp should be handled by evalApp"
     _other   -> shouldBeAlreadyHandled
 
  where

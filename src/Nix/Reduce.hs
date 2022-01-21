@@ -171,13 +171,13 @@ reduce (NUnaryAnnF uann op arg) =
 --
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
-reduce (NBinaryAnnF bann NApp fun arg) =
+reduce (NAppAnnF bann fun arg) =
   (\case
     f@(NSymAnn _ "import") ->
       (\case
           -- NEnvPathAnn     pann origPath -> staticImport pann origPath
         NLiteralPathAnn pann origPath -> staticImport pann origPath
-        v -> pure $ NBinaryAnn bann NApp f v
+        v -> pure $ NAppAnn bann f v
       ) =<< arg
 
     NAbsAnn _ (Param name) body ->
@@ -187,7 +187,7 @@ reduce (NBinaryAnnF bann NApp fun arg) =
           (coerce $ HM.singleton name x)
           (foldFix reduce body)
 
-    f -> NBinaryAnn bann NApp f <$> arg
+    f -> NAppAnn bann f <$> arg
   ) =<< fun
 
 -- | Reduce an integer addition to its result.
@@ -391,13 +391,13 @@ pruneTree opts =
     NSelect alt (Just aset) attr ->
       pure $ NSelect (join alt) aset $ pruneKeyName <$> attr
 
+    -- If the function was never called, it means its argument was in a
+    -- thunk that was forced elsewhere.
+    NApp Nothing (Just _) -> Nothing
+
     -- These are the only short-circuiting binary operators
     NBinary NAnd (Just (Ann _ larg)) _ -> pure larg
     NBinary NOr  (Just (Ann _ larg)) _ -> pure larg
-
-    -- If the function was never called, it means its argument was in a
-    -- thunk that was forced elsewhere.
-    NBinary NApp Nothing (Just _) -> Nothing
 
     -- The idea behind emitted a binary operator where one side may be
     -- invalid is that we're trying to emit what will reproduce whatever

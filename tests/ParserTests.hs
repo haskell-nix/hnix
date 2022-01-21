@@ -662,12 +662,10 @@ case_simpleLoc =
       (one $
         NamedVar
           (one $ StaticKey "foo")
-          (NBinaryAnn
+          (NAppAnn
             (mkSpan (2, 7) (3, 15))
-            NApp
-            (NBinaryAnn
+            (NAppAnn
               (mkSpan (2, 7) (3, 9))
-              NApp
               (NSymAnn (mkSpan (2, 7) (2, 10)) "bar")
               (NSymAnn (mkSpan (3, 6) (3, 9 )) "baz")
             )

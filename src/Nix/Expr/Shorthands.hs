@@ -68,7 +68,12 @@ mkSynHole = Fix . mkSynHoleF
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = one . StaticKey . coerce
 
+-- | Put a binary operator.
+--  @since
+mkApp :: NExpr -> NExpr -> NExpr
+mkApp a = Fix . NApp a
 -- | Put an unary operator.
+
 --  @since 0.15.0
 mkOp :: NUnaryOp -> NExpr -> NExpr
 mkOp op = Fix . NUnary op
@@ -343,7 +348,7 @@ infix 9 @.
 infix 9 @.<|>
 
 -- | Function application (@' '@ in @f x@)
-(@@) = mkOp2 NApp
+(@@) = mkApp
 infixl 8 @@
 
 -- | List concatenation: @++@

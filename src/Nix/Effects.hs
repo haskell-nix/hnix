@@ -290,24 +290,27 @@ class
 -- ** Instances
 
 instance MonadHttp IO where
-  getURL url = do
-    let urlstr = toString url
-    traceM $ "fetching HTTP URL: " <> urlstr
-    req     <- parseRequest urlstr
-    manager <-
-      if secure req
-        then newTlsManager
-        else newManager defaultManagerSettings
-    -- print req
-    response <- httpLbs (req { method = "GET" }) manager
-    let status = statusCode $ responseStatus response
-    pure $ Left $ ErrorCall $ if status /= 200
-      then
-        "fail, got " <> show status <> " when fetching url:" <> urlstr
-      else
-        -- do
-        -- let bstr = responseBody response
-        "success in downloading but hnix-store is not yet ready; url = " <> urlstr
+  getURL url =
+    do
+      let urlstr = toString url
+      traceM $ "fetching HTTP URL: " <> urlstr
+      req     <- parseRequest urlstr
+      manager <-
+        bool
+          (newManager defaultManagerSettings)
+          newTlsManager
+          (secure req)
+      -- print req
+      response <- httpLbs (req { method = "GET" }) manager
+      let status = statusCode $ responseStatus response
+      pure $ Left $ ErrorCall $
+        bool
+          ("fail, got " <> show status <> " when fetching url = ")
+          -- do
+          -- let bstr = responseBody response
+          "success in downloading but hnix-store is not yet ready; url = "
+          (status == 200)
+          <> urlstr
 
 deriving
   instance
@@ -418,13 +421,12 @@ instance MonadStore IO where
 -- ** Functions
 
 parseStoreResult :: Monad m => Text -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
-parseStoreResult name res =
-  pure $ either
-    (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> msg <> "\n" <> show logs)
-    pure -- result
-    (fst res)
- where
-  logs = snd res
+parseStoreResult name (res, logs) =
+  pure $
+    either
+      (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> msg <> "\n" <> show logs)
+      pure
+      res
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
 addTextToStore a b c d =
