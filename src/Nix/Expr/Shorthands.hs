@@ -68,7 +68,12 @@ mkSynHole = Fix . mkSynHoleF
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = one . StaticKey . coerce
 
+-- | Put a binary operator.
+--  @since
+mkApp :: NExpr -> NExpr -> NExpr
+mkApp a = Fix . NApp a
 -- | Put an unary operator.
+
 --  @since 0.15.0
 mkOp :: NUnaryOp -> NExpr -> NExpr
 mkOp op = Fix . NUnary op
@@ -83,11 +88,6 @@ mkNot = mkOp NNot
 --  @since 0.15.0
 mkNeg :: NExpr -> NExpr
 mkNeg = mkOp NNeg
-
--- | Put a binary operator.
---  @since 0.16.0
-mkApp :: NExpr -> NExpr -> NExpr
-mkApp a = Fix . NApp a
 
 -- | Put a binary operator.
 --  @since 0.15.0
