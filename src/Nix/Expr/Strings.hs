@@ -72,7 +72,7 @@ stripIndent xs =
  where
   pairWithLast ys =
     zip
-      (list
+      (handlePresence
         Nothing
         (pure . Unsafe.last)
         <$> inits ys
@@ -83,7 +83,7 @@ stripIndent xs =
   ls'       = dropSpaces minIndent <$> ls
 
   minIndent =
-    list
+    handlePresence
       0
       (minimum . (countSpaces . mergePlain <$>))
       (stripEmptyLines ls)

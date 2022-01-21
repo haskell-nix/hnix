@@ -22,7 +22,6 @@ module Nix.Utils
   , isPresent
   , handlePresence
   , whenText
-  , list
   , free
 
   , Path(..)
@@ -213,23 +212,13 @@ isPresent :: Foldable t => t a -> Bool
 isPresent = not . null
 
 
+-- | 'maybe'-like eliminator, for foldable empty/inhabited structures.
 handlePresence :: Foldable t => b -> (t a -> b) -> t a -> b
 handlePresence d f t =
   bool
     d
     (f t)
     (isPresent t)
-
--- | Analog for @bool@ or @maybe@, for list-like cons structures.
-list
-  :: Foldable t
-  => b -> (t a -> b) -> t a -> b
-list e f l =
-  bool
-    e
-    (f l)
-    (isPresent l)
-{-# inline list #-}
 
 whenText
   :: a -> (Text -> a) -> Text -> a

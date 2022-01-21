@@ -50,7 +50,11 @@ renderFrames xss@(x : xs) =
       --  2021-10-22: NOTE: List reverse is completely conterproductive. `reverse` of list famously neest to traverse the whole list to take the last element
         | verbosity <= Informational -> (foldMap renderPosition (reverse xs) <>) <$> render1 x
         | otherwise -> foldMapM render1 (reverse xss)
-    pure $ list mempty vsep renderedFrames
+    pure $
+      handlePresence
+        mempty
+        vsep
+        renderedFrames
  where
   render1 :: NixFrame -> m [Doc ann1]
   render1 = renderFrame @v @t @f

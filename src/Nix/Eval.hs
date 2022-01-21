@@ -369,7 +369,7 @@ evalBinds isRecursive binds =
         -- Empty attrset - return a stub.
         (pure (mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty) )
         (\ k ->
-          list
+          handlePresence
             -- No more keys in the attrset - return the result
             (pure ( one k, pos, finalValue ) )
             -- There are unprocessed keys in attrset - recurse appending the results
@@ -431,7 +431,7 @@ evalSelect aset attr =
       left
       (maybe
         left
-        (list
+        (handlePresence
           (pure . pure)
           (\ (y : ys) -> (extract (y :| ys) =<<))
           ks

@@ -331,7 +331,7 @@ exprFNixDoc = \case
   NSynHole name -> simpleExpr $ pretty @Text ("^" <> coerce name)
  where
   prettyContainer h f t c =
-    list
+    handlePresence
       (simpleExpr (h <> t))
       (const $ simpleExpr $ group $ nest 2 $ vsep $ one h <> (f <$> c) <> one t)
       c
@@ -380,7 +380,7 @@ prettyProv
   -> NValue t f m
   -> Doc ann
 prettyProv wasThunk v =
-  list
+  handlePresence
     id
     (\ ps pv ->
       fillSep
