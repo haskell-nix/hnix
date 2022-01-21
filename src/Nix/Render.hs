@@ -14,6 +14,9 @@ import qualified Data.Set                      as Set
 import           Nix.Utils.Fix1                 ( Fix1T
                                                 , MonadFix1T
                                                 )
+import           Nix.Expr.Types                 ( NPos(..)
+                                                , NSourcePos(..)
+                                                )
 import           Nix.Expr.Types.Annotated
 import           Prettyprinter
 import qualified System.Directory              as S
@@ -65,14 +68,14 @@ instance MonadFile IO where
 
 instance (MonadFix1T t m, MonadIO (Fix1T t m), MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
-posAndMsg :: SourcePos -> Doc a -> ParseError s Void
-posAndMsg (SourcePos _ lineNo _) msg =
+posAndMsg :: NSourcePos -> Doc a -> ParseError s Void
+posAndMsg (NSourcePos _ (coerce -> lineNo) _) msg =
   FancyError
     (unPos lineNo)
     (Set.fromList $ one (ErrorFail (show msg) :: ErrorFancy Void))
 
 renderLocation :: MonadFile m => SrcSpan -> Doc a -> m (Doc a)
-renderLocation (SrcSpan (SourcePos (coerce -> file) begLine begCol) (SourcePos (coerce -> file') endLine endCol)) msg
+renderLocation (SrcSpan (NSourcePos file (coerce -> begLine) (coerce -> begCol)) (NSourcePos file' (coerce -> endLine) (coerce -> endCol))) msg
   | file == file' && file == "<string>" && begLine == endLine =
     pure $ "In raw input string at position " <> pretty (unPos begCol)
 

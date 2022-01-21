@@ -1986,7 +1986,7 @@ builtinsList =
     , add  Normal   "tail"             tailNix
     , add2 Normal   "toFile"           toFileNix
     , add  Normal   "toJSON"           toJSONNix
-    , add  Normal   "toPath"           toPathNix
+    , add  Normal   "toPath"           toPathNix -- Deprecated in Nix: https://github.com/NixOS/nix/pull/2524
     , add  Normal   "toXML"            toXMLNix
     , add0 Normal   "true"             (pure $ mkNVBool True)
     , add  Normal   "tryEval"          tryEvalNix

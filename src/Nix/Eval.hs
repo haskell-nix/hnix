@@ -213,7 +213,7 @@ attrSetAlter
   :: forall v m
    . MonadNixEval v m
   => [VarName]
-  -> SourcePos
+  -> NSourcePos
   -> AttrSet (m v)
   -> PositionSet
   -> m v
@@ -267,7 +267,7 @@ desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
   collect
     :: Binding r
     -> State
-         (AttrSet (SourcePos, [Binding r]))
+         (AttrSet (NSourcePos, [Binding r]))
          (Either VarName (Binding r))
   collect (NamedVar (StaticKey x :| y : ys) val oldPosition) =
     do
@@ -275,24 +275,24 @@ desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
       pure $ Left x
    where
     updateBindingInformation
-      :: AttrSet (SourcePos, [Binding r])
-      -> AttrSet (SourcePos, [Binding r])
+      :: AttrSet (NSourcePos, [Binding r])
+      -> AttrSet (NSourcePos, [Binding r])
     updateBindingInformation =
       M.insert x
         =<< maybe
             (mkBindingSingleton oldPosition)
             (\ (foundPosition, newBindings) -> second (<> newBindings) $ mkBindingSingleton foundPosition)
             . M.lookup x
-    mkBindingSingleton :: SourcePos -> (SourcePos, [Binding r])
+    mkBindingSingleton :: NSourcePos -> (NSourcePos, [Binding r])
     mkBindingSingleton np = (np , one $ bindValAt np)
      where
-      bindValAt :: SourcePos -> Binding r
+      bindValAt :: NSourcePos -> Binding r
       bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
   findBinding
     :: Either VarName (Binding r)
-    -> State (AttrSet (SourcePos, [Binding r])) (Binding r)
+    -> State (AttrSet (NSourcePos, [Binding r])) (Binding r)
   findBinding =
     either
       (\ x ->
@@ -320,7 +320,7 @@ evalBinds isRecursive binds =
  where
   buildResult
     :: Scopes m v
-    -> [([VarName], SourcePos, m v)]
+    -> [([VarName], NSourcePos, m v)]
     -> m (AttrSet v, PositionSet)
   buildResult scopes bindings =
     do
@@ -335,13 +335,14 @@ evalBinds isRecursive binds =
       pure (coerce res, p)
 
    where
+    insert :: (AttrSet (m v), PositionSet) -> ([VarName], NSourcePos, m v) -> m (AttrSet (m v), PositionSet)
     insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
     mkThunk = defer . withScopes scopes
 
     encapsulate f attrs = mkThunk $ pushScope attrs f
 
-  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([VarName], SourcePos, m v)]
+  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([VarName], NSourcePos, m v)]
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     do
       (o', p') <- fromValue =<< finalValue
@@ -363,7 +364,7 @@ evalBinds isRecursive binds =
     ) <$> processAttrSetKeys pathExpr
 
    where
-    processAttrSetKeys :: NAttrPath (m v) -> m ([VarName], SourcePos, m v)
+    processAttrSetKeys :: NAttrPath (m v) -> m ([VarName], NSourcePos, m v)
     processAttrSetKeys (h :| t) =
       maybe
         -- Empty attrset - return a stub.
@@ -387,7 +388,7 @@ evalBinds isRecursive binds =
    where
     processScope
       :: VarName
-      -> ([VarName], SourcePos, m v)
+      -> ([VarName], NSourcePos, m v)
     processScope var =
       ( one var
       , pos

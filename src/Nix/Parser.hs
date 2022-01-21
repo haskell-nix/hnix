@@ -108,10 +108,10 @@ annotateLocation1 :: Parser a -> Parser (AnnUnit SrcSpan a)
 annotateLocation1 p =
   do
     begin <- getSourcePos
-    res <- p
+    res   <- p
     end   <- get -- The state set before the last whitespace
 
-    pure $ AnnUnit (SrcSpan begin end) res
+    pure $ AnnUnit (SrcSpan (toNSourcePos begin) (toNSourcePos end)) res
 
 annotateLocation :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation = (annUnitToAnn <$>) . annotateLocation1
@@ -401,7 +401,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
       label "inherited binding" $
         liftA2 (Inherit x)
           (many identifier)
-          (pure p)
+          (pure (toNSourcePos p))
   namedVar =
     do
       p <- getSourcePos
@@ -409,7 +409,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
         liftA3 NamedVar
           (annotated <$> nixSelector)
           (exprAfterSymbol '=')
-          (pure p)
+          (pure (toNSourcePos p))
   scope = label "inherit scope" nixParens
 
 nixSet :: Parser NExprLoc

@@ -22,7 +22,6 @@ import           Nix.Pretty
 import           Prettyprinter
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
-import           Text.Megaparsec                ( Pos )
 import qualified Text.Show.Pretty              as PS
 
 asciiString :: MonadGen m => m String
@@ -35,16 +34,16 @@ asciiVarName :: Gen VarName
 asciiVarName = coerce <$> asciiText
 
 -- Might want to replace this instance with a constant value
-genPos :: Gen Pos
-genPos = mkPos <$> Gen.int (Range.linear 1 256)
+genNPos :: Gen NPos
+genNPos = fmap coerce $ mkPos <$> Gen.int (Range.linear 1 256)
 
-genSourcePos :: Gen SourcePos
-genSourcePos =
+genNSourcePos :: Gen NSourcePos
+genNSourcePos =
   join (liftA3
-      SourcePos
-      asciiString
+      NSourcePos
+      (fmap coerce asciiString)
     )
-    genPos
+    genNPos
 
 genKeyName :: Gen (NKeyName NExpr)
 genKeyName =
@@ -59,11 +58,11 @@ genBinding = Gen.choice
   [ liftA3 NamedVar
       genAttrPath
       genExpr
-      genSourcePos
+      genNSourcePos
   , liftA3 Inherit
       (Gen.maybe genExpr)
       (Gen.list (Range.linear 0 5) asciiVarName)
-      genSourcePos
+      genNSourcePos
   ]
 
 genString :: Gen (NString NExpr)

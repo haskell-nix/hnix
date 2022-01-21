@@ -21,7 +21,6 @@ import qualified Data.HashMap.Lazy             as M
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.String
 import           Nix.Value
@@ -410,11 +409,11 @@ instance Convertible e t f m
   toValue = toValue @Path . coerce
 
 instance Convertible e t f m
-  => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
-  toValue (SourcePos f l c) = do
-    f' <- toValue $ mkNixStringWithoutContext $ fromString f
-    l' <- toValue $ unPos l
-    c' <- toValue $ unPos c
+  => ToValue NSourcePos m (NValue' t f m (NValue t f m)) where
+  toValue (NSourcePos f l c) = do
+    f' <- toValue $ mkNixStringWithoutContext $ fromString $ coerce f
+    l' <- toValue $ unPos $ coerce l
+    c' <- toValue $ unPos $ coerce c
     let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
     pure $ mkNVSet' mempty pos
 

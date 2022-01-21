@@ -18,7 +18,13 @@
 -- [Brief on shallow & deep embedding.](https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/)
 --
 -- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations.
-module Nix.Expr.Types where
+module Nix.Expr.Types
+  ( module Nix.Expr.Types
+  , SourcePos(..)
+  , unPos
+  , mkPos
+  )
+where
 
 import           Nix.Prelude
 import qualified Codec.Serialise               as Serialise
@@ -40,10 +46,10 @@ import           GHC.Generics
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
 import           Lens.Family2.TH
-import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
-                                                , Pos
+import           Text.Megaparsec.Pos            ( Pos
                                                 , mkPos
                                                 , unPos
+                                                , SourcePos(SourcePos)
                                                 )
 import           Text.Show.Deriving             ( deriveShow1, deriveShow2 )
 import           Text.Read.Deriving             ( deriveRead1, deriveRead2 )
@@ -60,13 +66,55 @@ import           Instances.TH.Lift              ()  -- importing Lift Text for G
 
 -- * utils
 
+newtype NPos = NPos Pos
+ deriving
+   ( Eq, Ord
+   , Read, Show
+   , Data, NFData
+   , Generic
+   )
+
+instance Semigroup NPos where
+  (NPos x) <> (NPos y) = NPos (x <> y)
+
+-- | Represents source positions.
+-- Source line & column positions change intensively during parsing,
+-- so they are declared strict to avoid memory leaks.
+--
+-- The data type is a reimplementation of 'Text.Megaparsec.Pos' 'SourcePos'.
+data NSourcePos =
+  NSourcePos
+  { -- | Name of source file
+    getSourceName :: Path,
+    -- | Line number
+    getSourceLine :: !NPos,
+    -- | Column number
+    getSourceColumn :: !NPos
+  }
+ deriving
+   ( Eq, Ord
+   , Read, Show
+   , Data, NFData
+   , Generic
+   )
+
+-- | Helper for 'SourcePos' -> 'NSourcePos' coersion.
+toNSourcePos :: SourcePos -> NSourcePos
+toNSourcePos (SourcePos f l c) =
+  NSourcePos (coerce f) (coerce l) (coerce c)
+
+-- | Helper for 'NSourcePos' -> 'SourcePos' coersion.
+toSourcePos :: NSourcePos -> SourcePos
+toSourcePos (NSourcePos f l c) =
+  SourcePos (coerce f) (coerce l) (coerce c)
+
 --  2021-07-16: NOTE: Should replace @ParamSet@ List
 -- | > Hashmap VarName -- type synonym
 type AttrSet = HashMap VarName
 
 -- | Holds file positionng information for abstrations.
--- A type synonym for @HashMap VarName SourcePos@.
-type PositionSet = AttrSet SourcePos
+-- A type synonym for @HashMap VarName NSourcePos@.
+type PositionSet = AttrSet NSourcePos
 
 -- ** orphan instances
 
@@ -74,43 +122,44 @@ type PositionSet = AttrSet SourcePos
 
 -- Upstreaming so far was not pursued.
 
-instance Serialise Pos where
-  encode = Serialise.encode . unPos
-  decode = mkPos <$> Serialise.decode
+instance Serialise NPos where
+  encode = Serialise.encode . unPos . coerce
+  decode = coerce . mkPos <$> Serialise.decode
 
-instance Serialise SourcePos where
-  encode (SourcePos f l c) =
+instance Serialise NSourcePos where
+  encode (NSourcePos f l c) =
+    coerce $
     Serialise.encode f <>
     Serialise.encode l <>
     Serialise.encode c
   decode =
-    liftA3 SourcePos
+    liftA3 NSourcePos
       Serialise.decode
       Serialise.decode
       Serialise.decode
 
-instance Hashable Pos where
-  hashWithSalt salt = hashWithSalt salt . unPos
+instance Hashable NPos where
+  hashWithSalt salt = hashWithSalt salt . unPos . coerce
 
-instance Hashable SourcePos where
-  hashWithSalt salt (SourcePos f l c) =
+instance Hashable NSourcePos where
+  hashWithSalt salt (NSourcePos f l c) =
     salt
       `hashWithSalt` f
       `hashWithSalt` l
       `hashWithSalt` c
 
-instance Binary Pos where
-  put = Binary.put . unPos
-  get = mkPos <$> Binary.get
-instance Binary SourcePos
+instance Binary NPos where
+  put = (Binary.put @Int) . unPos . coerce
+  get = coerce . mkPos <$> Binary.get
+instance Binary NSourcePos
 
-instance ToJSON Pos where
-  toJSON = toJSON . unPos
-instance ToJSON SourcePos
+instance ToJSON NPos where
+  toJSON = toJSON . unPos . coerce
+instance ToJSON NSourcePos
 
-instance FromJSON Pos where
-  parseJSON = fmap mkPos . parseJSON
-instance FromJSON SourcePos
+instance FromJSON NPos where
+  parseJSON = coerce . fmap mkPos . parseJSON
+instance FromJSON NSourcePos
 
 -- * Components of Nix expressions
 
@@ -405,23 +454,23 @@ instance Hashable1 NonEmpty
 
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
-  = NamedVar !(NAttrPath r) !r !SourcePos
+  = NamedVar !(NAttrPath r) !r !NSourcePos
   -- ^ An explicit naming.
   --
-  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![VarName] !SourcePos
+  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z NSourcePos{}  ~  x.y = z;
+  | Inherit !(Maybe r) ![VarName] !NSourcePos
   -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
   --
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  -- | Hask                                                          | Nix                | pseudocode            |
-  -- +===============================================================+====================+=======================+
-  -- | @Inherit Nothing  [StaticKey "a"] SourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  -- | @Inherit (pure x) [StaticKey "a"] SourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] SourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
-  -- |                                                               |                    | @b = x.b;@            |
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- +----------------------------------------------------------------+--------------------+-----------------------+
+  -- | Hask                                                           | Nix                | pseudocode            |
+  -- +================================================================+====================+=======================+
+  -- | @Inherit Nothing  [StaticKey "a"] NSourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
+  -- +----------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a"] NSourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
+  -- +----------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] NSourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
+  -- |                                                                |                    | @b = x.b;@            |
+  -- +----------------------------------------------------------------+--------------------+-----------------------+
   --
   -- (2021-07-07 use details):
   -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
@@ -701,8 +750,8 @@ stripPositionInfo = transport phi
   erasePositions (NamedVar path r     _pos) = NamedVar path r     nullPos
   erasePositions (Inherit  ms   names _pos) = Inherit  ms   names nullPos
 
-nullPos :: SourcePos
-nullPos = on (SourcePos "<string>") mkPos 1 1
+nullPos :: NSourcePos
+nullPos = on (NSourcePos "<string>") (coerce . mkPos) 1 1
 
 -- * Dead code
 
@@ -718,7 +767,7 @@ ekey
   :: forall ann g
   . NExprAnn ann g
   => NonEmpty VarName
-  -> SourcePos
+  -> NSourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
 ekey keys pos f e@(Fix x)
   | (NSet NonRecursive xs, ann) <- fromNExpr x =

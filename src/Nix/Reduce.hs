@@ -102,7 +102,7 @@ staticImport pann path =
           (\ err -> fail $ "Parse failed: " <> show err)
           (\ x -> do
             let
-              pos  = join (SourcePos "Reduce.hs") $ mkPos 1
+              pos  = join (NSourcePos "Reduce.hs") $ (coerce . mkPos) 1
               span = join SrcSpan pos
               cur  =
                 NamedVar
