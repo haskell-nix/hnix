@@ -1715,39 +1715,36 @@ addErrorContextNix _ = pure
 execNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 execNix xs =
-  do
-    xs' <- traverse (coerceStringlikeToNixString DontCopyToStore) =<< fromValue @[NValue t f m] xs
-    -- 2018-11-19: NOTE: Still need to do something with the context here
-    -- See prim_exec in nix/src/libexpr/primops.cc
-    -- Requires the implementation of EvalState::realiseContext
-    exec $ ignoreContext <$> xs'
+  -- 2018-11-19: NOTE: Still need to do something with the context here
+  -- See prim_exec in nix/src/libexpr/primops.cc
+  -- Requires the implementation of EvalState::realiseContext
+  (exec . fmap ignoreContext) =<< traverse (coerceStringlikeToNixString DontCopyToStore) =<< fromValue @[NValue t f m] xs
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchurlNix =
   (\case
-    NVSet _ s -> go (M.lookup "sha256" s) =<< demand =<< attrsetGet "url" s
-    v@NVStr{} -> go Nothing v
+    NVSet _ s -> fetch (M.lookup "sha256" s) =<< demand =<< attrsetGet "url" s
+    v@NVStr{} -> fetch Nothing v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
   ) <=< demand
 
  where
-  go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
-  go _msha =
+  --  2022-01-21: NOTE: Needs to check the hash match.
+  fetch :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
+  fetch _msha =
     \case
       NVStr ns ->
         either -- msha
           throwError
           toValue
-          =<< getURL =<< noContextAttrs ns
+          =<< getURL
+            =<< maybe
+              (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
+              pure
+              (getStringNoContext ns)
 
       v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or string, got " <> show v
-
-  noContextAttrs ns =
-    maybe
-      (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
-      pure
-      (getStringNoContext ns)
 
 partitionNix
   :: forall e t f m
@@ -1757,10 +1754,9 @@ partitionNix
   -> m (NValue t f m)
 partitionNix f nvlst =
   do
-    l <- fromValue @[NValue t f m] nvlst
     let
       match t = (, t) <$> (fromValue =<< callFunc f t)
-    selection <- traverse match l
+    selection <- traverse match =<< fromValue @[NValue t f m] nvlst
 
     let
       (right, wrong) = partition fst selection

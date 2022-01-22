@@ -116,11 +116,9 @@ type AttrSet = HashMap VarName
 -- A type synonym for @HashMap VarName NSourcePos@.
 type PositionSet = AttrSet NSourcePos
 
--- ** orphan instances
+-- ** Additional N{,Source}Pos instances
 
 -- Placed here because TH inference depends on declaration sequence.
-
--- Upstreaming so far was not pursued.
 
 instance Serialise NPos where
   encode = Serialise.encode . unPos . coerce
@@ -529,7 +527,6 @@ data NUnaryOp
 
 $(makeTraversals ''NUnaryOp)
 
-
 -- ** data NBinaryOp
 
 -- | Binary operators expressible in the nix language.
@@ -549,9 +546,6 @@ data NBinaryOp
   | NMult    -- ^ Multiplication (@*@)
   | NDiv     -- ^ Division (@/@)
   | NConcat  -- ^ List concatenation (@++@)
-  | NApp     -- ^ Apply a function to an argument.
-             --
-             -- > NBinary NApp f x  ~  f x
   deriving
     ( Eq, Ord, Enum, Bounded, Generic
     , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
@@ -605,6 +599,10 @@ data NExprF r
   --
   -- > NUnary NNeg x                               ~  - x
   -- > NUnary NNot x                               ~  ! x
+  | NApp !r !r
+  -- ^ Functional application (aka F.A., apply a function to an argument).
+  --
+  -- > NApp f x  ~  f x
   | NBinary !NBinaryOp !r !r
   -- ^ Application of a binary operator to two expressions.
   --
@@ -814,6 +812,7 @@ getFreeVars e =
     (NLiteralPath _               ) -> mempty
     (NEnvPath     _               ) -> mempty
     (NUnary       _    expr       ) -> getFreeVars expr
+    (NApp         left right      ) -> collectFreeVars left right
     (NBinary      _    left right ) -> collectFreeVars left right
     (NSelect      orExpr expr path) ->
       Set.unions

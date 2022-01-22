@@ -1,6 +1,13 @@
 
 # ChangeLog
 
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.16.0...0.17.0#files_bucket) 0.17.0
+
+* Breaking:
+  * `Nix.Expr.Types`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1042/files) The central HNix type `NExprF` changed, the `NApp` was moved out of `NBinary` & now a `NExprF` constructor of its own, the type signatures were changed accordingly.
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1038/files) project was using `megaparsec` `{,Source}Pos` and to use it shipped a lot of orphan instances. To improve the situation & performance (reports [#1026](https://github.com/haskell-nix/hnix/issues/1026), [#746](https://github.com/haskell-nix/hnix/issues/746)) project uses `N{,Source}Pos` types, related type signatures were changed accordingly.
+
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.15.0...0.16.0#files_bucket) 0.16.0
 
 On update problems, please reach out to us. For support refere to: https://github.com/haskell-nix/hnix/issues/984
