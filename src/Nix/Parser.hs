@@ -476,6 +476,22 @@ instance IsString NOpName where
 instance ToString NOpName where
   toString = toString @Text . coerce
 
+operator :: NOpName -> Parser Text
+operator (coerce -> op) =
+  case op of
+    c@"-" -> c `without` '>'
+    c@"/" -> c `without` '/'
+    c@"<" -> c `without` '='
+    c@">" -> c `without` '='
+    n   -> symbols n
+ where
+  without :: Text -> Char -> Parser Text
+  without opChar noNextChar =
+    lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
+
+opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> NOpName -> Parser a
+opWithLoc f op name = f . (op <$) <$> annotateLocation1 (operator name)
+
 newtype NOpPrecedence = NOpPrecedence Int
   deriving (Eq, Ord, Generic, Bounded, Typeable, Data, Show, NFData)
 
@@ -504,24 +520,14 @@ data NOperatorDef
   | NSpecialDef (Map NSpecialOp OperatorInfo)
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
+prefix op precedence name =
+  (NUnaryDef op precedence name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
+-- postfix name op = (NUnaryDef name op,
+--                    Postfix (opWithLoc annNUnary op name))
+
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
-
-operator :: NOpName -> Parser Text
-operator (coerce -> op) =
-  case op of
-    c@"-" -> c `without` '>'
-    c@"/" -> c `without` '/'
-    c@"<" -> c `without` '='
-    c@">" -> c `without` '='
-    n   -> symbols n
- where
-  without :: Text -> Char -> Parser Text
-  without opChar noNextChar =
-    lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
-
-opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> NOpName -> Parser a
-opWithLoc f op name = f . (op <$) <$> annotateLocation1 (operator name)
 
 binary
   :: NAssoc
@@ -540,12 +546,6 @@ binaryL =
   binary NAssocLeft InfixL
 binaryR =
   binary NAssocRight InfixR
-
-prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
-prefix op precedence name =
-  (NUnaryDef op precedence name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
--- postfix name op = (NUnaryDef name op,
---                    Postfix (opWithLoc annNUnary op name))
 
 nixOperators
   :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
