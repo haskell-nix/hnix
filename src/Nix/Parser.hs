@@ -499,9 +499,9 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 
 data NOperatorDef
   = NAppDef                       NOpPrecedence NOpName
-  | NUnaryDef          NUnaryOp   NOpPrecedence NOpName
-  | NBinaryDef  NAssoc NBinaryOp  NOpPrecedence NOpName
-  | NSpecialDef NAssoc NSpecialOp NOpPrecedence NOpName
+  | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
+  | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
+  | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -537,7 +537,7 @@ binary
   -> NOpName
   -> (NOperatorDef, b)
 binary assoc fixity op precedence name =
-  (NBinaryDef assoc op precedence name, fixity $ opWithLoc annNBinary op name)
+  (NBinaryDef op assoc precedence name, fixity $ opWithLoc annNBinary op name)
 
 binaryN, binaryL, binaryR :: NBinaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
@@ -586,7 +586,7 @@ nixOperators selector =
     one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef NAssocLeft NHasAttrOp 4 "?"
+      ( NSpecialDef NHasAttrOp NAssocLeft 4 "?"
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
@@ -683,7 +683,7 @@ getBinaryOperator = detectPrecedence spec
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
   spec _ =
     \case
-      (NBinaryDef assoc op prec name, _) -> one (op, OperatorInfo assoc prec name)
+      (NBinaryDef op assoc prec name, _) -> one (op, OperatorInfo assoc prec name)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
@@ -693,7 +693,7 @@ getSpecialOperator o         = detectPrecedence spec o
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
   spec _ =
       \case
-        (NSpecialDef assoc op prec name, _) -> one (op, OperatorInfo assoc prec name)
+        (NSpecialDef op assoc prec name, _) -> one (op, OperatorInfo assoc prec name)
         _                              -> mempty
 
 -- ** x: y lambda function
