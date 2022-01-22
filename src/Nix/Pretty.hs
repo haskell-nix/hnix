@@ -74,7 +74,7 @@ leastPrecedence =
   mkNixDoc $ OperatorInfo NAssocNone maxBound "least precedence"
 
 appOp :: OperatorInfo
-appOp = getAppOperator
+appOp = appOperatorInfo
 
 appOpNonAssoc :: OperatorInfo
 appOpNonAssoc = appOp { associativity = NAssocNone }

@@ -21,7 +21,7 @@ module Nix.Parser
   , NAssoc(..)
   , NOperatorDef
   , getUnaryOperator
-  , getAppOperator
+  , appOperatorInfo
   , getBinaryOperator
   , getSpecialOperator
   , nixExpr
@@ -498,8 +498,8 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NOperatorDef
-  = NAppDef                       NOpPrecedence NOpName
-  | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
+  = NAppDef                NOpPrecedence NOpName
+  | NUnaryDef   NUnaryOp   NOpPrecedence NOpName
   | NBinaryDef  NBinaryOp  OperatorInfo
   | NSpecialDef NSpecialOp OperatorInfo
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
@@ -551,7 +551,7 @@ prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser
 prefix op precedence name =
   (NUnaryDef op precedence name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
 -- postfix name op = (NUnaryDef name op,
---                    Postfix (opWithLoc name op annNUnary))
+--                    Postfix (opWithLoc annNUnary op name))
 
 nixOperators
   :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
@@ -586,7 +586,7 @@ nixOperators selector =
     one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef NHasAttrOp (OperatorInfo NAssocLeft 4 "?")
+      ( NSpecialDef NHasAttrOp $ getSpecialOperator NHasAttrOp
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
@@ -639,38 +639,12 @@ data OperatorInfo =
     }
  deriving (Eq, Ord, Generic, Typeable, Data, NFData, Show)
 
-detectPrecedence
-  :: Ord a
-  => ( NOpPrecedence
-    -> (NOperatorDef, Operator Parser NExprLoc)
-    -> [(a, OperatorInfo)]
-    )
-  -> a
-  -> OperatorInfo
-detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
- where
-  mapOfOpWithPrecedence =
-    Map.fromList $
-      fold $
-        zipWith
-          (foldMap . spec)
-          [1 ..]
-          l
-   where
-    l :: [[(NOperatorDef, Operator Parser NExprLoc)]]
-    l = nixOperators $ fail "unused"
-
 getUnaryOperator :: NUnaryOp -> OperatorInfo
-getUnaryOperator = detectPrecedence spec
- where
-  spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
-  spec _ =
-    \case
-      (NUnaryDef op prec name, _) -> one (op, OperatorInfo NAssocNone prec name)
-      _                      -> mempty
+getUnaryOperator NNeg = OperatorInfo NAssocNone 3 "-"
+getUnaryOperator NNot = OperatorInfo NAssocNone 8 "!"
 
-getAppOperator :: OperatorInfo
-getAppOperator =
+appOperatorInfo :: OperatorInfo
+appOperatorInfo =
   OperatorInfo
     { precedence    = 1 -- inside the code it is 1, inside the Nix they are +1
     , associativity = NAssocLeft
@@ -678,23 +652,25 @@ getAppOperator =
     }
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
-getBinaryOperator = detectPrecedence spec
- where
-  spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
-  spec _ =
-    \case
-      (NBinaryDef op operatorInfo, _) -> one (op, operatorInfo)
-      _                             -> mempty
+getBinaryOperator NConcat = OperatorInfo NAssocRight  5 "++"
+getBinaryOperator NMult   = OperatorInfo NAssocLeft   6 "*"
+getBinaryOperator NDiv    = OperatorInfo NAssocLeft   6 "/"
+getBinaryOperator NPlus   = OperatorInfo NAssocLeft   7 "+"
+getBinaryOperator NMinus  = OperatorInfo NAssocLeft   7 "-"
+getBinaryOperator NUpdate = OperatorInfo NAssocRight  9 "//"
+getBinaryOperator NLt     = OperatorInfo NAssocLeft  10 "<"
+getBinaryOperator NLte    = OperatorInfo NAssocLeft  10 "<="
+getBinaryOperator NGt     = OperatorInfo NAssocLeft  10 ">"
+getBinaryOperator NGte    = OperatorInfo NAssocLeft  10 ">="
+getBinaryOperator NEq     = OperatorInfo NAssocNone  11 "=="
+getBinaryOperator NNEq    = OperatorInfo NAssocNone  11 "!="
+getBinaryOperator NAnd    = OperatorInfo NAssocLeft  12 "&&"
+getBinaryOperator NOr     = OperatorInfo NAssocLeft  13 "||"
+getBinaryOperator NImpl   = OperatorInfo NAssocRight 14 "->"
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator NSelectOp = OperatorInfo NAssocLeft 1 "."
-getSpecialOperator o         = detectPrecedence spec o
- where
-  spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
-  spec _ =
-      \case
-        (NSpecialDef op operatorInfo, _) -> one (op, operatorInfo)
-        _                              -> mempty
+getSpecialOperator NSelectOp  = OperatorInfo NAssocLeft 1 "."
+getSpecialOperator NHasAttrOp = OperatorInfo NAssocLeft 4 "?"
 
 -- ** x: y lambda function
 
