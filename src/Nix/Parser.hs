@@ -500,7 +500,7 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 --  2022-01-22: NOTE: NAppDef has only one associativity (left)
 data NOperatorDef
   = NUnaryDef          NUnaryOp   NOpName NOpPrecedence
-  | NAppDef            NAssoc     NOpName NOpPrecedence
+  | NAppDef                       NOpName NOpPrecedence
   | NBinaryDef  NAssoc NBinaryOp  NOpName NOpPrecedence
   | NSpecialDef NAssoc NSpecialOp NOpName NOpPrecedence
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
@@ -578,10 +578,10 @@ nixOperators selector =
 
     {-  2 -}
     one
-      ( NAppDef NAssocLeft " " 2
+      ( NAppDef " " 2
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ annNApp <$ symbols mempty
+        InfixL $ annNApp <$ symbols mempty -- NApp is left associative
       )
   , {-  3 -}
     one $ prefix  NNeg "-" 3
