@@ -497,12 +497,11 @@ data NSpecialOp = NHasAttrOp | NSelectOp
 data NAssoc = NAssocNone | NAssocLeft | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
---  2022-01-22: NOTE: NAppDef has only one associativity (left)
 data NOperatorDef
-  = NUnaryDef          NUnaryOp   NOpName NOpPrecedence
-  | NAppDef                       NOpName NOpPrecedence
-  | NBinaryDef  NAssoc NBinaryOp  NOpName NOpPrecedence
-  | NSpecialDef NAssoc NSpecialOp NOpName NOpPrecedence
+  = NAppDef                       NOpPrecedence NOpName
+  | NUnaryDef          NUnaryOp   NOpPrecedence NOpName
+  | NBinaryDef  NAssoc NBinaryOp  NOpPrecedence NOpName
+  | NSpecialDef NAssoc NSpecialOp NOpPrecedence NOpName
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -534,13 +533,13 @@ binary
   :: NAssoc
   -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
   -> NBinaryOp
-  -> NOpName
   -> NOpPrecedence
+  -> NOpName
   -> (NOperatorDef, b)
-binary assoc fixity op name precedence =
-  (NBinaryDef assoc op name precedence, fixity $ opWithLoc annNBinary op name)
+binary assoc fixity op precedence name =
+  (NBinaryDef assoc op precedence name, fixity $ opWithLoc annNBinary op name)
 
-binaryN, binaryL, binaryR :: NBinaryOp -> NOpName -> NOpPrecedence -> (NOperatorDef, Operator Parser NExprLoc)
+binaryN, binaryL, binaryR :: NBinaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
   binary NAssocNone InfixN
 binaryL =
@@ -548,9 +547,9 @@ binaryL =
 binaryR =
   binary NAssocRight InfixR
 
-prefix :: NUnaryOp -> NOpName -> NOpPrecedence -> (NOperatorDef, Operator Parser NExprLoc)
-prefix op name precedence =
-  (NUnaryDef op name precedence, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
+prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
+prefix op precedence name =
+  (NUnaryDef op precedence name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc name op annNUnary))
 
@@ -578,48 +577,48 @@ nixOperators selector =
 
     {-  2 -}
     one
-      ( NAppDef " " 2
+      ( NAppDef 2 " "
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ annNApp <$ symbols mempty -- NApp is left associative
       )
   , {-  3 -}
-    one $ prefix  NNeg "-" 3
+    one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef NAssocLeft NHasAttrOp "?" 4
+      ( NSpecialDef NAssocLeft NHasAttrOp 4 "?"
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
-    one $ binaryR NConcat "++" 5
+    one $ binaryR NConcat 5 "++"
   , {-  6 -}
-    [ binaryL NMult "*" 6
-    , binaryL NDiv  "/" 6
+    [ binaryL NMult 6 "*"
+    , binaryL NDiv  6 "/"
     ]
   , {-  7 -}
-    [ binaryL NPlus "+" 7
-    , binaryL NMinus "-" 7
+    [ binaryL NPlus 7 "+"
+    , binaryL NMinus 7  "-"
     ]
   , {-  8 -}
-    one $ prefix  NNot "!" 8
+    one $ prefix  NNot 8 "!"
   , {-  9 -}
-    one $ binaryR NUpdate "//" 9
+    one $ binaryR NUpdate 9 "//"
   , {- 10 -}
-    [ binaryL NLt "<" 10
-    , binaryL NGt ">" 10
-    , binaryL NLte "<=" 10
-    , binaryL NGte ">=" 10
+    [ binaryL NLt 10 "<"
+    , binaryL NGt 10 ">"
+    , binaryL NLte 10 "<="
+    , binaryL NGte 10 ">="
     ]
   , {- 11 -}
-    [ binaryN NEq "==" 11
-    , binaryN NNEq "!=" 11
+    [ binaryN NEq 11 "=="
+    , binaryN NNEq 11 "!="
     ]
   , {- 12 -}
-    one $ binaryL NAnd "&&" 12
+    one $ binaryL NAnd 12 "&&"
   , {- 13 -}
-    one $ binaryL NOr "||" 13
+    one $ binaryL NOr 13 "||"
   , {- 14 -}
-    one $ binaryR NImpl "->" 14
+    one $ binaryR NImpl 14 "->"
   ]
 
 --  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
@@ -667,7 +666,7 @@ getUnaryOperator = detectPrecedence spec
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
   spec _ =
     \case
-      (NUnaryDef op name prec, _) -> one (op, OperatorInfo NAssocNone prec name)
+      (NUnaryDef op prec name, _) -> one (op, OperatorInfo NAssocNone prec name)
       _                      -> mempty
 
 getAppOperator :: OperatorInfo
@@ -684,7 +683,7 @@ getBinaryOperator = detectPrecedence spec
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
   spec _ =
     \case
-      (NBinaryDef assoc op name prec, _) -> one (op, OperatorInfo assoc prec name)
+      (NBinaryDef assoc op prec name, _) -> one (op, OperatorInfo assoc prec name)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
@@ -694,7 +693,7 @@ getSpecialOperator o         = detectPrecedence spec o
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
   spec _ =
       \case
-        (NSpecialDef assoc op name prec, _) -> one (op, OperatorInfo assoc prec name)
+        (NSpecialDef assoc op prec name, _) -> one (op, OperatorInfo assoc prec name)
         _                              -> mempty
 
 -- ** x: y lambda function
