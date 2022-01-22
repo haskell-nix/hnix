@@ -915,7 +915,7 @@ pathNix arg =
 
     Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name path recursive False
     -- TODO: Ensure that s matches sha256 when not empty
-    pure $ mkNVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
+    pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
  where
   coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
 
