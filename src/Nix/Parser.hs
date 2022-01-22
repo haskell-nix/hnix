@@ -634,8 +634,8 @@ nixOperators selector =
 -- details: https://github.com/haskell-nix/hnix/issues/982
 data OperatorInfo =
   OperatorInfo
-    { precedence    :: NOpPrecedence
-    , associativity :: NAssoc
+    { associativity :: NAssoc
+    , precedence    :: NOpPrecedence
     , operatorName  :: NOpName
     }
  deriving (Eq, Ord, Generic, Typeable, Data, Show)
@@ -667,7 +667,7 @@ getUnaryOperator = detectPrecedence spec
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
   spec _ =
     \case
-      (NUnaryDef op name prec, _) -> one (op, OperatorInfo prec NAssocNone name)
+      (NUnaryDef op name prec, _) -> one (op, OperatorInfo NAssocNone prec name)
       _                      -> mempty
 
 getAppOperator :: OperatorInfo
@@ -684,17 +684,17 @@ getBinaryOperator = detectPrecedence spec
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
   spec _ =
     \case
-      (NBinaryDef assoc op name prec, _) -> one (op, OperatorInfo prec assoc name)
+      (NBinaryDef assoc op name prec, _) -> one (op, OperatorInfo assoc prec name)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
+getSpecialOperator NSelectOp = OperatorInfo NAssocLeft 1 "."
 getSpecialOperator o         = detectPrecedence spec o
  where
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
   spec _ =
       \case
-        (NSpecialDef assoc op name prec, _) -> one (op, OperatorInfo prec assoc name)
+        (NSpecialDef assoc op name prec, _) -> one (op, OperatorInfo assoc prec name)
         _                              -> mempty
 
 -- ** x: y lambda function

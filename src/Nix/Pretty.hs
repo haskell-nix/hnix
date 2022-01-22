@@ -59,7 +59,7 @@ mkNixDoc o d = NixDoc { getDoc = d, rootOp = o, wasPath = False }
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc ann -> NixDoc ann
-simpleExpr = mkNixDoc $ OperatorInfo minBound NAssocNone "simple expr"
+simpleExpr = mkNixDoc $ OperatorInfo NAssocNone minBound "simple expr"
 
 pathExpr :: Doc ann -> NixDoc ann
 pathExpr d = (simpleExpr d) { wasPath = True }
@@ -71,7 +71,7 @@ pathExpr d = (simpleExpr d) { wasPath = True }
 --   binding).
 leastPrecedence :: Doc ann -> NixDoc ann
 leastPrecedence =
-  mkNixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
+  mkNixDoc $ OperatorInfo NAssocNone maxBound "least precedence"
 
 appOp :: OperatorInfo
 appOp = getAppOperator
