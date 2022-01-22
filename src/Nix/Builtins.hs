@@ -1530,14 +1530,14 @@ placeHolderNix p =
       $ Base32.encode
       -- Please, stop Text -> Bytestring here after migration to Text
       $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
-
+#if MIN_VERSION_base16_bytestring(1,0,0)
         -- Please, stop Text -> String here after migration to Text
         Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
         Right d -> d
-
-
-
-
+#else
+        (d, "") -> d
+        (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
+#endif
     where
       bytes :: NixString -> ByteString
       bytes = encodeUtf8 . body
