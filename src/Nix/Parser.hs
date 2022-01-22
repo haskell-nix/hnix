@@ -672,8 +672,8 @@ unaryOpInfMap = fromList
   , (NNot, OperatorInfo NAssocNone 8 "!")
   ]
 
-getOperatorInfo    :: Ord k => Map k c -> k -> c
-getOperatorInfo mp = fromMaybe (error "Impossible, the key should be in the map") . (`M.lookup` mp)
+getOperatorInfo    :: Ord k => Map k OperatorInfo -> k -> OperatorInfo
+getOperatorInfo mp k = M.findWithDefault (OperatorInfo NAssocNone 1 "Impossible, the key should be in the operator map.") k mp
 
 getUnaryOperator   :: NUnaryOp -> OperatorInfo
 getUnaryOperator   = getOperatorInfo unaryOpInfMap
