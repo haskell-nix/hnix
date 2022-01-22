@@ -521,13 +521,7 @@ operator (coerce -> op) =
     lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
 
 opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> NOpName -> Parser a
-opWithLoc f op name =
-  do
-    AnnUnit ann _ <-
-      annotateLocation1 $
-        operator name
-
-    pure . f $ AnnUnit ann op
+opWithLoc f op name = f . (op <$) <$> annotateLocation1 (operator name)
 
 binary
   :: NAssoc
