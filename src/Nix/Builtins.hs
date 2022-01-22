@@ -33,10 +33,10 @@ import qualified "hashing" Crypto.Hash.SHA1    as SHA1
 import qualified "hashing" Crypto.Hash.SHA256  as SHA256
 import qualified "hashing" Crypto.Hash.SHA512  as SHA512
 import qualified Data.Aeson                    as A
-
-
-
-
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key                as AKM
+import qualified Data.Aeson.KeyMap             as AKM
+#endif
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
@@ -1619,11 +1619,11 @@ fromJSONNix nvjson =
       A.Object m ->
         traverseToNValue
           (NVSet mempty)
-
-
-
+#if MIN_VERSION_aeson(2,0,0)
+          (M.mapKeys (coerce . AKM.toText)  $ AKM.toHashMap m)
+#else
           (M.mapKeys coerce m)
-
+#endif
       A.Array  l -> traverseToNValue NVList (V.toList l)
       A.String s -> pure $ mkNVStrWithoutContext s
       A.Number n ->
