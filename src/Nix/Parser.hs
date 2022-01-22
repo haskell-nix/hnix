@@ -803,10 +803,7 @@ keyName = dynamicKey <|> staticKey
 
 nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
 nixSelector =
-  annotateLocation1 $
-    do
-      (x : xs) <- keyName `sepBy1` selDot
-      pure $ x :| xs
+  annotateLocation1 $ fromList <$> keyName `sepBy1` selDot
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
 nixSelect term =
