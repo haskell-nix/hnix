@@ -530,22 +530,19 @@ manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
 
 binary
-  :: NAssoc
-  -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
-  -> NBinaryOp
-  -> NOpPrecedence
-  -> NOpName
-  -> (NOperatorDef, b)
-binary assoc fixity op precedence name =
-  (NBinaryDef $ one (op, OperatorInfo assoc precedence name), fixity $ opWithLoc annNBinary op name)
+  :: NBinaryOp
+  -> (NOperatorDef, Operator Parser NExprLoc)
+binary op =
+  ( NBinaryDef $ one (op, operatorInfo)
+  , mapAssocToInfix (associativity operatorInfo) $ opWithLoc annNBinary op $ operatorName operatorInfo
+  )
+ where
+  operatorInfo = getBinaryOperator op
 
-binaryN, binaryL, binaryR :: NBinaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
-binaryN =
-  binary NAssocNone InfixN
-binaryL =
-  binary NAssocLeft InfixL
-binaryR =
-  binary NAssocRight InfixR
+mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
+mapAssocToInfix NAssocNone  = InfixN
+mapAssocToInfix NAssocLeft  = InfixL
+mapAssocToInfix NAssocRight = InfixR
 
 nixOperators
   :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
@@ -584,42 +581,41 @@ nixOperators selector =
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
-    one $ binaryR NConcat 5 "++"
+    one $ binary NConcat
   , {-  6 -}
-    [ binaryL NMult 6 "*"
-    , binaryL NDiv  6 "/"
+    [ binary NMult
+    , binary NDiv
     ]
   , {-  7 -}
-    [ binaryL NPlus 7 "+"
-    , binaryL NMinus 7  "-"
+    [ binary NPlus
+    , binary NMinus
     ]
   , {-  8 -}
     one $ prefix  NNot 8 "!"
   , {-  9 -}
-    one $ binaryR NUpdate 9 "//"
+    one $ binary NUpdate
   , {- 10 -}
-    [ binaryL NLt 10 "<"
-    , binaryL NGt 10 ">"
-    , binaryL NLte 10 "<="
-    , binaryL NGte 10 ">="
+    [ binary NLt
+    , binary NGt
+    , binary NLte
+    , binary NGte
     ]
   , {- 11 -}
-    [ binaryN NEq 11 "=="
-    , binaryN NNEq 11 "!="
+    [ binary NEq
+    , binary NNEq
     ]
   , {- 12 -}
-    one $ binaryL NAnd 12 "&&"
+    one $ binary NAnd
   , {- 13 -}
-    one $ binaryL NOr 13 "||"
+    one $ binary NOr
   , {- 14 -}
-    one $ binaryR NImpl 14 "->"
+    one $ binary NImpl
   ]
 
 --  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
 --  2021-08-10: NOTE:
 --  All this is a sidecar:
 --  * This type
---  * detectPrecedence
 --  * getUnaryOperation
 --  * getBinaryOperation
 --  * getSpecialOperation
