@@ -141,7 +141,7 @@ normalForm_
   -> m ()
 normalForm_ t = void $ normalizeValue t
 
-opaqueVal :: Applicative f => NValue t f m
+opaqueVal :: NvConstraint f => NValue t f m
 opaqueVal = mkNVStrWithoutContext "<cycle>"
 
 -- | Detect cycles & stub them.
@@ -167,14 +167,14 @@ stubCycles =
  where
   Free (NValue' cyc) = opaqueVal
 
-thunkStubVal :: Applicative f => NValue t f m
+thunkStubVal :: NvConstraint f => NValue t f m
 thunkStubVal = mkNVStrWithoutContext thunkStubText
 
 -- | Check if thunk @t@ is computed,
 -- then bind it into first arg.
 -- else bind the thunk stub val.
 bindComputedThunkOrStub
-  :: ( Applicative f
+  :: ( NvConstraint f
     , MonadThunk t m (NValue t f m)
     )
   => (NValue t f m -> m a)

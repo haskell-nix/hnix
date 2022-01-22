@@ -370,39 +370,39 @@ instance ( Convertible e t f m
 
 instance Convertible e t f m
   => ToValue () m (NValue' t f m (NValue t f m)) where
-  toValue = const $ pure nvNull'
+  toValue = const $ pure NVNull'
 
 instance Convertible e t f m
   => ToValue Bool m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVConstant' . NBool
+  toValue = pure . NVConstant' . NBool
 
 instance Convertible e t f m
   => ToValue Int m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVConstant' . NInt . toInteger
+  toValue = pure . NVConstant' . NInt . toInteger
 
 instance Convertible e t f m
   => ToValue Integer m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVConstant' . NInt
+  toValue = pure . NVConstant' . NInt
 
 instance Convertible e t f m
   => ToValue Float m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVConstant' . NFloat
+  toValue = pure . NVConstant' . NFloat
 
 instance Convertible e t f m
   => ToValue NixString m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVStr'
+  toValue = pure . NVStr'
 
 instance Convertible e t f m
   => ToValue ByteString m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVStr' . mkNixStringWithoutContext . decodeUtf8
+  toValue = pure . NVStr' . mkNixStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
   => ToValue Text m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVStr' . mkNixStringWithoutContext
+  toValue = pure . NVStr' . mkNixStringWithoutContext
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVPath' . coerce
+  toValue = pure . NVPath' . coerce
 
 instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
@@ -415,40 +415,40 @@ instance Convertible e t f m
     l' <- toValue $ unPos $ coerce l
     c' <- toValue $ unPos $ coerce c
     let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
-    pure $ mkNVSet' mempty pos
+    pure $ NVSet' mempty pos
 
 -- | With 'ToValue', we can always act recursively
 instance Convertible e t f m
   => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
-  toValue = pure . mkNVList'
+  toValue = pure . NVList'
 
 instance (Convertible e t f m
   , ToValue a m (NValue t f m)
   )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue l = Deeper . mkNVList' <$> traverseToValue l
+  toValue l = Deeper . NVList' <$> traverseToValue l
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
-  toValue s = pure $ mkNVSet' mempty s
+  toValue s = pure $ NVSet' mempty s
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
   toValue s =
-    liftA2 (\ v s -> Deeper $ mkNVSet' s v)
+    liftA2 (\ v s -> Deeper $ NVSet' s v)
       (traverseToValue s)
       stub
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m), PositionSet) m
             (NValue' t f m (NValue t f m)) where
-  toValue (s, p) = pure $ mkNVSet' p s
+  toValue (s, p) = pure $ NVSet' p s
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a, PositionSet) m
             (Deeper (NValue' t f m (NValue t f m))) where
   toValue (s, p) =
-    liftA2 (\ v s -> Deeper $ mkNVSet' s v)
+    liftA2 (\ v s -> Deeper $ NVSet' s v)
       (traverseToValue s)
       (pure p)
 
@@ -472,7 +472,7 @@ instance Convertible e t f m
         (pure Nothing)
         (fmap pure . toValue)
         ts
-    pure $ mkNVSet' mempty $ M.fromList $ catMaybes
+    pure $ NVSet' mempty $ M.fromList $ catMaybes
       [ ("path"      ,) <$> path
       , ("allOutputs",) <$> allOutputs
       , ("outputs"   ,) <$> outputs

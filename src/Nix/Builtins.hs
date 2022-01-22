@@ -1,12 +1,13 @@
+{-# LANGUAGE GADTs #-}
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language KindSignatures #-}
-{-# language MonoLocalBinds #-}
 {-# language MultiWayIf #-}
 {-# language PartialTypeSignatures #-}
 {-# language QuasiQuotes #-}
+{-# language PatternSynonyms #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
@@ -23,7 +24,6 @@ where
 
 import           Nix.Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch            ( MonadCatch(catch) )
 import           Control.Monad.ListM            ( sortByM )
@@ -33,10 +33,10 @@ import qualified "hashing" Crypto.Hash.SHA1    as SHA1
 import qualified "hashing" Crypto.Hash.SHA256  as SHA256
 import qualified "hashing" Crypto.Hash.SHA512  as SHA512
 import qualified Data.Aeson                    as A
-#if MIN_VERSION_aeson(2,0,0)
-import qualified Data.Aeson.Key                as AKM
-import qualified Data.Aeson.KeyMap             as AKM
-#endif
+
+
+
+
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
@@ -126,14 +126,15 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ mkNVBuiltin (coerce name) $ toBuiltin name . f <=< fromValue . Deeper
+    pure $ NVBuiltin (coerce name) $ toBuiltin name . f <=< fromValue . Deeper
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
 -- We wrap values solely to provide an Ord instance for genericClosure
-newtype WValue t f m = WValue (NValue t f m)
+data WValue t f m where
+  WValue :: NvConstraint f => NValue t f m -> WValue t f m
 
-instance Comonad f => Eq (WValue t f m) where
+instance Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
     x == fromInteger y
   WValue (NVConstant (NInt   x)) == WValue (NVConstant (NFloat y)) =
@@ -145,7 +146,7 @@ instance Comonad f => Eq (WValue t f m) where
     ignoreContext x == ignoreContext y
   _ == _ = False
 
-instance Comonad f => Ord (WValue t f m) where
+instance Ord (WValue t f m) where
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
     x <= fromInteger y
   WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NFloat y)) =
@@ -159,11 +160,8 @@ instance Comonad f => Ord (WValue t f m) where
 
 -- ** Helpers
 
-mkNVBool
-  :: MonadNix e t f m
-  => Bool
-  -> NValue t f m
-mkNVBool = mkNVConstant . NBool
+pattern NVBool :: MonadNix e t f m => Bool -> NValue t f m
+pattern NVBool a = NVConstant (NBool a)
 
 data NixPathEntryType
   = PathEntryPath
@@ -331,15 +329,15 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
   caps :: NValue t f m
-  caps           = mkNVList (f <$> captures)
+  caps           = NVList (f <$> captures)
   f :: (ByteString, (Int, b)) -> NValue t f m
   f (a, (s, _))  =
     bool
-      nvNull
+      NVNull
       (thunkStr a)
       (s >= 0)
 
-thunkStr :: Applicative f => ByteString -> NValue t f m
+thunkStr :: NvConstraint f => ByteString -> NValue t f m
 thunkStr s = mkNVStrWithoutContext $ decodeUtf8 s
 
 hasKind
@@ -422,16 +420,16 @@ derivationNix = foldFix Eval.eval $$(do
 nixPathNix :: forall e t f m . MonadNix e t f m => m (NValue t f m)
 nixPathNix =
   fmap
-    mkNVList
+    NVList
     $ foldNixPath mempty $
         \p mn ty rest ->
           pure $
             pure
-              (mkNVSet
+              (NVSet
                 mempty
                 (M.fromList
                   [case ty of
-                    PathEntryPath -> ("path", mkNVPath  p)
+                    PathEntryPath -> ("path", NVPath  p)
                     PathEntryURI  -> ( "uri", mkNVStrWithoutContext $ fromString $ coerce p)
 
                   , ( "prefix", mkNVStrWithoutContext $ maybeToMonoid mn)
@@ -500,7 +498,7 @@ unsafeGetAttrPosNix nvX nvY =
     case (x, y) of
       (NVStr ns, NVSet apos _) ->
         maybe
-          (pure nvNull)
+          (pure NVNull)
           toValue
           (M.lookup @VarName (coerce $ ignoreContext ns) apos)
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
@@ -613,7 +611,7 @@ tailNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tailNix =
   maybe
     (throwError $ ErrorCall "builtins.tail: empty list")
-    (pure . mkNVList)
+    (pure . NVList)
   . viaNonEmpty tail <=< fromValue @[NValue t f m]
 
 splitVersionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -621,7 +619,7 @@ splitVersionNix v =
   do
     version <- fromStringNoContext =<< fromValue v
     pure $
-      mkNVList $
+      NVList $
         mkNVStrWithoutContext . show <$>
           splitVersion version
 
@@ -642,7 +640,7 @@ compareVersionsNix t1 t2 =
           EQ -> 0
           GT -> 1
 
-    pure $ mkNVConstant $ NInt cmpVers
+    pure $ NVConstant $ NInt cmpVers
 
  where
   mkText = fromStringNoContext <=< fromValue
@@ -689,7 +687,7 @@ matchNix pat str =
       re = makeRegex p :: Regex
       mkMatch t =
         bool
-          (pure nvNull)
+          (pure NVNull)
           (toValue $ mkNixStringWithoutContext t)
           (not $ Text.null t)
 
@@ -697,7 +695,7 @@ matchNix pat str =
       Just ("", sarr, "") ->
         do
           let submatches = fst <$> elems sarr
-          mkNVList <$>
+          NVList <$>
             traverse
               mkMatch
               (case submatches of
@@ -705,7 +703,7 @@ matchNix pat str =
                  [a] -> one a
                  _:xs -> xs -- return only the matched groups, drop the full string
               )
-      _ -> pure nvNull
+      _ -> pure NVNull
 
 splitNix
   :: forall e t f m
@@ -726,7 +724,7 @@ splitNix pat str =
       regex       = makeRegex p :: Regex
       haystack = encodeUtf8 s
 
-    pure $ mkNVList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
+    pure $ NVList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
 
 substringNix :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substringNix start len str =
@@ -825,7 +823,7 @@ catAttrsNix attrName xs =
     n <- fromStringNoContext =<< fromValue attrName
     l <- fromValue @[NValue t f m] xs
 
-    mkNVList . catMaybes <$>
+    NVList . catMaybes <$>
       traverse
         (fmap (M.lookup @VarName $ coerce n) . fromValue <=< demand)
         l
@@ -835,7 +833,7 @@ baseNameOfNix x =
   do
     ns <- coerceStringlikeToNixString DontCopyToStore x
     pure $
-      mkNVStr $
+      NVStr $
         modifyNixContents
           (fromString . coerce takeFileName . toString)
           ns
@@ -927,8 +925,8 @@ dirOfNix nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ mkNVStr $ modifyNixContents (fromString . coerce takeDirectory . toString) ns
-      NVPath path -> pure $ mkNVPath $ takeDirectory path
+      NVStr ns -> pure $ NVStr $ modifyNixContents (fromString . coerce takeDirectory . toString) ns
+      NVPath path -> pure $ NVPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
@@ -1158,7 +1156,7 @@ intersectAttrsNix set1 set2 =
     (s1, p1) <- fromValue @(AttrSet (NValue t f m), PositionSet) set1
     (s2, p2) <- fromValue @(AttrSet (NValue t f m), PositionSet) set2
 
-    pure $ mkNVSet (p2 `M.intersection` p1) (s2 `M.intersection` s1)
+    pure $ NVSet (p2 `M.intersection` p1) (s2 `M.intersection` s1)
 
 functionArgsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1167,7 +1165,7 @@ functionArgsNix nvfun =
     fun <- demand nvfun
     case fun of
       NVClosure p _ ->
-        toValue @(AttrSet (NValue t f m)) $ mkNVBool <$>
+        toValue @(AttrSet (NValue t f m)) $ NVBool <$>
           case p of
             Param name     -> one (name, False)
             ParamSet _ _ pset -> isJust <$> M.fromList pset
@@ -1272,7 +1270,7 @@ throwNix =
 --
 importNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-importNix = scopedImportNix $ mkNVSet mempty mempty
+importNix = scopedImportNix $ NVSet mempty mempty
 
 -- | @scopedImport scope path@
 -- An undocumented secret powerful function.
@@ -1383,7 +1381,7 @@ lessThanNix ta tb =
     let
       badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, got '" <> show va <> "' and '" <> show vb <> "'."
 
-    mkNVBool <$>
+    NVBool <$>
       case (va, vb) of
         (NVConstant ca, NVConstant cb) ->
           case (ca, cb) of
@@ -1433,7 +1431,7 @@ listToAttrsNix lst =
   do
     l <- fromValue @[NValue t f m] lst
     fmap
-      (mkNVSet mempty . M.fromList . reverse)
+      (NVSet mempty . M.fromList . reverse)
       (traverse
         (\ nvattrset ->
           do
@@ -1500,8 +1498,8 @@ groupByNix nvfun nvlist = do
   list   <- demand nvlist
   fun    <- demand nvfun
   (f, l) <- extractP (fun, list)
-  mkNVSet mempty
-    .   fmap (mkNVList . reverse)
+  NVSet mempty
+    .   fmap (NVList . reverse)
     .   M.fromListWith (<>)
     <$> traverse (app f) l
  where
@@ -1532,14 +1530,14 @@ placeHolderNix p =
       $ Base32.encode
       -- Please, stop Text -> Bytestring here after migration to Text
       $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
-#if MIN_VERSION_base16_bytestring(1,0,0)
+
         -- Please, stop Text -> String here after migration to Text
         Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
         Right d -> d
-#else
-        (d, "") -> d
-        (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
-#endif
+
+
+
+
     where
       bytes :: NixString -> ByteString
       bytes = encodeUtf8 . body
@@ -1565,7 +1563,7 @@ findFileNix nvaset nvfilepath =
         do
           mres <- findPath @t @f @m x $ coerce $ toString $ ignoreContext ns
 
-          pure $ mkNVPath mres
+          pure $ NVPath mres
 
       (NVList _, _y     ) -> throwError $ ErrorCall $ "expected a string, got " <> show _y
       (_x      , NVStr _) -> throwError $ ErrorCall $ "expected a list, got " <> show _x
@@ -1620,32 +1618,32 @@ fromJSONNix nvjson =
     \case
       A.Object m ->
         traverseToNValue
-          (mkNVSet mempty)
-#if MIN_VERSION_aeson(2,0,0)
-          (M.mapKeys (coerce . AKM.toText)  $ AKM.toHashMap m)
-#else
+          (NVSet mempty)
+
+
+
           (M.mapKeys coerce m)
-#endif
-      A.Array  l -> traverseToNValue mkNVList (V.toList l)
+
+      A.Array  l -> traverseToNValue NVList (V.toList l)
       A.String s -> pure $ mkNVStrWithoutContext s
       A.Number n ->
         pure $
-          mkNVConstant $
+          NVConstant $
             either
               NFloat
               NInt
               (floatingOrInteger n)
-      A.Bool   b -> pure $ mkNVBool b
-      A.Null     -> pure nvNull
+      A.Bool   b -> pure $ NVBool b
+      A.Null     -> pure NVNull
    where
     traverseToNValue :: Traversable t0 => (t0 (NValue t f m) -> b) -> t0 A.Value -> m b
     traverseToNValue f v = f <$> traverse jsonToNValue v
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toJSONNix = (fmap mkNVStr . toJSONNixString) <=< demand
+toJSONNix = (fmap NVStr . toJSONNixString) <=< demand
 
 toXMLNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toXMLNix = (fmap (mkNVStr . toXML) . normalForm) <=< demand
+toXMLNix = (fmap (NVStr . toXML) . normalForm) <=< demand
 
 typeOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 typeOfNix nvv =
@@ -1677,19 +1675,19 @@ tryEvalNix e = (`catch` (pure . onError))
   (onSuccess <$> demand e)
  where
   onSuccess v =
-    mkNVSet
+    NVSet
       mempty
       $ M.fromList
-        [ ("success", mkNVBool True)
+        [ ("success", NVBool True)
         , ("value"  , v            )
         ]
 
   onError :: SomeException -> NValue t f m
   onError _ =
-    mkNVSet
+    NVSet
       mempty
       $ M.fromList
-        $ (, mkNVBool False) <$>
+        $ (, NVBool False) <$>
           [ "success"
           , "value"
           ]
@@ -1766,7 +1764,7 @@ partitionNix f nvlst =
 
     let
       (right, wrong) = partition fst selection
-      makeSide       = mkNVList . fmap snd
+      makeSide       = NVList . fmap snd
 
     toValue @(AttrSet (NValue t f m))
       $ M.fromList
@@ -1791,15 +1789,15 @@ currentTimeNix =
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
 
-getRecursiveSizeNix :: (MonadIntrospect m, Applicative f) => a -> m (NValue t f m)
-getRecursiveSizeNix = fmap (mkNVConstant . NInt . fromIntegral) . recursiveSize
+getRecursiveSizeNix :: (MonadIntrospect m, NvConstraint f) => a -> m (NValue t f m)
+getRecursiveSizeNix = fmap (NVConstant . NInt . fromIntegral) . recursiveSize
 
 getContextNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getContextNix =
   \case
     (NVStr ns) ->
-      mkNVSet mempty <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getStringContext ns)
+      NVSet mempty <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getStringContext ns)
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
   <=< demand
 
@@ -1927,7 +1925,7 @@ builtinsList =
     , add2 Normal   "elem"             elemNix
     , add2 Normal   "elemAt"           elemAtNix
     , add  Normal   "exec"             execNix
-    , add0 Normal   "false"            (pure $ mkNVBool False)
+    , add0 Normal   "false"            (pure $ NVBool False)
     --, add  Normal   "fetchGit"         fetchGit
     --, add  Normal   "fetchMercurial"   fetchMercurial
     , add  Normal   "fetchTarball"     fetchTarball
@@ -1966,7 +1964,7 @@ builtinsList =
     , add2 Normal   "match"            matchNix
     , add2 Normal   "mul"              mulNix
     , add0 Normal   "nixPath"          nixPathNix
-    , add0 Normal   "null"             (pure nvNull)
+    , add0 Normal   "null"             (pure NVNull)
     , add  Normal   "parseDrvName"     parseDrvNameNix
     , add2 Normal   "partition"        partitionNix
     , add  Normal   "path"             pathNix
@@ -1988,7 +1986,7 @@ builtinsList =
     , add  Normal   "toJSON"           toJSONNix
     , add  Normal   "toPath"           toPathNix -- Deprecated in Nix: https://github.com/NixOS/nix/pull/2524
     , add  Normal   "toXML"            toXMLNix
-    , add0 Normal   "true"             (pure $ mkNVBool True)
+    , add0 Normal   "true"             (pure $ NVBool True)
     , add  Normal   "tryEval"          tryEvalNix
     , add  Normal   "typeOf"           typeOfNix
     , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependencyNix
@@ -2088,7 +2086,7 @@ withNixContext mpath action =
     opts <- askOptions
 
     pushScope
-      (one ("__includes", mkNVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
+      (one ("__includes", NVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
       (pushScopes
         base $
         maybe
@@ -2096,7 +2094,7 @@ withNixContext mpath action =
           (\ path act ->
             do
               traceM $ "Setting __cur_file = " <> show path
-              pushScope (one ("__cur_file", mkNVPath path)) act
+              pushScope (one ("__cur_file", NVPath path)) act
           )
           mpath
           action
@@ -2110,7 +2108,7 @@ builtins
   => m (Scopes m (NValue t f m))
 builtins =
   do
-    ref <- defer $ mkNVSet mempty <$> buildMap
+    ref <- defer $ NVSet mempty <$> buildMap
     (`pushScope` askScopes) . coerce . M.fromList . (one ("builtins", ref) <>) =<< topLevelBuiltins
  where
   buildMap :: m (HashMap VarName (NValue t f m))

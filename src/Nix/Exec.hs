@@ -61,7 +61,7 @@ mkNVConstantWithProvenance
   -> NAtom
   -> NValue t f m
 mkNVConstantWithProvenance scopes span x =
-  addProvenance (Provenance scopes . NConstantAnnF span $ x) $ mkNVConstant x
+  addProvenance (Provenance scopes . NConstantAnnF span $ x) $ NVConstant x
 
 mkNVStrWithProvenance
   :: MonadCited t f m
@@ -70,7 +70,7 @@ mkNVStrWithProvenance
   -> NixString
   -> NValue t f m
 mkNVStrWithProvenance scopes span x =
-  addProvenance (Provenance scopes . NStrAnnF span . DoubleQuoted . one . Plain . ignoreContext $ x) $ mkNVStr x
+  addProvenance (Provenance scopes . NStrAnnF span . DoubleQuoted . one . Plain . ignoreContext $ x) $ NVStr x
 
 mkNVPathWithProvenance
   :: MonadCited t f m
@@ -80,7 +80,7 @@ mkNVPathWithProvenance
   -> Path
   -> NValue t f m
 mkNVPathWithProvenance scope span lit real =
-  addProvenance (Provenance scope . NLiteralPathAnnF span $ lit) $ mkNVPath real
+  addProvenance (Provenance scope . NLiteralPathAnnF span $ lit) $ NVPath real
 
 mkNVClosureWithProvenance
   :: MonadCited t f m
@@ -90,7 +90,7 @@ mkNVClosureWithProvenance
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
 mkNVClosureWithProvenance scopes span x f =
-  addProvenance (Provenance scopes $ NAbsAnnF span (Nothing <$ x) Nothing) $ mkNVClosure x f
+  addProvenance (Provenance scopes $ NAbsAnnF span (Nothing <$ x) Nothing) $ NVClosure x f
 
 mkNVUnaryOpWithProvenance
   :: MonadCited t f m
@@ -339,7 +339,7 @@ execUnaryOp scope span op arg =
       throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
  where
   mkUnaryOp :: (a -> NAtom) -> (a -> a) -> a -> m (NValue t f m)
-  mkUnaryOp c b a = pure . mkNVUnaryOpWithProvenance scope span op (pure arg) . mkNVConstant $ c (b a)
+  mkUnaryOp c b a = pure . mkNVUnaryOpWithProvenance scope span op (pure arg) . NVConstant $ c (b a)
 
 execBinaryOp
   :: forall e t f m
@@ -390,7 +390,7 @@ execBinaryOp scope span op lval rarg =
 
   toBoolOp :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
   toBoolOp r b =
-    pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) r $ mkNVConstant $ NBool b
+    pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) r $ NVConstant $ NBool b
 
 execBinaryOpForced
   :: forall e t f m
@@ -454,25 +454,25 @@ execBinaryOpForced scope span op lval rval =
     mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval)
 
   mkBoolP :: Bool -> m (NValue t f m)
-  mkBoolP = pure . addProv . mkNVConstant . NBool
+  mkBoolP = pure . addProv . NVConstant . NBool
 
   mkIntP :: Integer -> m (NValue t f m)
-  mkIntP = pure . addProv . mkNVConstant . NInt
+  mkIntP = pure . addProv . NVConstant . NInt
 
   mkFloatP :: Float -> m (NValue t f m)
-  mkFloatP = pure . addProv . mkNVConstant . NFloat
+  mkFloatP = pure . addProv . NVConstant . NFloat
 
   mkListP :: [NValue t f m] -> NValue t f m
-  mkListP = addProv . mkNVList
+  mkListP = addProv . NVList
 
   mkStrP :: NixString -> NValue t f m
-  mkStrP = addProv . mkNVStr
+  mkStrP = addProv . NVStr
 
   mkPathP :: Path -> NValue t f m
-  mkPathP = addProv . mkNVPath
+  mkPathP = addProv . NVPath
 
   mkSetP :: (PositionSet -> AttrSet (NValue t f m) -> NValue t f m)
-  mkSetP x s = addProv $ mkNVSet x s
+  mkSetP x s = addProv $ NVSet x s
 
   mkCmpOp :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
   mkCmpOp op = case (lval, rval) of

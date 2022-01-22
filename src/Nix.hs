@@ -114,7 +114,7 @@ evaluateExpression mpath evaluator handler expr =
     f' <- demand f
     val <-
       case f' of
-        NVClosure _ g -> g $ mkNVSet mempty $ M.fromList args
+        NVClosure _ g -> g $ NVSet mempty $ M.fromList args
         _             -> pure f
     processResult handler val
  where
