@@ -501,7 +501,7 @@ data NOperatorDef
   = NAppDef                       NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
   | NBinaryDef  NBinaryOp  OperatorInfo
-  | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
+  | NSpecialDef NSpecialOp OperatorInfo
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -586,7 +586,7 @@ nixOperators selector =
     one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef NHasAttrOp NAssocLeft 4 "?"
+      ( NSpecialDef NHasAttrOp (OperatorInfo NAssocLeft 4 "?")
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
@@ -693,7 +693,7 @@ getSpecialOperator o         = detectPrecedence spec o
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
   spec _ =
       \case
-        (NSpecialDef op assoc prec name, _) -> one (op, OperatorInfo assoc prec name)
+        (NSpecialDef op operatorInfo, _) -> one (op, operatorInfo)
         _                              -> mempty
 
 -- ** x: y lambda function
