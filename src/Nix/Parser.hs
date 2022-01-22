@@ -64,8 +64,8 @@ import           Data.Char                      ( isAlpha
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
-import qualified Data.Map                      as Map
 import qualified Data.Text                     as Text
+import qualified Data.Map.Strict               as M
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
 import           Nix.Expr.Types.Annotated
@@ -500,7 +500,7 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 data NOperatorDef
   = NAppDef                NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp   NOpPrecedence NOpName
-  | NBinaryDef  NBinaryOp  OperatorInfo
+  | NBinaryDef  (Map NBinaryOp  OperatorInfo)
   | NSpecialDef NSpecialOp OperatorInfo
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
@@ -531,7 +531,7 @@ binary
   -> NOpName
   -> (NOperatorDef, b)
 binary assoc fixity op precedence name =
-  (NBinaryDef op (OperatorInfo assoc precedence name), fixity $ opWithLoc annNBinary op name)
+  (NBinaryDef $ one (op, OperatorInfo assoc precedence name), fixity $ opWithLoc annNBinary op name)
 
 binaryN, binaryL, binaryR :: NBinaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
@@ -645,22 +645,27 @@ appOperatorInfo =
     , operatorName  = " "
     }
 
+binOpInfMap :: Map NBinaryOp OperatorInfo
+binOpInfMap = fromList
+  [ (NConcat, OperatorInfo NAssocRight  5 "++")
+  , (NMult  , OperatorInfo NAssocLeft   6 "*" )
+  , (NDiv   , OperatorInfo NAssocLeft   6 "/" )
+  , (NPlus  , OperatorInfo NAssocLeft   7 "+" )
+  , (NMinus , OperatorInfo NAssocLeft   7 "-" )
+  , (NUpdate, OperatorInfo NAssocRight  9 "//")
+  , (NLt    , OperatorInfo NAssocLeft  10 "<" )
+  , (NLte   , OperatorInfo NAssocLeft  10 "<=")
+  , (NGt    , OperatorInfo NAssocLeft  10 ">" )
+  , (NGte   , OperatorInfo NAssocLeft  10 ">=")
+  , (NEq    , OperatorInfo NAssocNone  11 "==")
+  , (NNEq   , OperatorInfo NAssocNone  11 "!=")
+  , (NAnd   , OperatorInfo NAssocLeft  12 "&&")
+  , (NOr    , OperatorInfo NAssocLeft  13 "||")
+  , (NImpl  , OperatorInfo NAssocRight 14 "->")
+  ]
+
 getBinaryOperator :: NBinaryOp -> OperatorInfo
-getBinaryOperator NConcat = OperatorInfo NAssocRight  5 "++"
-getBinaryOperator NMult   = OperatorInfo NAssocLeft   6 "*"
-getBinaryOperator NDiv    = OperatorInfo NAssocLeft   6 "/"
-getBinaryOperator NPlus   = OperatorInfo NAssocLeft   7 "+"
-getBinaryOperator NMinus  = OperatorInfo NAssocLeft   7 "-"
-getBinaryOperator NUpdate = OperatorInfo NAssocRight  9 "//"
-getBinaryOperator NLt     = OperatorInfo NAssocLeft  10 "<"
-getBinaryOperator NLte    = OperatorInfo NAssocLeft  10 "<="
-getBinaryOperator NGt     = OperatorInfo NAssocLeft  10 ">"
-getBinaryOperator NGte    = OperatorInfo NAssocLeft  10 ">="
-getBinaryOperator NEq     = OperatorInfo NAssocNone  11 "=="
-getBinaryOperator NNEq    = OperatorInfo NAssocNone  11 "!="
-getBinaryOperator NAnd    = OperatorInfo NAssocLeft  12 "&&"
-getBinaryOperator NOr     = OperatorInfo NAssocLeft  13 "||"
-getBinaryOperator NImpl   = OperatorInfo NAssocRight 14 "->"
+getBinaryOperator = fromMaybe (error "Impossible, the key should be in the map") . (`M.lookup` binOpInfMap)
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp  = OperatorInfo NAssocLeft 1 "."
