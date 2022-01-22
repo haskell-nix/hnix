@@ -500,7 +500,7 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 data NOperatorDef
   = NAppDef                       NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
-  | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
+  | NBinaryDef  NBinaryOp  OperatorInfo
   | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
@@ -537,7 +537,7 @@ binary
   -> NOpName
   -> (NOperatorDef, b)
 binary assoc fixity op precedence name =
-  (NBinaryDef op assoc precedence name, fixity $ opWithLoc annNBinary op name)
+  (NBinaryDef op (OperatorInfo assoc precedence name), fixity $ opWithLoc annNBinary op name)
 
 binaryN, binaryL, binaryR :: NBinaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
@@ -637,7 +637,7 @@ data OperatorInfo =
     , precedence    :: NOpPrecedence
     , operatorName  :: NOpName
     }
- deriving (Eq, Ord, Generic, Typeable, Data, Show)
+ deriving (Eq, Ord, Generic, Typeable, Data, NFData, Show)
 
 detectPrecedence
   :: Ord a
@@ -683,7 +683,7 @@ getBinaryOperator = detectPrecedence spec
   spec :: NOpPrecedence -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
   spec _ =
     \case
-      (NBinaryDef op assoc prec name, _) -> one (op, OperatorInfo assoc prec name)
+      (NBinaryDef op operatorInfo, _) -> one (op, operatorInfo)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
