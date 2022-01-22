@@ -501,7 +501,7 @@ data NOperatorDef
   = NAppDef                NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp   NOpPrecedence NOpName
   | NBinaryDef  (Map NBinaryOp  OperatorInfo)
-  | NSpecialDef NSpecialOp OperatorInfo
+  | NSpecialDef (Map NSpecialOp OperatorInfo)
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -580,7 +580,7 @@ nixOperators selector =
     one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef NHasAttrOp $ getSpecialOperator NHasAttrOp
+      ( NSpecialDef (one (NHasAttrOp, getSpecialOperator NHasAttrOp))
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
@@ -633,10 +633,6 @@ data OperatorInfo =
     }
  deriving (Eq, Ord, Generic, Typeable, Data, NFData, Show)
 
-getUnaryOperator :: NUnaryOp -> OperatorInfo
-getUnaryOperator NNeg = OperatorInfo NAssocNone 3 "-"
-getUnaryOperator NNot = OperatorInfo NAssocNone 8 "!"
-
 appOperatorInfo :: OperatorInfo
 appOperatorInfo =
   OperatorInfo
@@ -664,12 +660,29 @@ binOpInfMap = fromList
   , (NImpl  , OperatorInfo NAssocRight 14 "->")
   ]
 
-getBinaryOperator :: NBinaryOp -> OperatorInfo
-getBinaryOperator = fromMaybe (error "Impossible, the key should be in the map") . (`M.lookup` binOpInfMap)
+specOpInfMap :: Map NSpecialOp OperatorInfo
+specOpInfMap = fromList
+  [ (NSelectOp , OperatorInfo NAssocLeft 1 ".")
+  , (NHasAttrOp, OperatorInfo NAssocLeft 4 "?")
+  ]
+
+unaryOpInfMap :: Map NUnaryOp OperatorInfo
+unaryOpInfMap = fromList
+  [ (NNeg, OperatorInfo NAssocNone 3 "-")
+  , (NNot, OperatorInfo NAssocNone 8 "!")
+  ]
+
+getOperatorInfo    :: Ord k => Map k c -> k -> c
+getOperatorInfo mp = fromMaybe (error "Impossible, the key should be in the map") . (`M.lookup` mp)
+
+getUnaryOperator   :: NUnaryOp -> OperatorInfo
+getUnaryOperator   = getOperatorInfo unaryOpInfMap
+
+getBinaryOperator  :: NBinaryOp -> OperatorInfo
+getBinaryOperator  = getOperatorInfo binOpInfMap
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator NSelectOp  = OperatorInfo NAssocLeft 1 "."
-getSpecialOperator NHasAttrOp = OperatorInfo NAssocLeft 4 "?"
+getSpecialOperator = getOperatorInfo specOpInfMap
 
 -- ** x: y lambda function
 
