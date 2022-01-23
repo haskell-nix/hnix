@@ -2,7 +2,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language MultiWayIf #-}
-{-# language GADTs #-}
 {-# language TypeFamilies #-}
 
 

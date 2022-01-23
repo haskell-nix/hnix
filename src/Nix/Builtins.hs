@@ -1,9 +1,9 @@
-{-# LANGUAGE GADTs #-}
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language KindSignatures #-}
+{-# language MonoLocalBinds #-}
 {-# language MultiWayIf #-}
 {-# language PartialTypeSignatures #-}
 {-# language QuasiQuotes #-}
@@ -131,10 +131,9 @@ instance
 -- *** @WValue@ closure wrapper to have @Ord@
 
 -- We wrap values solely to provide an Ord instance for genericClosure
-data WValue t f m where
-  WValue :: NVConstraint f => NValue t f m -> WValue t f m
+newtype WValue t f m = WValue (NValue t f m)
 
-instance Eq (WValue t f m) where
+instance NVConstraint f => Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
     x == fromInteger y
   WValue (NVConstant (NInt   x)) == WValue (NVConstant (NFloat y)) =
@@ -146,7 +145,7 @@ instance Eq (WValue t f m) where
     ignoreContext x == ignoreContext y
   _ == _ = False
 
-instance Ord (WValue t f m) where
+instance NVConstraint f => Ord (WValue t f m) where
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
     x <= fromInteger y
   WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NFloat y)) =

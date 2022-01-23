@@ -1,7 +1,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language DataKinds #-}
-{-# language GADTs #-}
 {-# language TypeFamilies #-}
 {-# language RankNTypes #-}
 
