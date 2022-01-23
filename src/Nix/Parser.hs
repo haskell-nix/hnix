@@ -510,7 +510,13 @@ instance Num NOpPrecedence where
 data NSpecialOp = NHasAttrOp | NSelectOp
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
-data NAssoc = NAssocNone | NAssocLeft | NAssocRight
+data NAssoc
+  = NAssocLeft
+  -- Nota bene: @parser-combinators@ named "associative property" as 'InfixN' stating it as "non-associative property".
+  -- Binary operators having some associativity is a basis property in mathematical algebras in use (for example, in Category theory). Having no associativity in operators makes theory mostly impossible in use and so non-associativity is not encountered in notations, therefore under 'InfixN' @parser-combinators@ meant "associative".
+  -- | Bidirectional associativity, or simply: associative property.
+  | NAssoc
+  | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NOperatorDef
@@ -540,8 +546,8 @@ binary op =
   operatorInfo = getBinaryOperator op
 
 mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
-mapAssocToInfix NAssocNone  = InfixN
 mapAssocToInfix NAssocLeft  = InfixL
+mapAssocToInfix NAssoc      = InfixN
 mapAssocToInfix NAssocRight = InfixR
 
 --  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
@@ -581,8 +587,8 @@ binOpInfMap = fromList
   , (NLte   , OperatorInfo NAssocLeft  10 "<=")
   , (NGt    , OperatorInfo NAssocLeft  10 ">" )
   , (NGte   , OperatorInfo NAssocLeft  10 ">=")
-  , (NEq    , OperatorInfo NAssocNone  11 "==")
-  , (NNEq   , OperatorInfo NAssocNone  11 "!=")
+  , (NEq    , OperatorInfo NAssoc      11 "==")
+  , (NNEq   , OperatorInfo NAssoc      11 "!=")
   , (NAnd   , OperatorInfo NAssocLeft  12 "&&")
   , (NOr    , OperatorInfo NAssocLeft  13 "||")
   , (NImpl  , OperatorInfo NAssocRight 14 "->")
@@ -596,12 +602,12 @@ specOpInfMap = fromList
 
 unaryOpInfMap :: Map NUnaryOp OperatorInfo
 unaryOpInfMap = fromList
-  [ (NNeg, OperatorInfo NAssocNone 3 "-")
-  , (NNot, OperatorInfo NAssocNone 8 "!")
+  [ (NNeg, OperatorInfo NAssoc 3 "-")
+  , (NNot, OperatorInfo NAssoc 8 "!")
   ]
 
 getOperatorInfo    :: Ord k => Map k OperatorInfo -> k -> OperatorInfo
-getOperatorInfo mp k = M.findWithDefault (OperatorInfo NAssocNone 1 "Impossible, the key should be in the operator map.") k mp
+getOperatorInfo mp k = M.findWithDefault (OperatorInfo NAssoc 1 "Impossible, the key should be in the operator map.") k mp
 
 getUnaryOperator   :: NUnaryOp -> OperatorInfo
 getUnaryOperator   = getOperatorInfo unaryOpInfMap
