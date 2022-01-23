@@ -99,7 +99,7 @@ isAlphanumeric :: Char -> Bool
 isAlphanumeric x = isAlpha x || isDigit x
 {-# inline isAlphanumeric #-}
 
--- | @<|>@ with additional preservation of @MonadPlus@ constraint.
+-- | Alternative "<|>" with additional preservation of 'MonadPlus' constraint.
 infixl 3 <|>
 (<|>) :: MonadPlus m => m a -> m a -> m a
 (<|>) = mplus
@@ -883,7 +883,7 @@ nixTerm =
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.
 nixExprAlgebra :: Parser NExprLoc
 nixExprAlgebra =
-  makeExprParser
+  makeExprParser -- This requires to convert precedence to [[op]]
     nixTerm
     (snd <<$>>
       nixOperators nixSelector
@@ -899,24 +899,24 @@ nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
 
 type Result a = Either (Doc Void) a
 
-parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
-parseFromFileEx parser file =
-  do
-    input <- liftIO $ readFile file
 
-    pure $
-      either
-        (Left . pretty . errorBundlePretty)
-        pure
-        $ (`evalState` initialPos (coerce file)) $ runParserT parser (coerce file) input
-
-parseFromText :: Parser a -> Text -> Result a
-parseFromText parser input =
-  let stub = "<string>" in
+parseWith
+  :: Parser a
+  -> Path
+  -> Text
+  -> Either (Doc Void) a
+parseWith parser file input =
   either
     (Left . pretty . errorBundlePretty)
     pure
-    $ (`evalState` initialPos stub) $ (`runParserT` stub) parser input
+    $ (`evalState` initialPos (coerce file)) $ (`runParserT` coerce file) parser input
+
+
+parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
+parseFromFileEx parser file = parseWith parser file <$> readFile file
+
+parseFromText :: Parser a -> Text -> Result a
+parseFromText = (`parseWith` "<string>")
 
 fullContent :: Parser NExprLoc
 fullContent = whiteSpace *> nixExpr <* eof
@@ -945,7 +945,7 @@ parseNixTextLoc :: Text -> Result NExprLoc
 parseNixTextLoc =
   parseNixText' id
 
-parseExpr :: (MonadFail m) => Text -> m NExpr
+parseExpr :: MonadFail m => Text -> m NExpr
 parseExpr =
   either
     (fail . show)

@@ -74,7 +74,6 @@ import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.Text                     as Text
-import qualified Data.Text.IO                 as Text
 import           Lens.Family2                  as X
                                                 ( view
                                                 , over
@@ -308,8 +307,8 @@ replaceExtension :: Path -> String -> Path
 replaceExtension = coerce FilePath.replaceExtension
 
 -- | 'Path's 'FilePath.readFile'.
-readFile :: Path -> IO Text
-readFile = Text.readFile . coerce
+readFile :: MonadIO m => Path -> m Text
+readFile = readFileText . coerce
 
 
 -- * Recursion scheme
