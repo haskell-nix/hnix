@@ -266,6 +266,12 @@ hoistNValueF lft =
 
 -- * @__NValue'__@: forming the (F(A))
 
+-- | NVConstraint constraint the f layer in @NValue'@.
+-- It makes bijection between sub category of Hask and Nix Value possible. 
+-- 'Comonad' enable Nix Value to Hask part.
+-- 'Applicative' enable Hask to Nix Value part.
+type NVConstraint f = (Comonad f, Applicative f) 
+
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a =
@@ -276,13 +282,13 @@ newtype NValue' t f m a =
     }
   deriving (Generic, Typeable, Functor, Foldable)
 
-instance (Comonad f, Show a) => Show (NValue' t f m a) where
+instance (NVConstraint f, Show a) => Show (NValue' t f m a) where
   show (NValue' (extract -> v)) = show v
 
 
 -- ** Show1
 
-instance Comonad f => Show1 (NValue' t f m) where
+instance NVConstraint f  => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
     NVConstant' atom  -> showsUnaryWith showsPrec             "NVConstantF" p atom
     NVStr' ns         -> showsUnaryWith showsPrec             "NVStrF"      p $ ignoreContext ns
@@ -378,10 +384,9 @@ unliftNValue' = hoistNValue' lift
 
 
 -- ** Bijective Hask subcategory <-> @NValue'@
--- *** @F: Hask subcategory → NValue'@
---
+-- *** @F: Hask subcategory <-> NValue'@
 -- #mantra#
--- $Methods @F: Hask → NValue'@
+-- $Patterns @F: Hask <-> NValue'@
 --
 -- Since Haskell and Nix are both recursive purely functional lazy languages.
 -- And since recursion-schemes.
@@ -395,88 +400,57 @@ unliftNValue' = hoistNValue' lift
 --
 -- Since it is a proper way of scientific implementation, we would eventually form a
 -- lawful functor.
---
--- Facts of which are seen below:
-
-
--- | Haskell constant to the Nix constant,
-mkNVConstant' :: Applicative f
-  => NAtom
-  -> NValue' t f m r
-mkNVConstant' = NValue' . pure . NVConstantF
-
--- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
-nvNull' :: Applicative f
-  => NValue' t f m r
-nvNull' = mkNVConstant' NNull
-
-
--- | Haskell text & context to the Nix text & context,
-mkNVStr' :: Applicative f
-  => NixString
-  -> NValue' t f m r
-mkNVStr' = NValue' . pure . NVStrF
-
-
--- | Haskell @Path@ to the Nix path,
-mkNVPath' :: Applicative f
-  => Path
-  -> NValue' t f m r
-mkNVPath' = NValue' . pure . NVPathF . coerce
-
-
--- | Haskell @[]@ to the Nix @[]@,
-mkNVList' :: Applicative f
-  => [r]
-  -> NValue' t f m r
-mkNVList' = NValue' . pure . NVListF
-
-
--- | Haskell key-value to the Nix key-value,
-mkNVSet' :: Applicative f
-  => PositionSet
-  -> AttrSet r
-  -> NValue' t f m r
-mkNVSet' p s = NValue' $ pure $ NVSetF p s
-
-
--- | Haskell closure to the Nix closure,
-mkNVClosure' :: (Applicative f, Functor m)
-  => Params ()
-  -> (NValue t f m
-      -> m r
-    )
-  -> NValue' t f m r
-mkNVClosure' x f = NValue' $ pure $ NVClosureF x f
-
-
--- | Haskell functions to the Nix functions!
-mkNVBuiltin' :: (Applicative f, Functor m)
-  => VarName
-  -> (NValue t f m -> m r)
-  -> NValue' t f m r
-mkNVBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
-
-
--- So above we have maps of Hask subcategory objects to Nix objects,
--- and Hask subcategory morphisms to Nix morphisms.
-
--- *** @F: NValue -> NValue'@
-
--- | Module pattens use @language PatternSynonyms@: unidirectional synonyms (@<-@),
+-- 
+-- Module pattens use @language PatternSynonyms@: bidirectional synonyms (@<-@),
 -- and @ViewPatterns@: (@->@) at the same time.
 -- @ViewPatterns Control.Comonad.extract@ extracts
 -- from the @NValue (Free (NValueF a))@
 -- the @NValueF a@. Which is @NValueF p m r@. Since it extracted from the
 -- @NValue@, which is formed by \( (F a -> a) F a \) in the first place.
 -- So @NValueF p m r@ which is extracted here, internally holds the next NValue.
+--
+-- Facts of bijection between Hask subcategory objects and Nix objects,
+-- and between Hask subcategory morphisms and Nix morphisms are seen blow:
+
+
+-- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
+pattern NVNull' :: NVConstraint w => NValue' t w m a
+pattern NVNull' = NVConstant' NNull
+
+-- | Haskell constant to the Nix constant,
+pattern NVConstant' :: NVConstraint w => NAtom -> NValue' t w m a
 pattern NVConstant' x <- NValue' (extract -> NVConstantF x)
+  where NVConstant' = NValue' . pure . NVConstantF
+
+-- | Haskell text & context to the Nix text & context,
+pattern NVStr' :: NVConstraint w => NixString -> NValue' t w m a
 pattern NVStr' ns <- NValue' (extract -> NVStrF ns)
+  where NVStr' = NValue' . pure . NVStrF 
+
+-- | Haskell @Path@ to the Nix path,
+pattern NVPath' :: NVConstraint w => Path -> NValue' t w m a
 pattern NVPath' x <- NValue' (extract -> NVPathF x)
+  where NVPath' = NValue' . pure . NVPathF . coerce
+
+-- | Haskell @[]@ to the Nix @[]@,
+pattern NVList' :: NVConstraint w => [a] -> NValue' t w m a
 pattern NVList' l <- NValue' (extract -> NVListF l)
+  where NVList' = NValue' . pure . NVListF
+
+-- | Haskell key-value to the Nix key-value,
+pattern NVSet' :: NVConstraint w => PositionSet -> AttrSet a -> NValue' t w m a
 pattern NVSet' p s <- NValue' (extract -> NVSetF p s)
+  where NVSet' p s = NValue' $ pure $ NVSetF p s
+
+-- | Haskell closure to the Nix closure,
+pattern NVClosure' :: NVConstraint w => Params () -> (NValue t w m -> m a) -> NValue' t w m a
 pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
+  where NVClosure' x f = NValue' $ pure $ NVClosureF x f
+
+-- | Haskell functions to the Nix functions!
+pattern NVBuiltin' :: NVConstraint w => VarName -> (NValue t w m -> m a) -> NValue' t w m a
 pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
+  where NVBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
 {-# complete NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
 
 
@@ -574,72 +548,12 @@ unliftNValue = hoistNValue lift
 -- The morphisms of the functor @Hask → NValue@.
 -- Continuation of the mantra: "Nix.Value#mantra"
 
-
--- | Life of a Haskell thunk to the life of a Nix thunk,
-mkNVThunk :: Applicative f
-  => t
-  -> NValue t f m
-mkNVThunk = Pure
-
-
--- | Life of a Haskell constant to the life of a Nix constant,
-mkNVConstant :: Applicative f
-  => NAtom
-  -> NValue t f m
-mkNVConstant = Free . mkNVConstant'
-
 -- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
-nvNull :: Applicative f
-  => NValue t f m
-nvNull = mkNVConstant NNull
 
--- | Life of a Haskell sting & context to the life of a Nix string & context,
-mkNVStr :: Applicative f
-  => NixString
-  -> NValue t f m
-mkNVStr = Free . mkNVStr'
-
-mkNVStrWithoutContext :: Applicative f
+mkNVStrWithoutContext :: NVConstraint f
   => Text
   -> NValue t f m
-mkNVStrWithoutContext = mkNVStr . mkNixStringWithoutContext
-
-
--- | Life of a Haskell FilePath to the life of a Nix path
-mkNVPath :: Applicative f
-  => Path
-  -> NValue t f m
-mkNVPath = Free . mkNVPath'
-
-
-mkNVList :: Applicative f
-  => [NValue t f m]
-  -> NValue t f m
-mkNVList = Free . mkNVList'
-
-
-mkNVSet :: Applicative f
-  => PositionSet
-  -> AttrSet (NValue t f m)
-  -> NValue t f m
-mkNVSet p s = Free $ mkNVSet' p s
-
-mkNVClosure :: (Applicative f, Functor m)
-  => Params ()
-  -> (NValue t f m
-      -> m (NValue t f m)
-    )
-  -> NValue t f m
-mkNVClosure x f = Free $ mkNVClosure' x f
-
-
-mkNVBuiltin :: (Applicative f, Functor m)
-  => VarName
-  -> (NValue t f m
-    -> m (NValue t f m)
-    )
-  -> NValue t f m
-mkNVBuiltin name f = Free $ mkNVBuiltin' name f
+mkNVStrWithoutContext = NVStr . mkNixStringWithoutContext
 
 
 builtin
@@ -650,7 +564,7 @@ builtin
     -> m (NValue t f m)
     ) -- ^ unary function
   -> m (NValue t f m)
-builtin = (pure .) . mkNVBuiltin
+builtin = (pure .) . NVBuiltin
 
 
 builtin2
@@ -680,17 +594,19 @@ builtin3 =
 
 -- *** @F: Evaluation -> NValue@
 
-pattern NVThunk t <- Pure t
-pattern NVValue v <- Free v
-{-# complete NVThunk, NVValue #-}
-pattern NVConstant x <- Free (NVConstant' x)
-pattern NVStr ns <- Free (NVStr' ns)
-pattern NVPath x <- Free (NVPath' x)
-pattern NVList l <- Free (NVList' l)
-pattern NVSet s x <- Free (NVSet' s x)
-pattern NVClosure x f <- Free (NVClosure' x f)
-pattern NVBuiltin name f <- Free (NVBuiltin' name f)
+pattern NVNull = Free NVNull'
+pattern NVThunk t = Pure t
+pattern NVValue v = Free v
+{-# complete NVThunk, NVValue, NVNull #-}
+pattern NVConstant x = Free (NVConstant' x)
+pattern NVStr ns = Free (NVStr' ns)
+pattern NVPath x = Free (NVPath' x)
+pattern NVList l = Free (NVList' l)
+pattern NVSet s x = Free (NVSet' s x)
+pattern NVClosure x f = Free (NVClosure' x f)
+pattern NVBuiltin name f = Free (NVBuiltin' name f) 
 {-# complete NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
+
 
 
 
@@ -784,7 +700,7 @@ data ValueFrame t f m
   | Expectation ValueType (NValue t f m)
  deriving Typeable
 
-deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
+deriving instance (NVConstraint f, Show t) => Show (ValueFrame t f m)
 
 
 -- * @MonadDataContext@

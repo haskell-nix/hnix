@@ -1,7 +1,6 @@
 {-# language ConstraintKinds #-}
 {-# language CPP #-}
 {-# language DataKinds #-}
-{-# language GADTs #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}

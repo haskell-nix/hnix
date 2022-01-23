@@ -2,7 +2,6 @@
 {-# language CPP #-}
 {-# language ConstraintKinds #-}
 {-# language DefaultSignatures #-}
-{-# language GADTs #-}
 {-# language TypeFamilies #-}
 {-# language TypeOperators #-}
 {-# language MultiWayIf #-}
