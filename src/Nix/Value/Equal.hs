@@ -167,7 +167,7 @@ compareAttrSets f eq lm rm = runIdentity
   $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
 
 valueEqM
-  :: (MonadThunk t m (NValue t f m), NvConstraint f)
+  :: (MonadThunk t m (NValue t f m), NVConstraint f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
@@ -195,7 +195,7 @@ valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
           _        -> mempty
       )
 
-thunkEqM :: (MonadThunk t m (NValue t f m), NvConstraint f) => t -> t -> m Bool
+thunkEqM :: (MonadThunk t m (NValue t f m), NVConstraint f) => t -> t -> m Bool
 thunkEqM lt rt =
   do
     lv <- force lt

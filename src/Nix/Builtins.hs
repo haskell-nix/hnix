@@ -132,7 +132,7 @@ instance
 
 -- We wrap values solely to provide an Ord instance for genericClosure
 data WValue t f m where
-  WValue :: NvConstraint f => NValue t f m -> WValue t f m
+  WValue :: NVConstraint f => NValue t f m -> WValue t f m
 
 instance Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
@@ -337,7 +337,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
       (thunkStr a)
       (s >= 0)
 
-thunkStr :: NvConstraint f => ByteString -> NValue t f m
+thunkStr :: NVConstraint f => ByteString -> NValue t f m
 thunkStr s = mkNVStrWithoutContext $ decodeUtf8 s
 
 hasKind
@@ -1785,7 +1785,7 @@ currentTimeNix =
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
 
-getRecursiveSizeNix :: (MonadIntrospect m, NvConstraint f) => a -> m (NValue t f m)
+getRecursiveSizeNix :: (MonadIntrospect m, NVConstraint f) => a -> m (NValue t f m)
 getRecursiveSizeNix = fmap (NVConstant . NInt . fromIntegral) . recursiveSize
 
 getContextNix

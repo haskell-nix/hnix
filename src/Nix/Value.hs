@@ -267,7 +267,6 @@ hoistNValueF lft =
 
 -- * @__NValue'__@: forming the (F(A))
 
-type NvConstraint f = (Comonad f, Applicative f) 
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a =
@@ -282,9 +281,9 @@ instance (Comonad f, Show a) => Show (NValue' t f m a) where
   show (NValue' (extract -> v)) = show v
 
 
--- ** Show1
+-- ** NVConstraint
 
-instance NvConstraint f  => Show1 (NValue' t f m) where
+instance NVConstraint f  => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
     NVConstant' atom  -> showsUnaryWith showsPrec             "NVConstantF" p atom
     NVStr' ns         -> showsUnaryWith showsPrec             "NVStrF"      p $ ignoreContext ns
@@ -380,6 +379,9 @@ unliftNValue' = hoistNValue' lift
 
 
 -- ** Bijective Hask subcategory <-> @NValue'@
+
+type NVConstraint f = (Comonad f, Applicative f) 
+
 -- *** @F: Hask subcategory → NValue'@
 --
 -- #mantra#
@@ -416,31 +418,31 @@ unliftNValue' = hoistNValue' lift
 
 -- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
 pattern NVNull' = NVConstant' NNull
-pattern NVConstant' :: NvConstraint w => NAtom -> NValue' t w m a
+pattern NVConstant' :: NVConstraint w => NAtom -> NValue' t w m a
 pattern NVConstant' x <- NValue' (extract -> NVConstantF x)
   where NVConstant' = NValue' . pure . NVConstantF
 
-pattern NVStr' :: NvConstraint w => NixString -> NValue' t w m a
+pattern NVStr' :: NVConstraint w => NixString -> NValue' t w m a
 pattern NVStr' ns <- NValue' (extract -> NVStrF ns)
   where NVStr' = NValue' . pure . NVStrF 
 
-pattern NVPath' :: NvConstraint w => Path -> NValue' t w m a
+pattern NVPath' :: NVConstraint w => Path -> NValue' t w m a
 pattern NVPath' x <- NValue' (extract -> NVPathF x)
   where NVPath' = NValue' . pure . NVPathF . coerce
 
-pattern NVList' :: NvConstraint w => [a] -> NValue' t w m a
+pattern NVList' :: NVConstraint w => [a] -> NValue' t w m a
 pattern NVList' l <- NValue' (extract -> NVListF l)
   where NVList' = NValue' . pure . NVListF
 
-pattern NVSet' :: NvConstraint w => PositionSet -> AttrSet a -> NValue' t w m a
+pattern NVSet' :: NVConstraint w => PositionSet -> AttrSet a -> NValue' t w m a
 pattern NVSet' p s <- NValue' (extract -> NVSetF p s)
   where NVSet' p s = NValue' $ pure $ NVSetF p s
 
-pattern NVClosure' :: NvConstraint w => Params () -> (NValue t w m -> m a) -> NValue' t w m a
+pattern NVClosure' :: NVConstraint w => Params () -> (NValue t w m -> m a) -> NValue' t w m a
 pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
   where NVClosure' x f = NValue' $ pure $ NVClosureF x f
 
-pattern NVBuiltin' :: NvConstraint w => VarName -> (NValue t w m -> m a) -> NValue' t w m a
+pattern NVBuiltin' :: NVConstraint w => VarName -> (NValue t w m -> m a) -> NValue' t w m a
 pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
   where NVBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
 {-# complete NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
@@ -542,7 +544,7 @@ unliftNValue = hoistNValue lift
 
 -- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
 
-mkNVStrWithoutContext :: NvConstraint f
+mkNVStrWithoutContext :: NVConstraint f
   => Text
   -> NValue t f m
 mkNVStrWithoutContext = NVStr . mkNixStringWithoutContext
@@ -692,7 +694,7 @@ data ValueFrame t f m
   | Expectation ValueType (NValue t f m)
  deriving Typeable
 
-deriving instance (NvConstraint f, Show t) => Show (ValueFrame t f m)
+deriving instance (NVConstraint f, Show t) => Show (ValueFrame t f m)
 
 
 -- * @MonadDataContext@
