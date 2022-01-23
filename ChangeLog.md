@@ -9,6 +9,8 @@
     * [(link)](https://github.com/haskell-nix/hnix/pull/1038/files) project was using `megaparsec` `{,Source}Pos` and to use it shipped a lot of orphan instances. To improve the situation & performance (reports [#1026](https://github.com/haskell-nix/hnix/issues/1026), [#746](https://github.com/haskell-nix/hnix/issues/746)) project uses `N{,Source}Pos` types, related type signatures were changed accordingly.
   * `Nix.Value`
     * Unify builder `mkNV*` and `NV*` patterns by bidirectional synonyms, a lot of builders `mkNV*` are removed, and merged to `NV*`. e.g. instead of builder `mkNVList`, `NVList` should be used.
+    * Constraint `NVConstraint f = (Comonad f, Applicative f)` was introduced, in order to unify builder `mkNV*` and `NV*` patterns.
+  
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.15.0...0.16.0#files_bucket) 0.16.0
 
