@@ -519,11 +519,12 @@ data NAssoc
   | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+-- | Single operator grammar entries.
 data NOperatorDef
   = NAppDef                NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp   NOpPrecedence NOpName
-  | NBinaryDef  (Map NBinaryOp  OperatorInfo)
-  | NSpecialDef (Map NSpecialOp OperatorInfo)
+  | NBinaryDef  NBinaryOp  OperatorInfo
+  | NSpecialDef NSpecialOp OperatorInfo
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
@@ -539,7 +540,7 @@ binary
   :: NBinaryOp
   -> (NOperatorDef, Operator Parser NExprLoc)
 binary op =
-  ( NBinaryDef $ one (op, operatorInfo)
+  ( NBinaryDef op operatorInfo
   , mapAssocToInfix (associativity operatorInfo) $ opWithLoc annNBinary op $ operatorName operatorInfo
   )
  where
@@ -824,7 +825,7 @@ nixOperators selector =
     one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef (one (NHasAttrOp, getSpecialOperator NHasAttrOp))
+      ( NSpecialDef NHasAttrOp $ getSpecialOperator NHasAttrOp
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
