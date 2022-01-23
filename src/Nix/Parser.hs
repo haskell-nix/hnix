@@ -175,7 +175,7 @@ symbols :: Text -> Parser Text
 symbols = lexeme . chunk
 
 -- We restrict the type of 'parens' and 'brackets' here because if they were to
--- take a @Parser NExprLoc@ argument they would parse additional text which
+-- take a 'Parser NExprLoc' argument they would parse additional text which
 -- wouldn't be captured in the source location annotation.
 --
 -- Braces and angles in hnix don't enclose a single expression so this type
@@ -544,74 +544,6 @@ mapAssocToInfix NAssocNone  = InfixN
 mapAssocToInfix NAssocLeft  = InfixL
 mapAssocToInfix NAssocRight = InfixR
 
-nixOperators
-  :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
-  -> [[ ( NOperatorDef
-       , Operator Parser NExprLoc
-       )
-    ]]
-nixOperators selector =
-  [ -- This is not parsed here, even though technically it's part of the
-    -- expression table. The problem is that in some cases, such as list
-    -- membership, it's also a term. And since terms are effectively the
-    -- highest precedence entities parsed by the expression parser, it ends up
-    -- working out that we parse them as a kind of "meta-term".
-
-    -- {-  1 -}
-    -- [ ( NSpecialDef "." NSelectOp NAssocLeft
-    --   , Postfix $
-    --       do
-    --         sel <- seldot *> selector
-    --         mor <- optional (reserved "or" *> term)
-    --         pure $ \x -> annNSelect x sel mor)
-    -- ]
-
-    {-  2 -}
-    one
-      ( NAppDef 2 " "
-      ,
-        -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ annNApp <$ symbols mempty -- NApp is left associative
-      )
-  , {-  3 -}
-    one $ prefix  NNeg 3 "-"
-  , {-  4 -}
-    one
-      ( NSpecialDef (one (NHasAttrOp, getSpecialOperator NHasAttrOp))
-      , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
-      )
-  , {-  5 -}
-    one $ binary NConcat
-  , {-  6 -}
-    [ binary NMult
-    , binary NDiv
-    ]
-  , {-  7 -}
-    [ binary NPlus
-    , binary NMinus
-    ]
-  , {-  8 -}
-    one $ prefix  NNot 8 "!"
-  , {-  9 -}
-    one $ binary NUpdate
-  , {- 10 -}
-    [ binary NLt
-    , binary NGt
-    , binary NLte
-    , binary NGte
-    ]
-  , {- 11 -}
-    [ binary NEq
-    , binary NNEq
-    ]
-  , {- 12 -}
-    one $ binary NAnd
-  , {- 13 -}
-    one $ binary NOr
-  , {- 14 -}
-    one $ binary NImpl
-  ]
-
 --  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
 --  2021-08-10: NOTE:
 --  All this is a sidecar:
@@ -852,6 +784,74 @@ nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
 
 -- ** Expr & its constituents (Language term, expr algebra)
+
+-- | Bundles operators with parsers for them, since @megaparsec@ requires the @[[op]]@ form.
+nixOperators
+  :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
+  -> [[ ( NOperatorDef
+       , Operator Parser NExprLoc
+       )
+    ]]
+nixOperators selector =
+  [ -- This is not parsed here, even though technically it's part of the
+    -- expression table. The problem is that in some cases, such as list
+    -- membership, it's also a term. And since terms are effectively the
+    -- highest precedence entities parsed by the expression parser, it ends up
+    -- working out that we parse them as a kind of "meta-term".
+
+    -- {-  1 -}
+    -- [ ( NSpecialDef "." NSelectOp NAssocLeft
+    --   , Postfix $
+    --       do
+    --         sel <- seldot *> selector
+    --         mor <- optional (reserved "or" *> term)
+    --         pure $ \x -> annNSelect x sel mor)
+    -- ]
+
+    {-  2 -}
+    one
+      ( NAppDef 2 " "
+      , -- Thanks to Brent Yorgey for showing me this trick!
+        InfixL $ annNApp <$ symbols mempty -- NApp is left associative
+      )
+  , {-  3 -}
+    one $ prefix  NNeg 3 "-"
+  , {-  4 -}
+    one
+      ( NSpecialDef (one (NHasAttrOp, getSpecialOperator NHasAttrOp))
+      , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
+      )
+  , {-  5 -}
+    one $ binary NConcat
+  , {-  6 -}
+    [ binary NMult
+    , binary NDiv
+    ]
+  , {-  7 -}
+    [ binary NPlus
+    , binary NMinus
+    ]
+  , {-  8 -}
+    one $ prefix NNot 8 "!"
+  , {-  9 -}
+    one $ binary NUpdate
+  , {- 10 -}
+    [ binary NLt
+    , binary NGt
+    , binary NLte
+    , binary NGte
+    ]
+  , {- 11 -}
+    [ binary NEq
+    , binary NNEq
+    ]
+  , {- 12 -}
+    one $ binary NAnd
+  , {- 13 -}
+    one $ binary NOr
+  , {- 14 -}
+    one $ binary NImpl
+  ]
 
 nixTerm :: Parser NExprLoc
 nixTerm =
