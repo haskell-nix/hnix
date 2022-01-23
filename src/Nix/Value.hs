@@ -43,7 +43,6 @@ import           Nix.String
 import           Nix.Thunk
 
 
-
 -- * @__NValueF__@: Base functor (F)
 
 -- | An NValueF p m r represents all the possible types of Nix values.
@@ -267,6 +266,12 @@ hoistNValueF lft =
 
 -- * @__NValue'__@: forming the (F(A))
 
+-- | NVConstraint constraint the f layer in @NValue'@.
+-- It makes bijection between sub category of Hask and Nix Value possible. 
+-- 'Comonad' enable Nix Value to Hask part.
+-- 'Applicative' enable Hask to Nix Value part.
+type NVConstraint f = (Comonad f, Applicative f) 
+
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a =
@@ -277,11 +282,11 @@ newtype NValue' t f m a =
     }
   deriving (Generic, Typeable, Functor, Foldable)
 
-instance (Comonad f, Show a) => Show (NValue' t f m a) where
+instance (NVConstraint f, Show a) => Show (NValue' t f m a) where
   show (NValue' (extract -> v)) = show v
 
 
--- ** NVConstraint
+-- ** Show1
 
 instance NVConstraint f  => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
@@ -379,13 +384,9 @@ unliftNValue' = hoistNValue' lift
 
 
 -- ** Bijective Hask subcategory <-> @NValue'@
-
-type NVConstraint f = (Comonad f, Applicative f) 
-
--- *** @F: Hask subcategory → NValue'@
---
+-- *** @F: Hask subcategory <-> NValue'@
 -- #mantra#
--- $Methods @F: Hask → NValue'@
+-- $Patterns @F: Hask <-> NValue'@
 --
 -- Since Haskell and Nix are both recursive purely functional lazy languages.
 -- And since recursion-schemes.
@@ -399,49 +400,54 @@ type NVConstraint f = (Comonad f, Applicative f)
 --
 -- Since it is a proper way of scientific implementation, we would eventually form a
 -- lawful functor.
---
--- Facts of which are seen below:
-
--- | Haskell key-value to the Nix key-value,
--- So above we have maps of Hask subcategory objects to Nix objects,
--- and Hask subcategory morphisms to Nix morphisms.
-
--- *** @F: NValue -> NValue'@
-
--- | Module pattens use @language PatternSynonyms@: unidirectional synonyms (@<-@),
+-- 
+-- Module pattens use @language PatternSynonyms@: bidirectional synonyms (@<-@),
 -- and @ViewPatterns@: (@->@) at the same time.
 -- @ViewPatterns Control.Comonad.extract@ extracts
 -- from the @NValue (Free (NValueF a))@
 -- the @NValueF a@. Which is @NValueF p m r@. Since it extracted from the
 -- @NValue@, which is formed by \( (F a -> a) F a \) in the first place.
 -- So @NValueF p m r@ which is extracted here, internally holds the next NValue.
+--
+-- Facts of bijection between Hask subcategory objects and Nix objects,
+-- and between Hask subcategory morphisms and Nix morphisms are seen blow:
+
 
 -- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
+pattern NVNull' :: NVConstraint w => NValue' t w m a
 pattern NVNull' = NVConstant' NNull
+
+-- | Haskell constant to the Nix constant,
 pattern NVConstant' :: NVConstraint w => NAtom -> NValue' t w m a
 pattern NVConstant' x <- NValue' (extract -> NVConstantF x)
   where NVConstant' = NValue' . pure . NVConstantF
 
+-- | Haskell text & context to the Nix text & context,
 pattern NVStr' :: NVConstraint w => NixString -> NValue' t w m a
 pattern NVStr' ns <- NValue' (extract -> NVStrF ns)
   where NVStr' = NValue' . pure . NVStrF 
 
+-- | Haskell @Path@ to the Nix path,
 pattern NVPath' :: NVConstraint w => Path -> NValue' t w m a
 pattern NVPath' x <- NValue' (extract -> NVPathF x)
   where NVPath' = NValue' . pure . NVPathF . coerce
 
+-- | Haskell @[]@ to the Nix @[]@,
 pattern NVList' :: NVConstraint w => [a] -> NValue' t w m a
 pattern NVList' l <- NValue' (extract -> NVListF l)
   where NVList' = NValue' . pure . NVListF
 
+-- | Haskell key-value to the Nix key-value,
 pattern NVSet' :: NVConstraint w => PositionSet -> AttrSet a -> NValue' t w m a
 pattern NVSet' p s <- NValue' (extract -> NVSetF p s)
   where NVSet' p s = NValue' $ pure $ NVSetF p s
 
+-- | Haskell closure to the Nix closure,
 pattern NVClosure' :: NVConstraint w => Params () -> (NValue t w m -> m a) -> NValue' t w m a
 pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
   where NVClosure' x f = NValue' $ pure $ NVClosureF x f
 
+-- | Haskell functions to the Nix functions!
 pattern NVBuiltin' :: NVConstraint w => VarName -> (NValue t w m -> m a) -> NValue' t w m a
 pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
   where NVBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
