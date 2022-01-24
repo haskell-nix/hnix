@@ -256,13 +256,13 @@ merge context = go
 
 -- | Result @== NMany []@ -> @unify@ fails.
 unify
-  :: forall e m
+  :: forall e m a
    . MonadLint e m
-  => NExprF ()
+  => NExprF a
   -> Symbolic m
   -> Symbolic m
   -> m (Symbolic m)
-unify context (SV x) (SV y) = do
+unify (void -> context) (SV x) (SV y) = do
   x' <- readRef x
   y' <- readRef y
   case (x', y') of
@@ -360,7 +360,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   evalEnvPath     = const $ mkSymbolic1 TPath
 
   evalUnary op arg =
-    unify (void $ NUnary op arg) arg =<< mkSymbolic1 (TConstant [TInt, TBool])
+    unify (NUnary op arg) arg =<< mkSymbolic1 (TConstant [TInt, TBool])
 
   evalBinary = lintBinaryOp
 
@@ -384,13 +384,13 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     do
       t' <- t
       f' <- f
-      let e = unify (void $ NIf cond t' f')
+      let e = unify (NIf cond t' f')
       e t' f' <* (e cond =<< mkSymbolic1 (TConstant $ one TBool))
 
   evalAssert cond body =
     do
       body' <- body
-      body' <$ (unify (void (NAssert cond body')) cond =<< mkSymbolic1 (TConstant $ one TBool))
+      body' <$ (unify (NAssert cond body') cond =<< mkSymbolic1 (TConstant $ one TBool))
 
   evalApp = (fmap snd .) . lintApp (join NApp mempty)
   evalAbs params _ = mkSymbolic1 (TClosure $ void params)
@@ -442,13 +442,12 @@ lintBinaryOp op lsym rarg =
   check lsym rsym xs =
     do
       let
-        e = NBinary op lsym rsym
-        unifyE = unify (void e)
+        contextUnify = unify $ NBinary op lsym rsym
 
       m <- mkSymbolic xs
-      _ <- unifyE lsym m
-      _ <- unifyE rsym m
-      unifyE lsym rsym
+      _ <- contextUnify lsym m
+      _ <- contextUnify rsym m
+      contextUnify lsym rsym
 
 infixl 1 `lintApp`
 lintApp
