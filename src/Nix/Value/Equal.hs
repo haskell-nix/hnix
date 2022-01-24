@@ -142,7 +142,7 @@ compareAttrSetsM
   -> m Bool
 compareAttrSetsM f eq lm rm =
   do
-    (l, r) <- on (liftA2 (,)) (isDerivationM f) lm rm
+    b <- on (liftA2 (&&)) (isDerivationM f) lm rm
     bool
       compareAttrs
       (maybe
@@ -150,7 +150,7 @@ compareAttrSetsM f eq lm rm =
         (uncurry eq)
         outPaths
       )
-      (l && r)
+      b
  where
   compareAttrs = alignEqM eq lm rm
 
