@@ -141,19 +141,19 @@ compareAttrSetsM
   -> AttrSet t
   -> m Bool
 compareAttrSetsM f eq lm rm =
-  do
-    l <- isDerivationM f lm
-    bool
-      compareAttrs
-      (do
-        r <- isDerivationM f rm
-        case r of
-          True
-            | Just lp <- HashMap.Lazy.lookup "outPath" lm,
-              Just rp <- HashMap.Lazy.lookup "outPath" rm -> eq lp rp
-          _ -> compareAttrs
-      )
-      l
+  bool
+    compareAttrs
+    ( bool
+        compareAttrs
+        (fromMaybe
+          compareAttrs
+          $ liftA2 eq
+            (HashMap.Lazy.lookup "outPath" lm)
+            (HashMap.Lazy.lookup "outPath" rm)
+        )
+        =<< isDerivationM f rm
+    )
+    =<< isDerivationM f lm
  where
   compareAttrs = alignEqM eq lm rm
 
