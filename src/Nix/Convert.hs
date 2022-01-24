@@ -402,7 +402,7 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
-  toValue = pure . NVPath' . coerce
+  toValue = pure . NVPath'
 
 instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
