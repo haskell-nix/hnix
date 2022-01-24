@@ -142,8 +142,7 @@ compareAttrSetsM
   -> m Bool
 compareAttrSetsM f eq lm rm =
   do
-    l <- isDerivationM f lm
-    r <- isDerivationM f rm
+    (l, r) <- on (liftA2 (,)) (isDerivationM f) lm rm
     bool
       compareAttrs
       (maybe
