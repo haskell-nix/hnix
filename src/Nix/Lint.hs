@@ -209,15 +209,17 @@ merge context = go
     (TSet x       , TSet Nothing ) -> (one (TSet x) <>) <$> rest
     (TSet Nothing , TSet x       ) -> (one (TSet x) <>) <$> rest
     (TSet (Just l), TSet (Just r)) -> do
-      hm <- sequenceA $ M.intersectionWith
-        (\ i j ->
-          do
-            i'' <- demand =<< i
-            j'' <- demand =<< j
-            (defer . unify context i'') j''
-        )
-        (pure <$> l)
-        (pure <$> r)
+      hm <-
+        sequenceA $
+          M.intersectionWith
+            (\ i j ->
+              do
+                i'' <- i
+                j'' <- j
+                defer $ unify context i'' j''
+            )
+            (fmap demand l)
+            (fmap demand r)
       handlePresence
         id
         (const ((one (TSet $ pure hm) <>) <$>))
