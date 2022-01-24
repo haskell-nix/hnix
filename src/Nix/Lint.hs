@@ -104,6 +104,12 @@ mkSymbolic
   -> m (Symbolic m)
 mkSymbolic = packSymbolic . NMany
 
+mkSymbolic1
+  :: MonadAtomicRef m
+  => NTypeF m (Symbolic m)
+  -> m (Symbolic m)
+mkSymbolic1 = mkSymbolic . one
+
 packSymbolic
   :: MonadAtomicRef m
   => NSymbolicF (NTypeF m (Symbolic m))
@@ -157,7 +163,7 @@ renderSymbolic =
               do
                 (args, sym) <-
                   do
-                    f' <- mkSymbolic $ one f
+                    f' <- mkSymbolic1 f
                     lintApp (NAbs p mempty) f' everyPossible
                 args' <- traverse renderSymbolic args
                 sym'  <- renderSymbolic sym
@@ -334,12 +340,12 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
 
   evalCurPos =
     do
-      f <- mkSymbolic $ one TPath
-      l <- mkSymbolic . one . TConstant $ one TInt
-      c <- mkSymbolic . one . TConstant $ one TInt
-      mkSymbolic . one . TSet . pure $ M.fromList [("file", f), ("line", l), ("col", c)]
+      f <- mkSymbolic1 TPath
+      l <- mkSymbolic1 $ TConstant $ one TInt
+      c <- mkSymbolic1 $ TConstant $ one TInt
+      mkSymbolic1 $ TSet . pure $ M.fromList [("file", f), ("line", l), ("col", c)]
 
-  evalConstant c = mkSymbolic $ one $ fun c
+  evalConstant c = mkSymbolic1 $ fun c
    where
     fun =
       \case
@@ -349,12 +355,12 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         NBool  _ -> TConstant $ one TBool
         NNull    -> TConstant $ one TNull
 
-  evalString      = const $ mkSymbolic $ one TStr
-  evalLiteralPath = const $ mkSymbolic $ one TPath
-  evalEnvPath     = const $ mkSymbolic $ one TPath
+  evalString      = const $ mkSymbolic1 TStr
+  evalLiteralPath = const $ mkSymbolic1 TPath
+  evalEnvPath     = const $ mkSymbolic1 TPath
 
   evalUnary op arg =
-    unify (void $ NUnary op arg) arg =<< mkSymbolic (one $ TConstant [TInt, TBool])
+    unify (void $ NUnary op arg) arg =<< mkSymbolic1 (TConstant [TInt, TBool])
 
   evalBinary = lintBinaryOp
 
@@ -378,20 +384,16 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     do
       t' <- t
       f' <- f
-      let e = NIf cond t' f'
-
-      _ <- unify (void e) cond =<< mkSymbolic (one $ TConstant $ one TBool)
-      unify (void e) t' f'
+      let e = unify (void $ NIf cond t' f')
+      e t' f' <* (e cond =<< mkSymbolic1 (TConstant $ one TBool))
 
   evalAssert cond body =
     do
       body' <- body
-      let e = NAssert cond body'
-      _ <- unify (void e) cond =<< mkSymbolic (one $ TConstant $ one TBool)
-      pure body'
+      body' <$ (unify (void (NAssert cond body')) cond =<< mkSymbolic1 (TConstant $ one TBool))
 
   evalApp = (fmap snd .) . lintApp (join NApp mempty)
-  evalAbs params _ = mkSymbolic (one $ TClosure $ void params)
+  evalAbs params _ = mkSymbolic1 (TClosure $ void params)
 
   evalError = throwError
 
