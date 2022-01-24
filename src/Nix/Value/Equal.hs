@@ -146,13 +146,16 @@ compareAttrSetsM f eq lm rm =
     r <- isDerivationM f rm
     bool
       compareAttrs
-      (fromMaybe
+      (maybe
         compareAttrs
-        $ on (liftA2 eq) (HashMap.Lazy.lookup "outPath") lm rm
+        (uncurry eq)
+        outPaths
       )
       (l && r)
  where
   compareAttrs = alignEqM eq lm rm
+
+  outPaths = on (liftA2 (,)) (HashMap.Lazy.lookup "outPath") lm rm
 
 compareAttrSets
   :: (t -> Maybe NixString)
