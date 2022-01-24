@@ -73,17 +73,13 @@ isDerivationM
   -> m Bool
 isDerivationM f m =
   maybe
-    (pure False)
-    p
-    (HashMap.Lazy.lookup "type" m)
- where
-  p t =
-    maybe
-      -- We should probably really make sure the context is empty here
-      -- but the C++ implementation ignores it.
-      False
-      ((==) "derivation" . ignoreContext)
-      <$> f t
+    False
+    -- (2019-03-18):
+    -- We should probably really make sure the context is empty here
+    -- but the C++ implementation ignores it.
+    ((==) "derivation" . ignoreContext)
+    . join <$> traverse f (HashMap.Lazy.lookup "type" m)
+
 
 isDerivation
   :: Monad m
