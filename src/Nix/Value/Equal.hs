@@ -31,9 +31,9 @@ checkComparable
   -> m ()
 checkComparable x y =
   case (x, y) of
-    (NVConstant (NFloat _), NVConstant (NInt   _)) -> stub
-    (NVConstant (NInt   _), NVConstant (NFloat _)) -> stub
     (NVConstant (NInt   _), NVConstant (NInt   _)) -> stub
+    (NVConstant (NInt   _), NVConstant (NFloat _)) -> stub
+    (NVConstant (NFloat _), NVConstant (NInt   _)) -> stub
     (NVConstant (NFloat _), NVConstant (NFloat _)) -> stub
     (NVStr       _        , NVStr       _        ) -> stub
     (NVPath      _        , NVPath      _        ) -> stub
@@ -62,7 +62,8 @@ alignEqM eq fa fb =
             (Data.Semialign.align fa fb)
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
-alignEq eq fa fb = runIdentity $ alignEqM ((Identity .) . eq) fa fb
+alignEq eq fa fb =
+  runIdentity $ alignEqM ((Identity .) . eq) fa fb
 
 isDerivationM
   :: Monad m
@@ -158,11 +159,12 @@ compareAttrSets
   -> AttrSet t
   -> AttrSet t
   -> Bool
-compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
+compareAttrSets f eq lm rm =
+  runIdentity $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
 
 valueEqM
-  :: (MonadThunk t m (NValue t f m), NVConstraint f)
+  :: forall t f m
+   . (MonadThunk t m (NValue t f m), NVConstraint f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
@@ -171,12 +173,13 @@ valueEqM (  Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
 valueEqM x@(Free _) (  Pure y) = (`thunkEqM` y) =<< thunk (pure x)
 valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
   valueFEqM
-    (compareAttrSetsM f valueEqM)
+    (compareAttrSetsM findNVStr valueEqM)
     valueEqM
     x
     y
  where
-  f =
+  findNVStr :: NValue t f m -> m (Maybe NixString)
+  findNVStr =
     free
       (pure .
         (\case
@@ -190,6 +193,8 @@ valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
           _        -> mempty
       )
 
+-- This function has mutual recursion with `valueEqM`, and this function so far is not used across the project,
+-- but that one is.
 thunkEqM :: (MonadThunk t m (NValue t f m), NVConstraint f) => t -> t -> m Bool
 thunkEqM lt rt =
   do
@@ -198,9 +203,10 @@ thunkEqM lt rt =
 
     let
       unsafePtrEq =
-        case (lt, rt) of
-          (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
-          _                                             -> valueEqM lv rv
+        bool
+          (valueEqM lv rv)
+          (pure True)
+          $ on (==) thunkId lt rt
 
     case (lv, rv) of
       (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
