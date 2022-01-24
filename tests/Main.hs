@@ -65,13 +65,16 @@ ensureNixpkgsCanParse =
         when (null files) $
           errorWithoutStackTrace $
             "Directory " <> show dir <> " does not have any files"
-        for_ files $ \file ->
-          unless ("azure-cli/default.nix" `isSuffixOf` file ||
-                  "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
-            -- Parse and deepseq the resulting expression tree, to ensure the
-            -- parser is fully executed.
-            _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
-            stub
+        traverse_
+          (\ file ->
+            unless ("azure-cli/default.nix" `isSuffixOf` file ||
+                    "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
+              -- Parse and deepseq the resulting expression tree, to ensure the
+              -- parser is fully executed.
+              _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
+              stub
+          )
+          files
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
   getExpr   k m =

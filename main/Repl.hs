@@ -575,16 +575,19 @@ help :: (MonadNix e t f m, MonadIO m)
      -> Repl e t f m ()
 help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
-  for_ hs $ \h ->
-    liftIO .
-      Text.putStrLn .
-        Prettyprinter.renderStrict .
-          Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions $
-            ":"
-            <> Prettyprinter.pretty (helpOptionName h) <> space
-            <> helpOptionSyntax h
-            <> Prettyprinter.line
-            <> Prettyprinter.indent 4 (helpOptionDoc h)
+  traverse_
+    (\h ->
+      liftIO .
+        Text.putStrLn .
+          Prettyprinter.renderStrict .
+            Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions $
+              ":"
+              <> Prettyprinter.pretty (helpOptionName h) <> space
+              <> helpOptionSyntax h
+              <> Prettyprinter.line
+              <> Prettyprinter.indent 4 (helpOptionDoc h)
+    )
+    hs
 
 options
   :: (MonadNix e t f m, MonadIO m)

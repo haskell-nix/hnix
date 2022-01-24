@@ -460,20 +460,26 @@ lintApp context fun arg =
   (\case
     NAny ->
       throwError $ ErrorCall "Cannot apply something not known to be a function"
-    NMany xs -> do
-      (args, ys) <- fmap unzip $ forM xs $ \case
-        TClosure _params ->
-          (\case
-            NAny                  -> error "NYI"
-            NMany [TSet (Just _)] -> error "NYI"
-            NMany _               -> throwError $ ErrorCall "NYI: lintApp NMany not set"
-          ) =<< unpackSymbolic =<< arg
-        TBuiltin _ _f -> throwError $ ErrorCall "NYI: lintApp builtin"
-        TSet _m       -> throwError $ ErrorCall "NYI: lintApp Set"
-        _x            -> throwError $ ErrorCall "Attempt to call non-function"
+    NMany xs ->
+      do
+        (args, ys) <-
+          unzip <$>
+            traverse
+              (\case
+                TClosure _params ->
+                  (\case
+                    NAny                  -> error "NYI"
+                    NMany [TSet (Just _)] -> error "NYI"
+                    NMany _               -> throwError $ ErrorCall "NYI: lintApp NMany not set"
+                  ) =<< unpackSymbolic =<< arg
+                TBuiltin _ _f -> throwError $ ErrorCall "NYI: lintApp builtin"
+                TSet _m       -> throwError $ ErrorCall "NYI: lintApp Set"
+                _x            -> throwError $ ErrorCall "Attempt to call non-function"
+              )
+              xs
 
-      y <- everyPossible
-      (Unsafe.head args, ) <$> foldM (unify context) y ys
+        y <- everyPossible
+        (Unsafe.head args, ) <$> foldM (unify context) y ys
   ) =<< unpackSymbolic fun
 
 newtype Lint s a = Lint
