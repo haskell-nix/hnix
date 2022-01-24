@@ -125,19 +125,19 @@
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: orM s
 - hint:
-    lhs: "fmap and (mapM f s)"
+    lhs: "fmap and (traversable f s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: allM f s
 - hint:
-    lhs: "and <$> mapM f s"
+    lhs: "and <$> traversable f s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: allM f s
 - hint:
-    lhs: "fmap or (mapM f s)"
+    lhs: "fmap or (traversable f s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: anyM f s
 - hint:
-    lhs: "or <$> mapM f s"
+    lhs: "or <$> traversable f s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: anyM f s
 - warn:
