@@ -147,9 +147,7 @@ compareAttrSetsM f eq lm rm =
         compareAttrs
         (fromMaybe
           compareAttrs
-          $ liftA2 eq
-            (HashMap.Lazy.lookup "outPath" lm)
-            (HashMap.Lazy.lookup "outPath" rm)
+          $ on (liftA2 eq) (HashMap.Lazy.lookup "outPath") lm rm
         )
         =<< isDerivationM f rm
     )
