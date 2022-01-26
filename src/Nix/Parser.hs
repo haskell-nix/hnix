@@ -860,12 +860,11 @@ nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
 -- | Bundles operators with parsers for them, since @megaparsec@ requires the @[[op]]@ form.
 nixOperators
-  :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
-  -> [[ ( NOperatorDef
-       , Operator Parser NExprLoc
-       )
-    ]]
-nixOperators selector =
+  :: [[ ( NOperatorDef
+        , Operator Parser NExprLoc
+        )
+     ]]
+nixOperators =
   [ -- This is not parsed here, even though technically it's part of the
     -- expression table. The problem is that in some cases, such as list
     -- membership, it's also a term. And since terms are effectively the
@@ -892,7 +891,7 @@ nixOperators selector =
   , {-  4 -}
     one
       ( getOpDef NHasAttrOp
-      , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
+      , Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)
       )
   , {-  5 -}
     one $ binary NConcat
@@ -959,7 +958,7 @@ nixExprAlgebra =
   makeExprParser -- This requires to convert precedence to [[op]]
     nixTerm
     (snd <<$>>
-      nixOperators nixSelector
+      nixOperators
     )
 
 nixExpr :: Parser NExprLoc
