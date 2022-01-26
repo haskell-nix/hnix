@@ -527,6 +527,26 @@ data NOperatorDef
   | NSpecialDef NSpecialOp OperatorInfo
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+-- -- | Class to get a private free construction to abstract away the gap between the Nix operation types
+-- -- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
+-- -- And in doing remove 'OperatorInfo' from existance.
+class NOp a where
+  getOpDef :: a -> OperatorInfo
+  getOpPrecedence :: a -> NOpPrecedence
+
+instance NOp NUnaryOp where
+  getOpDef op = getOperatorInfo unaryOpInfMap op
+  getOpPrecedence = precedence . getOpDef
+
+instance NOp NBinaryOp where
+  getOpDef op = getOperatorInfo binOpInfMap op
+  getOpPrecedence = precedence . getOpDef
+
+instance NOp NSpecialOp where
+  getOpDef op = getOperatorInfo specOpInfMap op
+  getOpPrecedence = precedence . getOpDef
+
+
 prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 prefix op precedence name =
   (NUnaryDef op precedence name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
@@ -611,13 +631,13 @@ getOperatorInfo    :: Ord k => Map k OperatorInfo -> k -> OperatorInfo
 getOperatorInfo mp k = M.findWithDefault (OperatorInfo NAssoc 1 "Impossible, the key should be in the operator map.") k mp
 
 getUnaryOperator   :: NUnaryOp -> OperatorInfo
-getUnaryOperator   = getOperatorInfo unaryOpInfMap
+getUnaryOperator   = getOpDef
 
 getBinaryOperator  :: NBinaryOp -> OperatorInfo
-getBinaryOperator  = getOperatorInfo binOpInfMap
+getBinaryOperator  = getOpDef
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator = getOperatorInfo specOpInfMap
+getSpecialOperator = getOpDef
 
 -- ** x: y lambda function
 
