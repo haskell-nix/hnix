@@ -798,8 +798,8 @@ nixAssert =
 
 -- ** . - reference (selector) into attr
 
-selDot :: Parser ()
-selDot = label "." $ try (symbol '.' *> notFollowedBy nixPath)
+selectorDot :: Parser ()
+selectorDot = label "." $ try (symbol '.' *> notFollowedBy nixPath)
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <|> staticKey
@@ -809,7 +809,7 @@ keyName = dynamicKey <|> staticKey
 
 nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
 nixSelector =
-  annotateLocation1 $ fromList <$> keyName `sepBy1` selDot
+  annotateLocation1 $ fromList <$> keyName `sepBy1` selectorDot
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
 nixSelect term =
@@ -818,11 +818,11 @@ nixSelect term =
       liftA2 build
         term
         (optional $
-          liftA2 (,)
-            (selDot *> nixSelector)
+          liftA2 (flip (,))
+            (selectorDot *> nixSelector)
             (optional $ reserved "or" *> nixTerm)
         )
-    continues <- optional $ lookAhead selDot
+    continues <- optional $ lookAhead selectorDot
 
     maybe
       id
@@ -833,14 +833,14 @@ nixSelect term =
   build
     :: NExprLoc
     -> Maybe
-      ( AnnUnit SrcSpan (NAttrPath NExprLoc)
-      , Maybe NExprLoc
+      ( Maybe NExprLoc
+      , AnnUnit SrcSpan (NAttrPath NExprLoc)
       )
     -> NExprLoc
   build t =
     maybe
       t
-      (\ (a, m) -> (`annNSelect` t) m a)
+      (uncurry (`annNSelect` t))
 
 
 -- ** _ - syntax hole
