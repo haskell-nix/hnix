@@ -357,7 +357,7 @@ absolutePathFromValue =
         let
           path = coerce . toString $ ignoreContext ns
 
-        unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
+        when (not (isAbsolute path)) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
         pure path
 
     NVPath path -> pure path

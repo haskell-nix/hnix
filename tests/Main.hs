@@ -35,7 +35,7 @@ import           Test.Tasty.HUnit
 ensureLangTestsPresent :: Assertion
 ensureLangTestsPresent = do
   exist <- fileExist "data/nix/tests/local.mk"
-  unless exist $
+  when (not exist) $
     errorWithoutStackTrace $ String.unlines
       [ "Directory data/nix does not have any files."
       , "Did you forget to run"
@@ -56,29 +56,32 @@ ensureNixpkgsCanParse =
           time <- getCurrentTime
           runWithBasicEffectsIO (defaultOptions time) $
             Nix.nixEvalExprLoc mempty expr
-        let dir = ignoreContext ns
-        exists <- fileExist $ toString dir
-        unless exists $
+        let dir = toString $ ignoreContext ns
+        exists <- fileExist dir
+        when (not exists) $
           errorWithoutStackTrace $
             "Directory " <> show dir <> " does not exist"
-        files <- globDir1 (compile "**/*.nix") $ toString dir
-        when (null files) $
-          errorWithoutStackTrace $
-            "Directory " <> show dir <> " does not have any files"
-        traverse_
-          (\ file ->
-            unless ("azure-cli/default.nix" `isSuffixOf` file ||
-                    "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
-              -- Parse and deepseq the resulting expression tree, to ensure the
-              -- parser is fully executed.
-              _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
-              stub
+        files <- globDir1 (compile "**/*.nix") dir
+        handlePresence
+          (errorWithoutStackTrace $
+            "Directory " <> show dir <> " does not have any files")
+          (traverse_
+            (\ file ->
+              let fileIsNotSuffix = not `isSuffixOf` file in
+              when
+                (on (&&) fileIsNotSuffix "azure-cli/default.nix" "os-specific/linux/udisks/2-default.nix")
+              $ do
+                -- Parse and deepseq the resulting expression tree, to ensure the
+                -- parser is fully executed.
+                _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
+                stub
+            )
           )
           files
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
   getExpr   k m =
-    let Just (Just r) = lookup k m in
+    let Just r = join $ lookup k m in
     r
   getString k m =
     let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in

@@ -61,12 +61,15 @@ normalizeValue v = run $ iterNValueM run (flip go) (fmap Free . sequenceNValue' 
       (pure $ pure t)
       b
 
-  seen t = do
-    let tid = thunkId t
-    lift $ do
-      res <- gets $ member tid
-      unless res $ modify $ insert tid
-      pure res
+  seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
+  seen t =
+    do
+      let tnkid = thunkId t
+      lift $
+        do
+          thunkWasVisited <- gets $ member tnkid
+          when (not thunkWasVisited) $ modify $ insert tnkid
+          pure thunkWasVisited
 
 -- 2021-05-09: NOTE: This seems a bit excessive. If these functorial versions are not used for recursion schemes - just free from it.
 -- | Normalization HOF (functorial) version of @normalizeValue@. Accepts the special thunk operating/forcing/nirmalizing function & internalizes it.
@@ -107,12 +110,15 @@ normalizeValueF f = run . iterNValueM run (flip go) (fmap Free . sequenceNValue'
       (pure $ pure t)
       b
 
-  seen t = do
-    let tid = thunkId t
-    lift $ do
-      res <- gets $ member tid
-      unless res $ modify $ insert tid
-      pure res
+  seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
+  seen t =
+    do
+      let tnkid = thunkId t
+      lift $
+        do
+          thunkWasVisited <- gets $ member tnkid
+          when (not thunkWasVisited) $ modify $ insert tnkid
+          pure thunkWasVisited
 
 -- | Normalize value.
 -- Detect cycles.
