@@ -508,8 +508,10 @@ instance Num NOpPrecedence where
   negate = coerce (negate @Int)
 
 --  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
-data NSpecialOp =
-  NHasAttrOp | NSelectOp | NTerm
+data NSpecialOp
+  = NHasAttrOp
+  | NSelectOp
+  | NTerm -- ^ For special handling of internal print cases.
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NAssoc

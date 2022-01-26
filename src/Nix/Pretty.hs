@@ -81,53 +81,48 @@ selectOp = getOpDef NSelectOp
 hasAttrOp :: NOperatorDef
 hasAttrOp = getOpDef NHasAttrOp
 
+data WrapMode
+  = ProcessAllWrap
+  | PrecedenceWrap
+ deriving Eq
+
+needsParens
+  :: WrapMode
+  -> NOperatorDef
+  -> NOperatorDef
+  -> Bool
+needsParens mode host sub =
+  getOpPrecedence host > getOpPrecedence sub
+  || bool
+    False
+    ( NAssoc /=  getOpAssoc      host
+      && on (==) getOpAssoc      host sub
+      && on (==) getOpPrecedence host sub
+    )
+    (ProcessAllWrap == mode)
+
+maybeWrapDoc :: WrapMode -> NOperatorDef -> NixDoc ann -> Doc ann
+maybeWrapDoc mode host sub =
+  bool
+    parens
+    id
+    (needsParens mode host (rootOp sub))
+    (getDoc sub)
+
 -- | Determine if to return doc wraped into parens,
 -- according the given operator.
+wrap :: NOperatorDef -> NixDoc ann -> Doc ann
+wrap = maybeWrapDoc ProcessAllWrap
+
 precedenceWrap :: NOperatorDef -> NixDoc ann -> Doc ann
-precedenceWrap op subExpr =
-  maybeWrap $ getDoc subExpr
- where
-  maybeWrap :: Doc ann -> Doc ann
-  maybeWrap =
-    bool
-      parens
-      id
-      needsParens
-   where
-    needsParens :: Bool
-    needsParens =
-      getOpPrecedence root < getOpPrecedence op
-      || (  getOpPrecedence root == getOpPrecedence op
-         && getOpAssoc      root == getOpAssoc op
-         && getOpAssoc      op   /= NAssoc
-         )
-
-    root = rootOp subExpr
-
-precedenceWrapAssoc :: NOperatorDef -> NixDoc ann -> Doc ann
-precedenceWrapAssoc op subExpr =
-  maybeWrap $ getDoc subExpr
- where
-  maybeWrap :: Doc ann -> Doc ann
-  maybeWrap =
-    bool
-      parens
-      id
-      needsParens
-   where
-    needsParens :: Bool
-    needsParens =
-      getOpPrecedence root < getOpPrecedence op
-
-    root = rootOp subExpr
-
+precedenceWrap = maybeWrapDoc PrecedenceWrap
 
 -- Used in the selector case to print a path in a selector as
 -- "${./abc}"
 wrapPath :: NOperatorDef -> NixDoc ann -> Doc ann
 wrapPath op sub =
   bool
-    (precedenceWrap op sub)
+    (wrap op sub)
     (dquotes $ antiquote sub)
     (wasPath sub)
 
@@ -256,7 +251,7 @@ exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
   NList xs ->
-    prettyContainer "[" (precedenceWrapAssoc appOpDef) "]" xs
+    prettyContainer "[" (precedenceWrap appOpDef) "]" xs
   NSet NonRecursive xs ->
     prettyContainer "{" prettyBind "}" xs
   NSet Recursive xs ->
@@ -269,7 +264,7 @@ exprFNixDoc = \case
           , getDoc body
           ]
   NApp fun arg ->
-    mkNixDoc appOpDef (precedenceWrap appOpDef fun <> " " <> precedenceWrapAssoc appOpDef arg)
+    mkNixDoc appOpDef (wrap appOpDef fun <> " " <> precedenceWrap appOpDef arg)
   NBinary op r1 r2 ->
     mkNixDoc
       opDef $
@@ -282,15 +277,19 @@ exprFNixDoc = \case
     opDef = getOpDef op
     f :: NAssoc -> NixDoc ann -> Doc ann
     f x =
-      bool
-        precedenceWrap
-        precedenceWrapAssoc
-        (getOpAssoc opDef /= x)
+      maybeWrapDoc
+        mode
         opDef
+     where
+      mode =
+        bool
+          ProcessAllWrap
+          PrecedenceWrap
+          (getOpAssoc opDef /= x)
   NUnary op r1 ->
     mkNixDoc
       opDef $
-      pretty @Text (coerce $ getOpName op) <> precedenceWrap opDef r1
+      pretty @Text (coerce $ getOpName op) <> wrap opDef r1
    where
     opDef = getOpDef op
   NSelect o r' attr ->
@@ -298,10 +297,10 @@ exprFNixDoc = \case
       (mkNixDoc selectOp)
       (const leastPrecedence)
       o
-      $ wrapPath selectOp (mkNixDoc selectOp (precedenceWrapAssoc appOpDef r')) <> "." <> prettySelector attr <>
-        ((" or " <>) . precedenceWrapAssoc appOpDef) `whenJust` o
+      $ wrapPath selectOp (mkNixDoc selectOp (wrap appOpDef r')) <> "." <> prettySelector attr <>
+        ((" or " <>) . precedenceWrap appOpDef) `whenJust` o
   NHasAttr r attr ->
-    mkNixDoc hasAttrOp (precedenceWrap hasAttrOp r <> " ? " <> prettySelector attr)
+    mkNixDoc hasAttrOp (wrap hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
   NLiteralPath p ->
     pathExpr $
