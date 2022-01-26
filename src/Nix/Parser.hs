@@ -138,14 +138,11 @@ reserved :: Text -> Parser ()
 reserved n =
   lexeme $ try $ chunk n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
-exprAfterP :: Parser a -> Parser NExprLoc
-exprAfterP p = p *> nixExpr
-
 exprAfterSymbol :: Char -> Parser NExprLoc
-exprAfterSymbol p = exprAfterP $ symbol p
+exprAfterSymbol p = symbol p *> nixExpr
 
 exprAfterReservedWord :: Text -> Parser NExprLoc
-exprAfterReservedWord word = exprAfterP $ reserved word
+exprAfterReservedWord word = reserved word *> nixExpr
 
 -- | A literal copy of @megaparsec@ one but with addition of the @\r@ for Windows EOL case (@\r\n@).
 -- Overall, parser should simply @\r\n -> \n@.
@@ -758,14 +755,16 @@ nixLet =
   annotateNamedLocation "let block" $
     reserved "let" *> (letBody <|> letBinders)
  where
+  -- | Expressions `let {..., body = ...}' are just desugared
+  -- into `(rec {..., body = ...}).body'.
+  letBody    = (\ expr -> NSelect Nothing expr (one $ StaticKey "body")) <$> attrset
+   where
+    attrset       = annotateLocation $ NSet Recursive <$> braces nixBinders
+  -- | Regular `let`
   letBinders =
     liftA2 NLet
       nixBinders
       (exprAfterReservedWord "in")
-  -- Let expressions `let {..., body = ...}' are just desugared
-  -- into `(rec {..., body = ...}).body'.
-  letBody    = (\x -> NSelect Nothing x (one $ StaticKey "body")) <$> aset
-  aset       = annotateLocation $ NSet Recursive <$> braces nixBinders
 
 -- ** if then else
 
