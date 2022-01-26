@@ -10,6 +10,7 @@
   * `Nix.Value`
     * [(link)](https://github.com/haskell-nix/hnix/pull/1046/files) Unify builder `mkNV*` and `NV*` patterns by bidirectional synonyms, a lot of builders `mkNV*` are removed, and merged to `NV*`. e.g. instead of builder `mkNVList`, `NVList` should be used.
     * [(link)](https://github.com/haskell-nix/hnix/pull/1046/files) Constraint `NVConstraint f = (Comonad f, Applicative f)` was introduced, in order to unify builder `mkNV*` and `NV*` patterns.
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) `Nix.Pretty`: rm `appOp`
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.15.0...0.16.0#files_bucket) 0.16.0
 
