@@ -66,15 +66,13 @@ ensureNixpkgsCanParse =
           (errorWithoutStackTrace $
             "Directory " <> show dir <> " does not have any files")
           (traverse_
-            (\ file ->
-              let fileIsNotSuffix = not `isSuffixOf` file in
+            (\ path ->
+              let notEndsIn suffix = not $ isSuffixOf suffix path in
               when
-                (on (&&) fileIsNotSuffix "azure-cli/default.nix" "os-specific/linux/udisks/2-default.nix")
-              $ do
-                -- Parse and deepseq the resulting expression tree, to ensure the
-                -- parser is fully executed.
-                _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
-                stub
+                (on (&&) notEndsIn "azure-cli/default.nix" "os-specific/linux/udisks/2-default.nix")
+                $ -- Parse and deepseq the resulting expression tree, to ensure the
+                  -- parser is fully executed.
+                  mempty <$ consider (coerce path) (parseNixFileLoc (coerce path)) $ Exc.evaluate . force
             )
           )
           files
