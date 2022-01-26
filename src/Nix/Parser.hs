@@ -462,6 +462,7 @@ nixSearchPath =
 
 -- ** Operators
 
+--  2022-01-26: NOTE: Rename to 'literal'
 newtype NOpName = NOpName Text
   deriving
     (Eq, Ord, Generic, Typeable, Data, Show, NFData)
@@ -521,8 +522,8 @@ data NAssoc
 data NOperatorDef
   = NAppDef                NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp   NOpPrecedence NOpName
-  | NBinaryDef  NBinaryOp  OperatorInfo
-  | NSpecialDef NSpecialOp OperatorInfo
+  | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
+  | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 
@@ -537,27 +538,27 @@ unaryOpDefMap = fromList
 
 binaryOpDefMap :: Map NBinaryOp NOperatorDef
 binaryOpDefMap = fromList
-  [ (NConcat, NBinaryDef NConcat $ OperatorInfo NAssocRight  5 "++")
-  , (NMult  , NBinaryDef NMult   $ OperatorInfo NAssocLeft   6 "*" )
-  , (NDiv   , NBinaryDef NDiv    $ OperatorInfo NAssocLeft   6 "/" )
-  , (NPlus  , NBinaryDef NPlus   $ OperatorInfo NAssocLeft   7 "+" )
-  , (NMinus , NBinaryDef NMinus  $ OperatorInfo NAssocLeft   7 "-" )
-  , (NUpdate, NBinaryDef NUpdate $ OperatorInfo NAssocRight  9 "//")
-  , (NLt    , NBinaryDef NLt     $ OperatorInfo NAssocLeft  10 "<" )
-  , (NLte   , NBinaryDef NLte    $ OperatorInfo NAssocLeft  10 "<=")
-  , (NGt    , NBinaryDef NGt     $ OperatorInfo NAssocLeft  10 ">" )
-  , (NGte   , NBinaryDef NGte    $ OperatorInfo NAssocLeft  10 ">=")
-  , (NEq    , NBinaryDef NEq     $ OperatorInfo NAssoc      11 "==")
-  , (NNEq   , NBinaryDef NNEq    $ OperatorInfo NAssoc      11 "!=")
-  , (NAnd   , NBinaryDef NAnd    $ OperatorInfo NAssocLeft  12 "&&")
-  , (NOr    , NBinaryDef NOr     $ OperatorInfo NAssocLeft  13 "||")
-  , (NImpl  , NBinaryDef NImpl   $ OperatorInfo NAssocRight 14 "->")
+  [ (NConcat, NBinaryDef NConcat NAssocRight  5 "++")
+  , (NMult  , NBinaryDef NMult   NAssocLeft   6 "*" )
+  , (NDiv   , NBinaryDef NDiv    NAssocLeft   6 "/" )
+  , (NPlus  , NBinaryDef NPlus   NAssocLeft   7 "+" )
+  , (NMinus , NBinaryDef NMinus  NAssocLeft   7 "-" )
+  , (NUpdate, NBinaryDef NUpdate NAssocRight  9 "//")
+  , (NLt    , NBinaryDef NLt     NAssocLeft  10 "<" )
+  , (NLte   , NBinaryDef NLte    NAssocLeft  10 "<=")
+  , (NGt    , NBinaryDef NGt     NAssocLeft  10 ">" )
+  , (NGte   , NBinaryDef NGte    NAssocLeft  10 ">=")
+  , (NEq    , NBinaryDef NEq     NAssoc      11 "==")
+  , (NNEq   , NBinaryDef NNEq    NAssoc      11 "!=")
+  , (NAnd   , NBinaryDef NAnd    NAssocLeft  12 "&&")
+  , (NOr    , NBinaryDef NOr     NAssocLeft  13 "||")
+  , (NImpl  , NBinaryDef NImpl   NAssocRight 14 "->")
   ]
 
 specOpDefMap :: Map NSpecialOp NOperatorDef
 specOpDefMap = fromList
-  [ (NSelectOp , NSpecialDef NSelectOp  $ OperatorInfo NAssocLeft 1 ".")
-  , (NHasAttrOp, NSpecialDef NHasAttrOp $ OperatorInfo NAssocLeft 4 "?")
+  [ (NSelectOp , NSpecialDef NSelectOp  NAssocLeft 1 ".")
+  , (NHasAttrOp, NSpecialDef NHasAttrOp NAssocLeft 4 "?")
   ]
 
 --  2022-01-26: NOTE: When total - make sure to hide & inline all these instances to get free solution.
@@ -566,7 +567,9 @@ specOpDefMap = fromList
 -- And in doing remove 'OperatorInfo' from existance.
 class NOp a where
   getOpDef :: a -> NOperatorDef
+  getOpAssoc :: a -> NAssoc
   getOpPrecedence :: a -> NOpPrecedence
+  getOpName :: a -> NOpName
   getOpInf :: a -> OperatorInfo
 
 instance NOp NUnaryOp where
@@ -575,14 +578,23 @@ instance NOp NUnaryOp where
       (error "Impossible happened: unary operation should be includded into the definition map.")
       op
       unaryOpDefMap
+  --  2022-01-26: NOTE: This instance is a lie, - remove it after `OperatorInfo` is removed from the module.
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NUnaryDef _op _prec _name) = NAssoc
+    fun _ = error "Impossible happened, unary operation should been matched."
   getOpPrecedence = fun . getOpDef
    where
     fun (NUnaryDef _op prec _name) = prec
-    fun _ = error "Impossible happened, match should been `show NUnaryDef`."
+    fun _ = error "Impossible happened, unary operation should been matched."
+  getOpName = fun . getOpDef
+   where
+    fun (NUnaryDef _op _prec name) = name
+    fun _ = error "Impossible happened, unary operation should been matched."
   getOpInf = fun . getOpDef
    where
     fun (NUnaryDef _op prec name) = OperatorInfo NAssoc prec name
-    fun _ = error "Impossible happened, match should been `NUnaryDef`."
+    fun _ = error "Impossible happened, unary operation should been matched."
 
 instance NOp NBinaryOp where
   getOpDef op =
@@ -590,14 +602,22 @@ instance NOp NBinaryOp where
       (error "Impossible, binary operation should be includded into the definition map.")
       op
       binaryOpDefMap
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NBinaryDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, binary operation should been matched."
   getOpPrecedence = fun . getOpDef
    where
-    fun (NBinaryDef _op opInfo) = precedence opInfo
-    fun _ = error "Impossible happened, match should been 'NBinaryDef'."
+    fun (NBinaryDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, binary operation should been matched."
+  getOpName = fun . getOpDef
+   where
+    fun (NBinaryDef _op _assoc _prec name) = name
+    fun _ = error "Impossible happened, binary operation should been matched."
   getOpInf = fun . getOpDef
    where
-    fun (NBinaryDef _op operInfo) = operInfo
-    fun _ = error "Impossible happened, match should been `NBinaryDef`."
+    fun (NBinaryDef _op assoc prec name) = OperatorInfo assoc prec name
+    fun _ = error "Impossible happened, binary operation should been matched."
 
 instance NOp NSpecialOp where
   getOpDef op =
@@ -605,13 +625,21 @@ instance NOp NSpecialOp where
       (error "Impossible, special operation should be includded into the definition map.")
       op
       specOpDefMap
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NSpecialDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, special operation should been matched."
   getOpPrecedence = fun . getOpDef
    where
-    fun (NSpecialDef _op opInfo) = precedence opInfo
+    fun (NSpecialDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, special operation should been matched."
+  getOpName = fun . getOpDef
+   where
+    fun (NSpecialDef _op _assoc _prec name) = name
     fun _ = error "Impossible happened, special operation should been matched."
   getOpInf = fun . getOpDef
    where
-    fun (NSpecialDef _op operInfo) = operInfo
+    fun (NSpecialDef _op assoc prec name) = OperatorInfo assoc prec name
     fun _ = error "Impossible happened, special operation should been matched."
 
 
@@ -628,11 +656,13 @@ binary
   :: NBinaryOp
   -> (NOperatorDef, Operator Parser NExprLoc)
 binary op =
-  ( NBinaryDef op operatorInfo
-  , mapAssocToInfix (associativity operatorInfo) $ opWithLoc annNBinary op $ operatorName operatorInfo
+  ( def
+  , mapAssocToInfix assoc $ opWithLoc annNBinary op name
   )
  where
-  operatorInfo = getBinaryOperator op
+  assoc = getOpAssoc op
+  name = getOpName op
+  def = getOpDef op
 
 mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
 mapAssocToInfix NAssocLeft  = InfixL
@@ -883,7 +913,7 @@ nixOperators selector =
     one $ prefix  NNeg 3 "-"
   , {-  4 -}
     one
-      ( NSpecialDef NHasAttrOp $ getSpecialOperator NHasAttrOp
+      ( getOpDef NHasAttrOp
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
   , {-  5 -}
