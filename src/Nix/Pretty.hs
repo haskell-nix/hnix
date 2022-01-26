@@ -1,6 +1,5 @@
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
-{-# language DeriveAnyClass #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -8,7 +7,6 @@ module Nix.Pretty where
 
 import           Nix.Prelude             hiding ( toList, group )
 import           Control.Monad.Free             ( Free(Free) )
-import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
 import           Data.HashMap.Lazy              ( toList )
@@ -31,49 +29,6 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 
---  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
---  2021-08-10: NOTE:
---  All this is a sidecar:
---  * This type
---  * getUnaryOperation
---  * getBinaryOperation
---  * getSpecialOperation
---  can reduced in favour of adding precedence field into @NOperatorDef@.
--- details: https://github.com/haskell-nix/hnix/issues/982
-data OperatorInfo =
-  OperatorInfo
-    { associativity :: NAssoc
-    , precedence    :: NOpPrecedence
-    , operatorName  :: NOpName
-    }
- deriving (Eq, Ord, Generic, Typeable, Data, NFData, Show)
-
-appOperatorInfo :: OperatorInfo
-appOperatorInfo =
-  OperatorInfo
-    { precedence    = 1 -- inside the code it is 1, inside the Nix it is 2
-    , associativity = NAssocLeft
-    , operatorName  = " "
-    }
-
-getUnaryOperator   :: NUnaryOp -> OperatorInfo
-getUnaryOperator   = fun . getOpDef
- where
-  fun (NUnaryDef _op prec name) = OperatorInfo NAssoc prec name
-  fun _ = error "Impossible happened, unary operation should been matched."
-
-getBinaryOperator  :: NBinaryOp -> OperatorInfo
-getBinaryOperator  = fun . getOpDef
- where
-  fun (NBinaryDef _op assoc prec name) = OperatorInfo assoc prec name
-  fun _ = error "Impossible happened, binary operation should been matched."
-
-getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator = fun . getOpDef
- where
-  fun (NSpecialDef _op assoc prec name) = OperatorInfo assoc prec name
-  fun _ = error "Impossible happened, special operation should been matched."
-
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
 data NixDoc ann = NixDoc
@@ -84,7 +39,7 @@ data NixDoc ann = NixDoc
     -- the expression tree. For example, in '(a * b) + c', '+' would be the root
     -- operator. It is needed to determine if we need to wrap the expression in
     -- parentheses.
-  , rootOp :: OperatorInfo
+  , rootOp :: NOperatorDef
   , wasPath :: Bool -- This is needed so that when a path is used in a selector path
                     -- we can add brackets appropriately
   }
@@ -97,14 +52,15 @@ data NixDoc ann = NixDoc
 antiquote :: NixDoc ann -> Doc ann
 antiquote x = "${" <> getDoc x <> "}"
 
-mkNixDoc :: OperatorInfo -> Doc ann -> NixDoc ann
+mkNixDoc :: NOperatorDef -> Doc ann -> NixDoc ann
 mkNixDoc o d = NixDoc { getDoc = d, rootOp = o, wasPath = False }
 
 -- | A simple expression is never wrapped in parentheses. The expression
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc ann -> NixDoc ann
-simpleExpr = mkNixDoc $ OperatorInfo NAssoc minBound "simple expr"
+simpleExpr =
+  mkNixDoc $ NSpecialDef NTerm NAssoc minBound "simple expr"
 
 pathExpr :: Doc ann -> NixDoc ann
 pathExpr d = (simpleExpr d) { wasPath = True }
@@ -116,20 +72,18 @@ pathExpr d = (simpleExpr d) { wasPath = True }
 --   binding).
 leastPrecedence :: Doc ann -> NixDoc ann
 leastPrecedence =
-  mkNixDoc $ OperatorInfo NAssoc maxBound "least precedence"
+  mkNixDoc $ NSpecialDef NTerm NAssoc maxBound "least precedence"
 
-appOpNonAssoc :: OperatorInfo
-appOpNonAssoc = appOperatorInfo { associativity = NAssoc }
 
-selectOp :: OperatorInfo
-selectOp = getSpecialOperator NSelectOp
+selectOp :: NOperatorDef
+selectOp = getOpDef NSelectOp
 
-hasAttrOp :: OperatorInfo
-hasAttrOp = getSpecialOperator NHasAttrOp
+hasAttrOp :: NOperatorDef
+hasAttrOp = getOpDef NHasAttrOp
 
 -- | Determine if to return doc wraped into parens,
 -- according the given operator.
-precedenceWrap :: OperatorInfo -> NixDoc ann -> Doc ann
+precedenceWrap :: NOperatorDef -> NixDoc ann -> Doc ann
 precedenceWrap op subExpr =
   maybeWrap $ getDoc subExpr
  where
@@ -142,18 +96,35 @@ precedenceWrap op subExpr =
    where
     needsParens :: Bool
     needsParens =
-      precedence root < precedence op
-      || (  precedence    root == precedence    op
-         && associativity root == associativity op
-         && associativity op   /= NAssoc
+      getOpPrecedence root < getOpPrecedence op
+      || (  getOpPrecedence root == getOpPrecedence op
+         && getOpAssoc      root == getOpAssoc op
+         && getOpAssoc      op   /= NAssoc
          )
+
+    root = rootOp subExpr
+
+precedenceWrapAssoc :: NOperatorDef -> NixDoc ann -> Doc ann
+precedenceWrapAssoc op subExpr =
+  maybeWrap $ getDoc subExpr
+ where
+  maybeWrap :: Doc ann -> Doc ann
+  maybeWrap =
+    bool
+      parens
+      id
+      needsParens
+   where
+    needsParens :: Bool
+    needsParens =
+      getOpPrecedence root < getOpPrecedence op
 
     root = rootOp subExpr
 
 
 -- Used in the selector case to print a path in a selector as
 -- "${./abc}"
-wrapPath :: OperatorInfo -> NixDoc ann -> Doc ann
+wrapPath :: NOperatorDef -> NixDoc ann -> Doc ann
 wrapPath op sub =
   bool
     (precedenceWrap op sub)
@@ -285,7 +256,7 @@ exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
   NList xs ->
-    prettyContainer "[" (precedenceWrap appOpNonAssoc) "]" xs
+    prettyContainer "[" (precedenceWrapAssoc appOpDef) "]" xs
   NSet NonRecursive xs ->
     prettyContainer "{" prettyBind "}" xs
   NSet Recursive xs ->
@@ -298,37 +269,37 @@ exprFNixDoc = \case
           , getDoc body
           ]
   NApp fun arg ->
-    mkNixDoc appOperatorInfo (precedenceWrap appOperatorInfo fun <> " " <> precedenceWrap appOpNonAssoc arg)
+    mkNixDoc appOpDef (precedenceWrap appOpDef fun <> " " <> precedenceWrapAssoc appOpDef arg)
   NBinary op r1 r2 ->
     mkNixDoc
-      opInfo $
+      opDef $
       hsep
         [ f NAssocLeft r1
-        , pretty @Text $ coerce @NOpName $ operatorName opInfo
+        , pretty @Text $ coerce @NOpName $ getOpName op
         , f NAssocRight r2
         ]
    where
-    opInfo = getBinaryOperator op
+    opDef = getOpDef op
     f :: NAssoc -> NixDoc ann -> Doc ann
     f x =
-      precedenceWrap
-        $ bool
-            opInfo
-            (opInfo { associativity = NAssoc })
-            (associativity opInfo /= x)
+      bool
+        precedenceWrap
+        precedenceWrapAssoc
+        (getOpAssoc opDef /= x)
+        opDef
   NUnary op r1 ->
     mkNixDoc
-      opInfo $
-      pretty @Text (coerce $ operatorName opInfo) <> precedenceWrap opInfo r1
+      opDef $
+      pretty @Text (coerce $ getOpName op) <> precedenceWrap opDef r1
    where
-    opInfo = getUnaryOperator op
+    opDef = getOpDef op
   NSelect o r' attr ->
     maybe
       (mkNixDoc selectOp)
       (const leastPrecedence)
       o
-      $ wrapPath selectOp (mkNixDoc selectOp (precedenceWrap appOpNonAssoc r')) <> "." <> prettySelector attr <>
-        ((" or " <>) . precedenceWrap appOpNonAssoc) `whenJust` o
+      $ wrapPath selectOp (mkNixDoc selectOp (precedenceWrapAssoc appOpDef r')) <> "." <> prettySelector attr <>
+        ((" or " <>) . precedenceWrapAssoc appOpDef) `whenJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (precedenceWrap hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"

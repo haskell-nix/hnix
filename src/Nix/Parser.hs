@@ -38,6 +38,7 @@ module Nix.Parser
 
   --  2022-01-26: NOTE: Try to hide it after OperatorInfo is removed
   , NOp(..)
+  , appOpDef
   )
 where
 
@@ -506,7 +507,9 @@ instance Num NOpPrecedence where
   fromInteger = coerce (fromInteger @Int)
   negate = coerce (negate @Int)
 
-data NSpecialOp = NHasAttrOp | NSelectOp
+--  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
+data NSpecialOp =
+  NHasAttrOp | NSelectOp | NTerm
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NAssoc
@@ -518,16 +521,18 @@ data NAssoc
   | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
---  2022-01-26: NOTE: Maybe split up this type into according? Would make NOp class total.
-
+--  2022-01-26: NOTE: Maybe split up this type into according set? Would make NOp class total.
 -- | Single operator grammar entries.
 data NOperatorDef
-  = NAppDef                NOpPrecedence NOpName
-  | NUnaryDef   NUnaryOp   NOpPrecedence NOpName
+  = NAppDef                       NOpPrecedence NOpName
+  | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
   | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
   | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
+  --  2022-01-26: NOTE: Ord can be the order of evaluation of precedence (which 'Pretty' printing also accounts for).
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+appOpDef :: NOperatorDef
+appOpDef = NAppDef 1 " " -- This defined as "2" in Nix lang spec.
 
 --  2022-01-26: NOTE: After `OperatorInfo` type is removed from code base
 -- , think to remove these maps in favour of direct pattern matching in instances.
@@ -631,6 +636,26 @@ instance NOp NSpecialOp where
     fun (NSpecialDef _op _assoc _prec name) = name
     fun _ = error "Impossible happened, special operation should been matched."
 
+instance NOp NOperatorDef where
+  getOpDef op = op
+  getOpAssoc op = fun op
+   where
+    fun (NAppDef _prec _name) = NAssocLeft
+    fun (NBinaryDef _op assoc _prec _name) = assoc
+    fun (NSpecialDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, operator seems to have no associativity getter defined."
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NAppDef prec _name) = prec
+    fun (NBinaryDef _op _assoc prec _name) = prec
+    fun (NSpecialDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, operator seems to have no precedence getter defined."
+  getOpName = fun . getOpDef
+   where
+    fun (NAppDef _prec name) = name
+    fun (NBinaryDef _op _assoc _prec name) = name
+    fun (NSpecialDef _op _assoc _prec name) = name
+    fun _ = error "Impossible happened, operator seems to have no name getter defined."
 
 prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
 prefix op precedence name =
@@ -645,13 +670,9 @@ binary
   :: NBinaryOp
   -> (NOperatorDef, Operator Parser NExprLoc)
 binary op =
-  ( def
-  , mapAssocToInfix assoc $ opWithLoc annNBinary op name
+  ( getOpDef op
+  , mapAssocToInfix (getOpAssoc op) $ opWithLoc annNBinary op (getOpName op)
   )
- where
-  assoc = getOpAssoc op
-  name = getOpName op
-  def = getOpDef op
 
 mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
 mapAssocToInfix NAssocLeft  = InfixL
@@ -860,7 +881,7 @@ nixOperators selector =
 
     {-  2 -}
     one
-      ( NAppDef 2 " "
+      ( appOpDef
       , -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ annNApp <$ symbols mempty -- NApp is left associative
       )
