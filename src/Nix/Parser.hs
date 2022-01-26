@@ -489,6 +489,9 @@ operator (coerce -> op) =
 opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> NOpName -> Parser a
 opWithLoc f op name = f . (op <$) <$> annotateLocation1 (operator name)
 
+--  2022-01-26: NOTE: Make presedence free and type safe by moving it into type level:
+--  https://youtu.be/qaPdg0mZavM?t=1757
+--  https://wiki.haskell.org/The_Monad.Reader/Issue5/Number_Param_Types
 newtype NOpPrecedence = NOpPrecedence Int
   deriving (Eq, Ord, Generic, Bounded, Typeable, Data, Show, NFData)
 
