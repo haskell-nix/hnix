@@ -10,8 +10,22 @@
   * `Nix.Value`
     * [(link)](https://github.com/haskell-nix/hnix/pull/1046/files) Unify builder `mkNV*` and `NV*` patterns by bidirectional synonyms, a lot of builders `mkNV*` are removed, and merged to `NV*`. e.g. instead of builder `mkNVList`, `NVList` should be used.
     * [(link)](https://github.com/haskell-nix/hnix/pull/1046/files) Constraint `NVConstraint f = (Comonad f, Applicative f)` was introduced, in order to unify builder `mkNV*` and `NV*` patterns.
-    * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) `Nix.Pretty`: rm `appOp`
-    * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) `Nix.Pretty`: `precedenceWrap` behaviour is changed (to be literal to the name), the old behaviour is now a `wrap` function.
+
+  * `Nix.Parser`:
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) rm `OperatorInfo`, using `NOperatorDef`. Number of functions changed signatures accordingly:
+    * In `Nix.Pretty`:
+      * `NixDoc ann`
+      * `mkNixDoc`
+      * `selectOp`
+      * `hasAttrOp`
+      * `precedenceWrap`
+      * `wrapPath`
+    * In `Nix.Parser`:
+      * rm `get{App,Unary,Binary,Special}Operator`, currely `NOp` class instances are used instead.
+    
+  * `Nix.Pretty`:
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) rm `appOp`, instead use `appOpDef`.
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) `precedenceWrap` behaviour is changed (to be literal to the name), the old behaviour is now a `wrap` function.
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.15.0...0.16.0#files_bucket) 0.16.0
 
