@@ -587,11 +587,6 @@ instance NOp NUnaryOp where
       (error "Impossible happened: unary operation should be includded into the definition map.")
       op
       unaryOpDefMap
-  --  2022-01-26: NOTE: This instance is a lie, - remove it after `OperatorInfo` is removed from the module.
-  getOpAssoc = fun . getOpDef
-   where
-    fun (NUnaryDef _op _prec _name) = NAssoc
-    fun _ = error "Impossible happened, unary operation should been matched."
   getOpPrecedence = fun . getOpDef
    where
     fun (NUnaryDef _op prec _name) = prec
