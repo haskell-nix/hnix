@@ -15,6 +15,8 @@
   - "-XTypeApplications"
   - "-XViewPatterns"
 - ignore:
+    name: Use unless
+- ignore:
     name: Use head
 - ignore:
     name: Use Foldable.forM_
@@ -180,9 +182,6 @@
     lhs: forever
     note: "'forever' is loosely typed and may hide errors"
     rhs: infinitely
-- warn:
-    lhs: "whenM (not <$> x)"
-    rhs: unlessM x
 - warn:
     lhs: "unlessM (not <$> x)"
     rhs: whenM x
@@ -950,11 +949,6 @@
     name: "Use 'guard' from Relude"
     note: "'guard' is already exported from Relude"
     rhs: guard
-- warn:
-    lhs: Control.Monad.unless
-    name: "Use 'unless' from Relude"
-    note: "'unless' is already exported from Relude"
-    rhs: unless
 - warn:
     lhs: Control.Monad.when
     name: "Use 'when' from Relude"
@@ -2745,3 +2739,8 @@
     lhs: "mapM"
     note: "Use `traverse`"
     rhs: traverse
+
+- hint:
+    lhs: "unless b"
+    note: "Use `when not` as it reads intuitively."
+    rhs: when (not b)
