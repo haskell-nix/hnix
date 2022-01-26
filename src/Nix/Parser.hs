@@ -659,9 +659,9 @@ instance NOp NOperatorDef where
     fun (NSpecialDef _op _assoc _prec name) = name
     fun _ = error "Impossible happened, operator seems to have no name getter defined."
 
-prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
-prefix op precedence name =
-  (NUnaryDef op precedence name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
+prefix :: NUnaryOp -> Operator Parser NExprLoc
+prefix op =
+  Prefix $ manyUnaryOp $ opWithLoc annNUnary op $ getOpName op
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc annNUnary op name))
 
@@ -670,11 +670,9 @@ manyUnaryOp f = foldr1 (.) <$> some f
 
 binary
   :: NBinaryOp
-  -> (NOperatorDef, Operator Parser NExprLoc)
+  -> Operator Parser NExprLoc
 binary op =
-  ( getOpDef op
-  , mapAssocToInfix (getOpAssoc op) $ opWithLoc annNBinary op (getOpName op)
-  )
+  mapAssocToInfix (getOpAssoc op) $ opWithLoc annNBinary op (getOpName op)
 
 mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
 mapAssocToInfix NAssocLeft  = InfixL
@@ -860,10 +858,7 @@ nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
 -- | Bundles operators with parsers for them, since @megaparsec@ requires the @[[op]]@ form.
 nixOperators
-  :: [[ ( NOperatorDef
-        , Operator Parser NExprLoc
-        )
-     ]]
+  :: [[ Operator Parser NExprLoc ]]
 nixOperators =
   [ -- This is not parsed here, even though technically it's part of the
     -- expression table. The problem is that in some cases, such as list
@@ -881,18 +876,12 @@ nixOperators =
     -- ]
 
     {-  2 -}
-    one
-      ( appOpDef
-      , -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ annNApp <$ symbols mempty -- NApp is left associative
-      )
+  -- 2018-05-07: jwiegley: Thanks to Brent Yorgey for showing me this trick!
+    one (InfixL $ annNApp <$ symbols mempty) -- NApp is left associative
   , {-  3 -}
-    one $ prefix  NNeg 3 "-"
+    one $ prefix NNeg
   , {-  4 -}
-    one
-      ( getOpDef NHasAttrOp
-      , Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)
-      )
+    one ( Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector) )
   , {-  5 -}
     one $ binary NConcat
   , {-  6 -}
@@ -904,7 +893,7 @@ nixOperators =
     , binary NMinus
     ]
   , {-  8 -}
-    one $ prefix NNot 8 "!"
+    one $ prefix NNot
   , {-  9 -}
     one $ binary NUpdate
   , {- 10 -}
@@ -957,9 +946,7 @@ nixExprAlgebra :: Parser NExprLoc
 nixExprAlgebra =
   makeExprParser -- This requires to convert precedence to [[op]]
     nixTerm
-    (snd <<$>>
-      nixOperators
-    )
+    nixOperators
 
 nixExpr :: Parser NExprLoc
 nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
