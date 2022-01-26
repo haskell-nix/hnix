@@ -62,6 +62,7 @@ import           Data.Char                      ( isAlpha
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
+import           Data.List.Extra                ( groupSort )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Text                     as Text
@@ -511,7 +512,7 @@ instance Num NOpPrecedence where
 data NSpecialOp
   = NHasAttrOp
   | NSelectOp
-  | NTerm -- ^ For special handling of internal print cases.
+  | NTerm -- ^ For special handling of internal special cases.
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NAssoc
@@ -820,7 +821,7 @@ nixSelect :: Parser NExprLoc -> Parser NExprLoc
 nixSelect term =
   do
     res <-
-      liftA2 build
+      liftA2 builder
         term
         (optional $
           liftA2 (flip (,))
@@ -835,14 +836,14 @@ nixSelect term =
       continues
       (pure res)
  where
-  build
+  builder
     :: NExprLoc
     -> Maybe
       ( Maybe NExprLoc
       , AnnUnit SrcSpan (NAttrPath NExprLoc)
       )
     -> NExprLoc
-  build t =
+  builder t =
     maybe
       t
       (uncurry (`annNSelect` t))
@@ -851,68 +852,52 @@ nixSelect term =
 -- ** _ - syntax hole
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
+nixSynHole =
+  annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
+opParsers :: [(NOpPrecedence, Operator Parser NExprLoc)]
+opParsers =
+  -- This is not parsed here, even though technically it's part of the
+  -- expression table. The problem is that in some cases, such as list
+  -- membership, it's also a term. And since terms are effectively the
+  -- highest precedence entities parsed by the expression parser, it ends up
+  -- working out that we parse them as a kind of "meta-term".
+
+  -- {-  1 -}
+  -- [ ( NSpecialDef "." NSelectOp NAssocLeft
+  --   , Postfix $
+  --       do
+  --         sel <- seldot *> selector
+  --         mor <- optional (reserved "or" *> term)
+  --         pure $ \x -> annNSelect x sel mor)
+  -- ]
+
+  -- NApp is left associative
+  -- 2018-05-07: jwiegley: Thanks to Brent Yorgey for showing me this trick!
+  one (entry appOpDef   (const (InfixL $ annNApp <$ symbols mempty))) <>
+  one (entry NHasAttrOp (const (Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)))) <>
+  fmap (`entry` prefix) [NNeg, NNot] <>
+  fmap (`entry` binary)
+    [ NConcat
+    , NMult
+    , NDiv
+    , NPlus
+    , NMinus
+    , NUpdate
+    , NLt
+    , NGt
+    , NLte
+    , NGte
+    , NEq
+    , NNEq
+    , NAnd
+    , NOr
+    , NImpl
+    ]
+ where
+  entry op parser = (getOpPrecedence op, parser op)
 
 -- ** Expr & its constituents (Language term, expr algebra)
-
--- | Bundles operators with parsers for them, since @megaparsec@ requires the @[[op]]@ form.
-nixOperators
-  :: [[ Operator Parser NExprLoc ]]
-nixOperators =
-  [ -- This is not parsed here, even though technically it's part of the
-    -- expression table. The problem is that in some cases, such as list
-    -- membership, it's also a term. And since terms are effectively the
-    -- highest precedence entities parsed by the expression parser, it ends up
-    -- working out that we parse them as a kind of "meta-term".
-
-    -- {-  1 -}
-    -- [ ( NSpecialDef "." NSelectOp NAssocLeft
-    --   , Postfix $
-    --       do
-    --         sel <- seldot *> selector
-    --         mor <- optional (reserved "or" *> term)
-    --         pure $ \x -> annNSelect x sel mor)
-    -- ]
-
-    {-  2 -}
-  -- 2018-05-07: jwiegley: Thanks to Brent Yorgey for showing me this trick!
-    one (InfixL $ annNApp <$ symbols mempty) -- NApp is left associative
-  , {-  3 -}
-    one $ prefix NNeg
-  , {-  4 -}
-    one ( Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector) )
-  , {-  5 -}
-    one $ binary NConcat
-  , {-  6 -}
-    [ binary NMult
-    , binary NDiv
-    ]
-  , {-  7 -}
-    [ binary NPlus
-    , binary NMinus
-    ]
-  , {-  8 -}
-    one $ prefix NNot
-  , {-  9 -}
-    one $ binary NUpdate
-  , {- 10 -}
-    [ binary NLt
-    , binary NGt
-    , binary NLte
-    , binary NGte
-    ]
-  , {- 11 -}
-    [ binary NEq
-    , binary NNEq
-    ]
-  , {- 12 -}
-    one $ binary NAnd
-  , {- 13 -}
-    one $ binary NOr
-  , {- 14 -}
-    one $ binary NImpl
-  ]
 
 nixTerm :: Parser NExprLoc
 nixTerm =
@@ -940,11 +925,17 @@ nixTerm =
                 <> [ nixNull | c == 'n' ]
                 <> one (nixSelect nixSym)
 
+-- | Bundles parsers into @[[]]@ based on precedence (form is required for `megaparsec`).
+nixOperators :: [[ Operator Parser NExprLoc ]]
+nixOperators =
+  snd <$>
+    groupSort opParsers
+
 -- | Nix expression algebra parser.
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.
 nixExprAlgebra :: Parser NExprLoc
 nixExprAlgebra =
-  makeExprParser -- This requires to convert precedence to [[op]]
+  makeExprParser
     nixTerm
     nixOperators
 
