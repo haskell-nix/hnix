@@ -2740,3 +2740,8 @@
     lhs: "map"
     note: "Use `fmap`"
     rhs: fmap
+
+- hint:
+    lhs: "mapM"
+    note: "Use `traverse`"
+    rhs: traverse
