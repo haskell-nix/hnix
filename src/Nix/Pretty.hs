@@ -1,5 +1,6 @@
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
+{-# language DeriveAnyClass #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -7,6 +8,7 @@ module Nix.Pretty where
 
 import           Nix.Prelude             hiding ( toList, group )
 import           Control.Monad.Free             ( Free(Free) )
+import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
 import           Data.HashMap.Lazy              ( toList )
@@ -28,6 +30,49 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
+
+--  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
+--  2021-08-10: NOTE:
+--  All this is a sidecar:
+--  * This type
+--  * getUnaryOperation
+--  * getBinaryOperation
+--  * getSpecialOperation
+--  can reduced in favour of adding precedence field into @NOperatorDef@.
+-- details: https://github.com/haskell-nix/hnix/issues/982
+data OperatorInfo =
+  OperatorInfo
+    { associativity :: NAssoc
+    , precedence    :: NOpPrecedence
+    , operatorName  :: NOpName
+    }
+ deriving (Eq, Ord, Generic, Typeable, Data, NFData, Show)
+
+appOperatorInfo :: OperatorInfo
+appOperatorInfo =
+  OperatorInfo
+    { precedence    = 1 -- inside the code it is 1, inside the Nix it is 2
+    , associativity = NAssocLeft
+    , operatorName  = " "
+    }
+
+getUnaryOperator   :: NUnaryOp -> OperatorInfo
+getUnaryOperator   = fun . getOpDef
+ where
+  fun (NUnaryDef _op prec name) = OperatorInfo NAssoc prec name
+  fun _ = error "Impossible happened, unary operation should been matched."
+
+getBinaryOperator  :: NBinaryOp -> OperatorInfo
+getBinaryOperator  = fun . getOpDef
+ where
+  fun (NBinaryDef _op assoc prec name) = OperatorInfo assoc prec name
+  fun _ = error "Impossible happened, binary operation should been matched."
+
+getSpecialOperator :: NSpecialOp -> OperatorInfo
+getSpecialOperator = fun . getOpDef
+ where
+  fun (NSpecialDef _op assoc prec name) = OperatorInfo assoc prec name
+  fun _ = error "Impossible happened, special operation should been matched."
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.

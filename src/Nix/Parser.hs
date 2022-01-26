@@ -15,15 +15,11 @@ module Nix.Parser
   , parseFromText
   , Result
   , reservedNames
-  , NOpName(..)
-  , OperatorInfo(..)
-  , NSpecialOp(..)
   , NAssoc(..)
-  , NOperatorDef
-  , getUnaryOperator
-  , appOperatorInfo
-  , getBinaryOperator
-  , getSpecialOperator
+  , NOpPrecedence(..)
+  , NOpName(..)
+  , NSpecialOp(..)
+  , NOperatorDef(..)
   , nixExpr
   , nixExprAlgebra
   , nixSet
@@ -39,6 +35,9 @@ module Nix.Parser
   , nixBool
   , nixNull
   , whiteSpace
+
+  --  2022-01-26: NOTE: Try to hide it after OperatorInfo is removed
+  , NOp(..)
   )
 where
 
@@ -573,7 +572,6 @@ class NOp a where
   getOpAssoc :: a -> NAssoc
   getOpPrecedence :: a -> NOpPrecedence
   getOpName :: a -> NOpName
-  getOpInf :: a -> OperatorInfo
 
 instance NOp NUnaryOp where
   getOpDef op =
@@ -594,10 +592,6 @@ instance NOp NUnaryOp where
    where
     fun (NUnaryDef _op _prec name) = name
     fun _ = error "Impossible happened, unary operation should been matched."
-  getOpInf = fun . getOpDef
-   where
-    fun (NUnaryDef _op prec name) = OperatorInfo NAssoc prec name
-    fun _ = error "Impossible happened, unary operation should been matched."
 
 instance NOp NBinaryOp where
   getOpDef op =
@@ -617,10 +611,6 @@ instance NOp NBinaryOp where
    where
     fun (NBinaryDef _op _assoc _prec name) = name
     fun _ = error "Impossible happened, binary operation should been matched."
-  getOpInf = fun . getOpDef
-   where
-    fun (NBinaryDef _op assoc prec name) = OperatorInfo assoc prec name
-    fun _ = error "Impossible happened, binary operation should been matched."
 
 instance NOp NSpecialOp where
   getOpDef op =
@@ -639,10 +629,6 @@ instance NOp NSpecialOp where
   getOpName = fun . getOpDef
    where
     fun (NSpecialDef _op _assoc _prec name) = name
-    fun _ = error "Impossible happened, special operation should been matched."
-  getOpInf = fun . getOpDef
-   where
-    fun (NSpecialDef _op assoc prec name) = OperatorInfo assoc prec name
     fun _ = error "Impossible happened, special operation should been matched."
 
 
@@ -671,40 +657,6 @@ mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
 mapAssocToInfix NAssocLeft  = InfixL
 mapAssocToInfix NAssoc      = InfixN
 mapAssocToInfix NAssocRight = InfixR
-
---  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
---  2021-08-10: NOTE:
---  All this is a sidecar:
---  * This type
---  * getUnaryOperation
---  * getBinaryOperation
---  * getSpecialOperation
---  can reduced in favour of adding precedence field into @NOperatorDef@.
--- details: https://github.com/haskell-nix/hnix/issues/982
-data OperatorInfo =
-  OperatorInfo
-    { associativity :: NAssoc
-    , precedence    :: NOpPrecedence
-    , operatorName  :: NOpName
-    }
- deriving (Eq, Ord, Generic, Typeable, Data, NFData, Show)
-
-appOperatorInfo :: OperatorInfo
-appOperatorInfo =
-  OperatorInfo
-    { precedence    = 1 -- inside the code it is 1, inside the Nix they are +1
-    , associativity = NAssocLeft
-    , operatorName  = " "
-    }
-
-getUnaryOperator   :: NUnaryOp -> OperatorInfo
-getUnaryOperator   = getOpInf
-
-getBinaryOperator  :: NBinaryOp -> OperatorInfo
-getBinaryOperator  = getOpInf
-
-getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator = getOpInf
 
 -- ** x: y lambda function
 
