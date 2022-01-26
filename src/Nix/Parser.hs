@@ -628,7 +628,11 @@ unaryOpInfMap = fromList
   ]
 
 getOperatorInfo    :: Ord k => Map k OperatorInfo -> k -> OperatorInfo
-getOperatorInfo mp k = M.findWithDefault (OperatorInfo NAssoc 1 "Impossible, the key should be in the operator map.") k mp
+getOperatorInfo mp k =
+  M.findWithDefault
+    (OperatorInfo NAssoc 1 "Impossible, the key should be in the operator map.")
+    k
+    mp
 
 getUnaryOperator   :: NUnaryOp -> OperatorInfo
 getUnaryOperator   = getOpDef
@@ -666,13 +670,13 @@ argExpr =
     try $
       do
         name             <- identifier <* symbol '@'
-        (pset, variadic) <- params
+        (variadic, pset) <- params
         pure $ ParamSet (pure name) variadic pset
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight =
     do
-      (pset, variadic) <- params
+      (variadic, pset) <- params
       name             <- optional $ symbol '@' *> identifier
       pure $ ParamSet name variadic pset
 
@@ -681,18 +685,20 @@ argExpr =
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- an flag indication if the parameters are variadic.
+  getParams :: Parser (Variadic, [(VarName, Maybe NExprLoc)])
   getParams = go mempty
    where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, Variadic) <$ symbols "...") <|> getMore
+    go :: [(VarName, Maybe NExprLoc)] -> Parser (Variadic, [(VarName, Maybe NExprLoc)])
+    go acc = ((Variadic, acc) <$ symbols "...") <|> getMore
      where
-      getMore :: Parser ([(VarName, Maybe NExprLoc)], Variadic)
+      getMore :: Parser (Variadic, [(VarName, Maybe NExprLoc)])
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, mempty) $
+        option (mempty, acc) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -703,7 +709,7 @@ argExpr =
             let args = acc <> one pair
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, mempty) $ symbol ',' *> go args
+            option (mempty, args) $ symbol ',' *> go args
 
 nixLambda :: Parser NExprLoc
 nixLambda =
