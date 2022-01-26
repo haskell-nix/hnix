@@ -322,17 +322,16 @@ indented =
     try $
       do
         indentedQuotationMark
-        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
+        Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$')
           <|>
             do
-              _ <- char '\\'
-              c <- escapeCode
+              c <- char '\\' *> escapeCode
 
               pure $
                 bool
                   EscapedNewline
                   (Plain $ one c)
-                  (c /= '\n')
+                  ('\n' /= c)
 
   -- | Enclosed into indented quatation "'' <expr> ''"
   inIndentedQuotation :: Parser a -> Parser a
