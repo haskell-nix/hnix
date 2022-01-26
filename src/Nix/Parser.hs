@@ -518,6 +518,8 @@ data NAssoc
   | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+--  2022-01-26: NOTE: Maybe split up this type into according? Would make NOp class total.
+
 -- | Single operator grammar entries.
 data NOperatorDef
   = NAppDef                NOpPrecedence NOpName
@@ -526,24 +528,94 @@ data NOperatorDef
   | NSpecialDef NSpecialOp OperatorInfo
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
--- -- | Class to get a private free construction to abstract away the gap between the Nix operation types
--- -- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
--- -- And in doing remove 'OperatorInfo' from existance.
+
+--  2022-01-26: NOTE: After `OperatorInfo` type is removed from code base
+-- , think to remove these maps in favour of direct pattern matching in instances.
+-- That would make those instances total.
+unaryOpDefMap :: Map NUnaryOp NOperatorDef
+unaryOpDefMap = fromList
+  [ (NNeg, NUnaryDef NNeg 3 "-")
+  , (NNot, NUnaryDef NNot 8 "!")
+  ]
+
+binaryOpDefMap :: Map NBinaryOp NOperatorDef
+binaryOpDefMap = fromList
+  [ (NConcat, NBinaryDef NConcat $ OperatorInfo NAssocRight  5 "++")
+  , (NMult  , NBinaryDef NMult   $ OperatorInfo NAssocLeft   6 "*" )
+  , (NDiv   , NBinaryDef NDiv    $ OperatorInfo NAssocLeft   6 "/" )
+  , (NPlus  , NBinaryDef NPlus   $ OperatorInfo NAssocLeft   7 "+" )
+  , (NMinus , NBinaryDef NMinus  $ OperatorInfo NAssocLeft   7 "-" )
+  , (NUpdate, NBinaryDef NUpdate $ OperatorInfo NAssocRight  9 "//")
+  , (NLt    , NBinaryDef NLt     $ OperatorInfo NAssocLeft  10 "<" )
+  , (NLte   , NBinaryDef NLte    $ OperatorInfo NAssocLeft  10 "<=")
+  , (NGt    , NBinaryDef NGt     $ OperatorInfo NAssocLeft  10 ">" )
+  , (NGte   , NBinaryDef NGte    $ OperatorInfo NAssocLeft  10 ">=")
+  , (NEq    , NBinaryDef NEq     $ OperatorInfo NAssoc      11 "==")
+  , (NNEq   , NBinaryDef NNEq    $ OperatorInfo NAssoc      11 "!=")
+  , (NAnd   , NBinaryDef NAnd    $ OperatorInfo NAssocLeft  12 "&&")
+  , (NOr    , NBinaryDef NOr     $ OperatorInfo NAssocLeft  13 "||")
+  , (NImpl  , NBinaryDef NImpl   $ OperatorInfo NAssocRight 14 "->")
+  ]
+
+specOpDefMap :: Map NSpecialOp NOperatorDef
+specOpDefMap = fromList
+  [ (NSelectOp , NSpecialDef NSelectOp  $ OperatorInfo NAssocLeft 1 ".")
+  , (NHasAttrOp, NSpecialDef NHasAttrOp $ OperatorInfo NAssocLeft 4 "?")
+  ]
+
+--  2022-01-26: NOTE: When total - make sure to hide & inline all these instances to get free solution.
+-- | Class to get a private free construction to abstract away the gap between the Nix operation types
+-- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
+-- And in doing remove 'OperatorInfo' from existance.
 class NOp a where
-  getOpDef :: a -> OperatorInfo
+  getOpDef :: a -> NOperatorDef
   getOpPrecedence :: a -> NOpPrecedence
+  getOpInf :: a -> OperatorInfo
 
 instance NOp NUnaryOp where
-  getOpDef op = getOperatorInfo unaryOpInfMap op
-  getOpPrecedence = precedence . getOpDef
+  getOpDef op =
+    M.findWithDefault
+      (error "Impossible happened: unary operation should be includded into the definition map.")
+      op
+      unaryOpDefMap
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NUnaryDef _op prec _name) = prec
+    fun _ = error "Impossible happened, match should been `show NUnaryDef`."
+  getOpInf = fun . getOpDef
+   where
+    fun (NUnaryDef _op prec name) = OperatorInfo NAssoc prec name
+    fun _ = error "Impossible happened, match should been `NUnaryDef`."
 
 instance NOp NBinaryOp where
-  getOpDef op = getOperatorInfo binOpInfMap op
-  getOpPrecedence = precedence . getOpDef
+  getOpDef op =
+    M.findWithDefault
+      (error "Impossible, binary operation should be includded into the definition map.")
+      op
+      binaryOpDefMap
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NBinaryDef _op opInfo) = precedence opInfo
+    fun _ = error "Impossible happened, match should been 'NBinaryDef'."
+  getOpInf = fun . getOpDef
+   where
+    fun (NBinaryDef _op operInfo) = operInfo
+    fun _ = error "Impossible happened, match should been `NBinaryDef`."
 
 instance NOp NSpecialOp where
-  getOpDef op = getOperatorInfo specOpInfMap op
-  getOpPrecedence = precedence . getOpDef
+  getOpDef op =
+    M.findWithDefault
+      (error "Impossible, special operation should be includded into the definition map.")
+      op
+      specOpDefMap
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NSpecialDef _op opInfo) = precedence opInfo
+    fun _ = error "Impossible happened, special operation should been matched."
+  getOpInf = fun . getOpDef
+   where
+    fun (NSpecialDef _op operInfo) = operInfo
+    fun _ = error "Impossible happened, special operation should been matched."
 
 
 prefix :: NUnaryOp -> NOpPrecedence -> NOpName -> (NOperatorDef, Operator Parser NExprLoc)
@@ -595,52 +667,14 @@ appOperatorInfo =
     , operatorName  = " "
     }
 
-binOpInfMap :: Map NBinaryOp OperatorInfo
-binOpInfMap = fromList
-  [ (NConcat, OperatorInfo NAssocRight  5 "++")
-  , (NMult  , OperatorInfo NAssocLeft   6 "*" )
-  , (NDiv   , OperatorInfo NAssocLeft   6 "/" )
-  , (NPlus  , OperatorInfo NAssocLeft   7 "+" )
-  , (NMinus , OperatorInfo NAssocLeft   7 "-" )
-  , (NUpdate, OperatorInfo NAssocRight  9 "//")
-  , (NLt    , OperatorInfo NAssocLeft  10 "<" )
-  , (NLte   , OperatorInfo NAssocLeft  10 "<=")
-  , (NGt    , OperatorInfo NAssocLeft  10 ">" )
-  , (NGte   , OperatorInfo NAssocLeft  10 ">=")
-  , (NEq    , OperatorInfo NAssoc      11 "==")
-  , (NNEq   , OperatorInfo NAssoc      11 "!=")
-  , (NAnd   , OperatorInfo NAssocLeft  12 "&&")
-  , (NOr    , OperatorInfo NAssocLeft  13 "||")
-  , (NImpl  , OperatorInfo NAssocRight 14 "->")
-  ]
-
-specOpInfMap :: Map NSpecialOp OperatorInfo
-specOpInfMap = fromList
-  [ (NSelectOp , OperatorInfo NAssocLeft 1 ".")
-  , (NHasAttrOp, OperatorInfo NAssocLeft 4 "?")
-  ]
-
-unaryOpInfMap :: Map NUnaryOp OperatorInfo
-unaryOpInfMap = fromList
-  [ (NNeg, OperatorInfo NAssoc 3 "-")
-  , (NNot, OperatorInfo NAssoc 8 "!")
-  ]
-
-getOperatorInfo    :: Ord k => Map k OperatorInfo -> k -> OperatorInfo
-getOperatorInfo mp k =
-  M.findWithDefault
-    (OperatorInfo NAssoc 1 "Impossible, the key should be in the operator map.")
-    k
-    mp
-
 getUnaryOperator   :: NUnaryOp -> OperatorInfo
-getUnaryOperator   = getOpDef
+getUnaryOperator   = getOpInf
 
 getBinaryOperator  :: NBinaryOp -> OperatorInfo
-getBinaryOperator  = getOpDef
+getBinaryOperator  = getOpInf
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator = getOpDef
+getSpecialOperator = getOpInf
 
 -- ** x: y lambda function
 
