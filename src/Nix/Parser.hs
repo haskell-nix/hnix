@@ -855,6 +855,7 @@ nixSynHole :: Parser NExprLoc
 nixSynHole =
   annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
+-- List of Nix operation parsers with their precedence.
 opParsers :: [(NOpPrecedence, Operator Parser NExprLoc)]
 opParsers =
   -- This is not parsed here, even though technically it's part of the
@@ -874,28 +875,20 @@ opParsers =
 
   -- NApp is left associative
   -- 2018-05-07: jwiegley: Thanks to Brent Yorgey for showing me this trick!
-  one (entry appOpDef   (const (InfixL $ annNApp <$ symbols mempty))) <>
-  one (entry NHasAttrOp (const (Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)))) <>
-  fmap (`entry` prefix) [NNeg, NNot] <>
-  fmap (`entry` binary)
-    [ NConcat
-    , NMult
-    , NDiv
-    , NPlus
-    , NMinus
-    , NUpdate
-    , NLt
-    , NGt
-    , NLte
-    , NGte
-    , NEq
-    , NNEq
-    , NAnd
-    , NOr
-    , NImpl
-    ]
+  specialBuilder appOpDef (InfixL $ annNApp <$ symbols mempty) <>
+  specialBuilder NHasAttrOp (Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)) <>
+  builder prefix <>
+  builder binary
  where
+  specialBuilder :: NOp t => t -> b -> [(NOpPrecedence, b)]
+  specialBuilder op parser = one (entry op (const parser))
+
+  builder :: (Enum t, Bounded t, NOp t) => (t -> b) -> [(NOpPrecedence, b)]
+  builder tp = fmap (`entry` tp) universe
+
+  entry :: NOp t => t -> (t -> b) -> (NOpPrecedence, b)
   entry op parser = (getOpPrecedence op, parser op)
+
 
 -- ** Expr & its constituents (Language term, expr algebra)
 
