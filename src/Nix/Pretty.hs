@@ -75,12 +75,6 @@ leastPrecedence =
   mkNixDoc $ NSpecialDef NTerm NAssoc maxBound "least precedence"
 
 
-selectOp :: NOperatorDef
-selectOp = getOpDef NSelectOp
-
-hasAttrOp :: NOperatorDef
-hasAttrOp = getOpDef NHasAttrOp
-
 data WrapMode
   = ProcessAllWrap
   | PrecedenceWrap
@@ -296,8 +290,16 @@ exprFNixDoc = \case
       o
       $ wrapPath selectOp (mkNixDoc selectOp (wrap appOpDef r')) <> "." <> prettySelector attr <>
         ((" or " <>) . precedenceWrap appOpDef) `whenJust` o
+   where
+    selectOp :: NOperatorDef
+    selectOp = getOpDef NSelectOp
+
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrap hasAttrOp r <> " ? " <> prettySelector attr)
+   where
+    hasAttrOp :: NOperatorDef
+    hasAttrOp = getOpDef NHasAttrOp
+
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
   NLiteralPath p ->
     pathExpr $
