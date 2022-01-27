@@ -278,15 +278,11 @@ exprFNixDoc = \case
 
     pickWrapMode :: NAssoc -> NixDoc ann -> Doc ann
     pickWrapMode x =
-      maybeWrapDoc
-        mode
+      bool
+        wrap
+        precedenceWrap
+        (getOpAssoc opDef /= x)
         opDef
-     where
-      mode =
-        bool
-          ProcessAllWrap
-          PrecedenceWrap
-          (getOpAssoc opDef /= x)
   NUnary op r1 ->
     mkNixDoc
       opDef $
