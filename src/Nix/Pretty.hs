@@ -325,15 +325,14 @@ exprFNixDoc = \case
   NIf cond trueBody falseBody ->
     leastPrecedence $
       group $
-        nest 2 $
-          ifThenElse getDoc
+        nest 2 ifThenElse
    where
-    ifThenElse :: (NixDoc ann -> Doc ann) -> Doc ann
-    ifThenElse wp =
+    ifThenElse :: Doc ann
+    ifThenElse =
       sep
-        [ "if " <> wp cond
-        , align ("then " <> wp trueBody)
-        , align ("else " <> wp falseBody)
+        [         "if "   <> getDoc cond
+        , align $ "then " <> getDoc trueBody
+        , align $ "else " <> getDoc falseBody
         ]
   NWith scope body ->
     prettyAddScope "with " scope body
