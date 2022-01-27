@@ -530,8 +530,8 @@ data NAssoc
 --  2022-01-26: NOTE: Maybe split up this type into according set? Would make NOp class total.
 -- | Single operator grammar entries.
 data NOperatorDef
-  = NAppDef     NAppOp            NOpPrecedence NOpName
-  | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
+  = NAppDef     NAppOp     NAssoc NOpPrecedence NOpName
+  | NUnaryDef   NUnaryOp   NAssoc NOpPrecedence NOpName
   | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
   | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
   --  2022-01-26: NOTE: Ord can be the order of evaluation of precedence (which 'Pretty' printing also accounts for).
@@ -540,18 +540,17 @@ data NOperatorDef
 -- Supplied since its definition gets called/used frequently.
 -- | Functional application operator definition, left associative, high precedence.
 appOpDef :: NOperatorDef
-appOpDef = NAppDef NAppOp 1 " " -- This defined as "2" in Nix lang spec.
+appOpDef = NAppDef NAppOp NAssocLeft 1 " " -- This defined as "2" in Nix lang spec.
 
 --  2022-01-26: NOTE: When total - make sure to hide & inline all these instances to get free solution.
 -- | Class to get a private free construction to abstract away the gap between the Nix operation types
 -- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
 -- And in doing remove 'OperatorInfo' from existance.
 class NOp a where
-  {-# minimal getOpDef, getOpPrecedence, getOpName #-}
+  {-# minimal getOpDef, getOpAssoc, getOpPrecedence, getOpName #-}
 
   getOpDef :: a -> NOperatorDef
   getOpAssoc :: a -> NAssoc
-  getOpAssoc _ = NAssocLeft
   getOpPrecedence :: a -> NOpPrecedence
   getOpName :: a -> NOpName
 
@@ -559,29 +558,33 @@ instance NOp NAppOp where
   getOpDef NAppOp = appOpDef
   getOpAssoc _op = fun appOpDef
    where
-    fun (NAppDef _op _prec _name) = NAssocLeft
+    fun (NAppDef _op assoc _prec _name) = assoc
     fun _ = error "Impossible happened, funapp operation should been matched."
   getOpPrecedence _op = fun appOpDef
    where
-    fun (NAppDef _op prec _name) = prec
+    fun (NAppDef _op _assoc prec _name) = prec
     fun _ = error "Impossible happened, funapp operation should been matched."
   getOpName _ = fun appOpDef
    where
-    fun (NAppDef _op _prec name) = name
+    fun (NAppDef _op _assoc _prec name) = name
     fun _ = error "Impossible happened, funapp operation should been matched."
 
 instance NOp NUnaryOp where
   getOpDef =
     \case
-      NNeg -> NUnaryDef NNeg 3 "-"
-      NNot -> NUnaryDef NNot 8 "!"
+      NNeg -> NUnaryDef NNeg NAssocRight 3 "-"
+      NNot -> NUnaryDef NNot NAssocRight 8 "!"
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NUnaryDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, unary operation should been matched."
   getOpPrecedence = fun . getOpDef
    where
-    fun (NUnaryDef _op prec _name) = prec
+    fun (NUnaryDef _op _assoc prec _name) = prec
     fun _ = error "Impossible happened, unary operation should been matched."
   getOpName = fun . getOpDef
    where
-    fun (NUnaryDef _op _prec name) = name
+    fun (NUnaryDef _op _assoc _prec name) = name
     fun _ = error "Impossible happened, unary operation should been matched."
 
 instance NOp NBinaryOp where
@@ -638,20 +641,20 @@ instance NOp NOperatorDef where
   getOpDef op = op
   getOpAssoc op = fun op
    where
-    fun (NAppDef     _op       _prec _name) = getOpAssoc NAppOp
-    fun (NUnaryDef    op       _prec _name) = getOpAssoc op -- is a lie
+    fun (NAppDef     _op assoc _prec _name) = assoc
+    fun (NUnaryDef   _op assoc _prec _name) = assoc
     fun (NBinaryDef  _op assoc _prec _name) = assoc
     fun (NSpecialDef _op assoc _prec _name) = assoc
   getOpPrecedence = fun . getOpDef
    where
-    fun (NAppDef     _op        prec _name) = prec
-    fun (NUnaryDef   _op        prec _name) = prec
+    fun (NAppDef     _op _assoc prec _name) = prec
+    fun (NUnaryDef   _op _assoc prec _name) = prec
     fun (NBinaryDef  _op _assoc prec _name) = prec
     fun (NSpecialDef _op _assoc prec _name) = prec
   getOpName = fun . getOpDef
    where
-    fun (NAppDef     _op        _prec name) = name
-    fun (NUnaryDef   _op        _prec name) = name
+    fun (NAppDef     _op _assoc _prec name) = name
+    fun (NUnaryDef   _op _assoc _prec name) = name
     fun (NBinaryDef  _op _assoc _prec name) = name
     fun (NSpecialDef _op _assoc _prec name) = name
 
