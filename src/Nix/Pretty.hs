@@ -269,14 +269,15 @@ exprFNixDoc = \case
     mkNixDoc
       opDef $
       hsep
-        [ f NAssocLeft r1
+        [ pickWrapMode NAssocLeft r1
         , pretty @Text $ coerce @NOpName $ getOpName op
-        , f NAssocRight r2
+        , pickWrapMode NAssocRight r2
         ]
    where
     opDef = getOpDef op
-    f :: NAssoc -> NixDoc ann -> Doc ann
-    f x =
+
+    pickWrapMode :: NAssoc -> NixDoc ann -> Doc ann
+    pickWrapMode x =
       maybeWrapDoc
         mode
         opDef

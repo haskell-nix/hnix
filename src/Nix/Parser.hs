@@ -66,7 +66,6 @@ import           Data.List.Extra                ( groupSort )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Text                     as Text
-import qualified Data.Map.Strict               as M
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
 import           Nix.Expr.Types.Annotated
@@ -509,6 +508,10 @@ instance Num NOpPrecedence where
   negate = coerce (negate @Int)
 
 --  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
+data NAppOp = NAppOp
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+--  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
 data NSpecialOp
   = NHasAttrOp
   | NSelectOp
@@ -527,66 +530,51 @@ data NAssoc
 --  2022-01-26: NOTE: Maybe split up this type into according set? Would make NOp class total.
 -- | Single operator grammar entries.
 data NOperatorDef
-  = NAppDef                       NOpPrecedence NOpName
+  = NAppDef     NAppOp            NOpPrecedence NOpName
   | NUnaryDef   NUnaryOp          NOpPrecedence NOpName
   | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
   | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
   --  2022-01-26: NOTE: Ord can be the order of evaluation of precedence (which 'Pretty' printing also accounts for).
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
+-- Supplied since its definition gets called/used frequently.
+-- | Functional application operator definition, left associative, high precedence.
 appOpDef :: NOperatorDef
-appOpDef = NAppDef 1 " " -- This defined as "2" in Nix lang spec.
-
---  2022-01-26: NOTE: After `OperatorInfo` type is removed from code base
--- , think to remove these maps in favour of direct pattern matching in instances.
--- That would make those instances total.
-unaryOpDefMap :: Map NUnaryOp NOperatorDef
-unaryOpDefMap = fromList
-  [ (NNeg, NUnaryDef NNeg 3 "-")
-  , (NNot, NUnaryDef NNot 8 "!")
-  ]
-
-binaryOpDefMap :: Map NBinaryOp NOperatorDef
-binaryOpDefMap = fromList
-  [ (NConcat, NBinaryDef NConcat NAssocRight  5 "++")
-  , (NMult  , NBinaryDef NMult   NAssocLeft   6 "*" )
-  , (NDiv   , NBinaryDef NDiv    NAssocLeft   6 "/" )
-  , (NPlus  , NBinaryDef NPlus   NAssocLeft   7 "+" )
-  , (NMinus , NBinaryDef NMinus  NAssocLeft   7 "-" )
-  , (NUpdate, NBinaryDef NUpdate NAssocRight  9 "//")
-  , (NLt    , NBinaryDef NLt     NAssocLeft  10 "<" )
-  , (NLte   , NBinaryDef NLte    NAssocLeft  10 "<=")
-  , (NGt    , NBinaryDef NGt     NAssocLeft  10 ">" )
-  , (NGte   , NBinaryDef NGte    NAssocLeft  10 ">=")
-  , (NEq    , NBinaryDef NEq     NAssoc      11 "==")
-  , (NNEq   , NBinaryDef NNEq    NAssoc      11 "!=")
-  , (NAnd   , NBinaryDef NAnd    NAssocLeft  12 "&&")
-  , (NOr    , NBinaryDef NOr     NAssocLeft  13 "||")
-  , (NImpl  , NBinaryDef NImpl   NAssocRight 14 "->")
-  ]
-
-specOpDefMap :: Map NSpecialOp NOperatorDef
-specOpDefMap = fromList
-  [ (NSelectOp , NSpecialDef NSelectOp  NAssocLeft 1 ".")
-  , (NHasAttrOp, NSpecialDef NHasAttrOp NAssocLeft 4 "?")
-  ]
+appOpDef = NAppDef NAppOp 1 " " -- This defined as "2" in Nix lang spec.
 
 --  2022-01-26: NOTE: When total - make sure to hide & inline all these instances to get free solution.
 -- | Class to get a private free construction to abstract away the gap between the Nix operation types
 -- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
 -- And in doing remove 'OperatorInfo' from existance.
 class NOp a where
+  {-# minimal getOpDef, getOpPrecedence, getOpName #-}
+
   getOpDef :: a -> NOperatorDef
   getOpAssoc :: a -> NAssoc
+  getOpAssoc _ = NAssocLeft
   getOpPrecedence :: a -> NOpPrecedence
   getOpName :: a -> NOpName
 
+instance NOp NAppOp where
+  getOpDef NAppOp = appOpDef
+  getOpAssoc _op = fun appOpDef
+   where
+    fun (NAppDef _op _prec _name) = NAssocLeft
+    fun _ = error "Impossible happened, funapp operation should been matched."
+  getOpPrecedence _op = fun appOpDef
+   where
+    fun (NAppDef _op prec _name) = prec
+    fun _ = error "Impossible happened, funapp operation should been matched."
+  getOpName _ = fun appOpDef
+   where
+    fun (NAppDef _op _prec name) = name
+    fun _ = error "Impossible happened, funapp operation should been matched."
+
 instance NOp NUnaryOp where
-  getOpDef op =
-    M.findWithDefault
-      (error "Impossible happened: unary operation should be includded into the definition map.")
-      op
-      unaryOpDefMap
+  getOpDef =
+    \case
+      NNeg -> NUnaryDef NNeg 3 "-"
+      NNot -> NUnaryDef NNot 8 "!"
   getOpPrecedence = fun . getOpDef
    where
     fun (NUnaryDef _op prec _name) = prec
@@ -597,11 +585,23 @@ instance NOp NUnaryOp where
     fun _ = error "Impossible happened, unary operation should been matched."
 
 instance NOp NBinaryOp where
-  getOpDef op =
-    M.findWithDefault
-      (error "Impossible, binary operation should be includded into the definition map.")
-      op
-      binaryOpDefMap
+  getOpDef =
+    \case
+      NConcat -> NBinaryDef NConcat NAssocRight  5 "++"
+      NMult   -> NBinaryDef NMult   NAssocLeft   6 "*"
+      NDiv    -> NBinaryDef NDiv    NAssocLeft   6 "/"
+      NPlus   -> NBinaryDef NPlus   NAssocLeft   7 "+"
+      NMinus  -> NBinaryDef NMinus  NAssocLeft   7 "-"
+      NUpdate -> NBinaryDef NUpdate NAssocRight  9 "//"
+      NLt     -> NBinaryDef NLt     NAssocLeft  10 "<"
+      NLte    -> NBinaryDef NLte    NAssocLeft  10 "<="
+      NGt     -> NBinaryDef NGt     NAssocLeft  10 ">"
+      NGte    -> NBinaryDef NGte    NAssocLeft  10 ">="
+      NEq     -> NBinaryDef NEq     NAssoc      11 "=="
+      NNEq    -> NBinaryDef NNEq    NAssoc      11 "!="
+      NAnd    -> NBinaryDef NAnd    NAssocLeft  12 "&&"
+      NOr     -> NBinaryDef NOr     NAssocLeft  13 "||"
+      NImpl   -> NBinaryDef NImpl   NAssocRight 14 "->"
   getOpAssoc = fun . getOpDef
    where
     fun (NBinaryDef _op assoc _prec _name) = assoc
@@ -616,11 +616,11 @@ instance NOp NBinaryOp where
     fun _ = error "Impossible happened, binary operation should been matched."
 
 instance NOp NSpecialOp where
-  getOpDef op =
-    M.findWithDefault
-      (error "Impossible, special operation should be includded into the definition map.")
-      op
-      specOpDefMap
+  getOpDef =
+    \case
+      NSelectOp  -> NSpecialDef NSelectOp  NAssocLeft 1 "."
+      NHasAttrOp -> NSpecialDef NHasAttrOp NAssocLeft 4 "?"
+      NTerm      -> NSpecialDef NTerm      NAssocLeft 1 "???"
   getOpAssoc = fun . getOpDef
    where
     fun (NSpecialDef _op assoc _prec _name) = assoc
@@ -638,22 +638,22 @@ instance NOp NOperatorDef where
   getOpDef op = op
   getOpAssoc op = fun op
    where
-    fun (NAppDef _prec _name) = NAssocLeft
-    fun (NBinaryDef _op assoc _prec _name) = assoc
+    fun (NAppDef     _op       _prec _name) = getOpAssoc NAppOp
+    fun (NUnaryDef    op       _prec _name) = getOpAssoc op -- is a lie
+    fun (NBinaryDef  _op assoc _prec _name) = assoc
     fun (NSpecialDef _op assoc _prec _name) = assoc
-    fun _ = error "Impossible happened, operator seems to have no associativity getter defined."
   getOpPrecedence = fun . getOpDef
    where
-    fun (NAppDef prec _name) = prec
-    fun (NBinaryDef _op _assoc prec _name) = prec
+    fun (NAppDef     _op        prec _name) = prec
+    fun (NUnaryDef   _op        prec _name) = prec
+    fun (NBinaryDef  _op _assoc prec _name) = prec
     fun (NSpecialDef _op _assoc prec _name) = prec
-    fun _ = error "Impossible happened, operator seems to have no precedence getter defined."
   getOpName = fun . getOpDef
    where
-    fun (NAppDef _prec name) = name
-    fun (NBinaryDef _op _assoc _prec name) = name
+    fun (NAppDef     _op        _prec name) = name
+    fun (NUnaryDef   _op        _prec name) = name
+    fun (NBinaryDef  _op _assoc _prec name) = name
     fun (NSpecialDef _op _assoc _prec name) = name
-    fun _ = error "Impossible happened, operator seems to have no name getter defined."
 
 prefix :: NUnaryOp -> Operator Parser NExprLoc
 prefix op =
@@ -870,7 +870,7 @@ opParsers =
 
   -- NApp is left associative
   -- 2018-05-07: jwiegley: Thanks to Brent Yorgey for showing me this trick!
-  specialBuilder appOpDef (InfixL $ annNApp <$ symbols mempty) <>
+  specialBuilder NAppOp (InfixL $ annNApp <$ symbols mempty) <>
   specialBuilder NHasAttrOp (Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)) <>
   builder prefix <>
   builder binary
