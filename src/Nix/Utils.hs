@@ -209,6 +209,7 @@ whenJust =
 
 isPresent :: Foldable t => t a -> Bool
 isPresent = not . null
+{-# inline isPresent #-}
 
 
 -- | 'maybe'-like eliminator, for foldable empty/inhabited structures.
@@ -218,6 +219,7 @@ handlePresence d f t =
     d
     (f t)
     (isPresent t)
+{-# inline handlePresence #-}
 
 whenText
   :: a -> (Text -> a) -> Text -> a
