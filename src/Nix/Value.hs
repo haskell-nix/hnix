@@ -603,8 +603,8 @@ pattern NVStr ns = Free (NVStr' ns)
 pattern NVPath x = Free (NVPath' x)
 pattern NVList l = Free (NVList' l)
 pattern NVSet s x = Free (NVSet' s x)
-pattern NVClosure x f = Free (NVClosure' x f)
 pattern NVBuiltin name f = Free (NVBuiltin' name f) 
+pattern NVClosure x f = Free (NVClosure' x f)
 {-# complete NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
 
 

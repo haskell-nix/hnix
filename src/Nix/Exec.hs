@@ -320,11 +320,11 @@ callFunc fun arg =
 
     fun' <- demand fun
     case fun' of
-      NVClosure _params f -> f arg
       NVBuiltin name f    ->
         do
           span <- askSpan
           withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
+      NVClosure _params f -> f arg
       (NVSet _ m) | Just f <- M.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
