@@ -527,7 +527,20 @@ data NAssoc
   | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
---  2022-01-26: NOTE: Maybe split up this type into according set? Would make NOp class total.
+--  2022-01-31: NOTE: This type and related typeclasses & their design, probably need a refinement.
+--
+-- In the "Nix.Pretty", the code probably should be well-typed to the type of operations its processes.
+-- Therefor splitting operation types into separate types there is probably needed.
+--
+-- After that:
+--
+-- > { NAssoc, NOpPrecedence, NOpName }
+--
+-- Can be formed into a type.
+--
+-- Also 'NAppDef' really has only 1 implementation, @{ NAssoc, NOpPrecedence, NOpName }@
+-- were added there only to make type uniformal.
+-- All impossible cases ideally should be unrepresentable.
 -- | Single operator grammar entries.
 data NOperatorDef
   = NAppDef     NAppOp     NAssoc NOpPrecedence NOpName
@@ -639,12 +652,11 @@ instance NOp NSpecialOp where
 
 instance NOp NOperatorDef where
   getOpDef op = op
-  getOpAssoc op = fun op
-   where
-    fun (NAppDef     _op assoc _prec _name) = assoc
-    fun (NUnaryDef   _op assoc _prec _name) = assoc
-    fun (NBinaryDef  _op assoc _prec _name) = assoc
-    fun (NSpecialDef _op assoc _prec _name) = assoc
+  getOpAssoc = \case
+    (NAppDef     _op assoc _prec _name) -> assoc
+    (NUnaryDef   _op assoc _prec _name) -> assoc
+    (NBinaryDef  _op assoc _prec _name) -> assoc
+    (NSpecialDef _op assoc _prec _name) -> assoc
   getOpPrecedence = fun . getOpDef
    where
     fun (NAppDef     _op _assoc prec _name) = prec
