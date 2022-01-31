@@ -39,7 +39,7 @@ data NixDoc ann = NixDoc
     -- the expression tree. For example, in '(a * b) + c', '+' would be the root
     -- operator. It is needed to determine if we need to wrap the expression in
     -- parentheses.
-  , rootOp :: OperatorInfo
+  , rootOp :: NOperatorDef
   , wasPath :: Bool -- This is needed so that when a path is used in a selector path
                     -- we can add brackets appropriately
   }
@@ -52,14 +52,15 @@ data NixDoc ann = NixDoc
 antiquote :: NixDoc ann -> Doc ann
 antiquote x = "${" <> getDoc x <> "}"
 
-mkNixDoc :: OperatorInfo -> Doc ann -> NixDoc ann
+mkNixDoc :: NOperatorDef -> Doc ann -> NixDoc ann
 mkNixDoc o d = NixDoc { getDoc = d, rootOp = o, wasPath = False }
 
 -- | A simple expression is never wrapped in parentheses. The expression
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc ann -> NixDoc ann
-simpleExpr = mkNixDoc $ OperatorInfo minBound NAssocNone "simple expr"
+simpleExpr =
+  mkNixDoc $ NSpecialDef NTerm NAssoc minBound "simple expr"
 
 pathExpr :: Doc ann -> NixDoc ann
 pathExpr d = (simpleExpr d) { wasPath = True }
@@ -71,50 +72,51 @@ pathExpr d = (simpleExpr d) { wasPath = True }
 --   binding).
 leastPrecedence :: Doc ann -> NixDoc ann
 leastPrecedence =
-  mkNixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
+  mkNixDoc $ NSpecialDef NTerm NAssoc maxBound "least precedence"
 
-appOp :: OperatorInfo
-appOp = getAppOperator
 
-appOpNonAssoc :: OperatorInfo
-appOpNonAssoc = appOp { associativity = NAssocNone }
+data WrapMode
+  = ProcessAllWrap
+  | PrecedenceWrap
+ deriving Eq
 
-selectOp :: OperatorInfo
-selectOp = getSpecialOperator NSelectOp
+needsParens
+  :: WrapMode
+  -> NOperatorDef
+  -> NOperatorDef
+  -> Bool
+needsParens mode host sub =
+  getOpPrecedence host > getOpPrecedence sub
+  || bool
+    False
+    ( NAssoc /=  getOpAssoc      host
+      && on (==) getOpAssoc      host sub
+      && on (==) getOpPrecedence host sub
+    )
+    (ProcessAllWrap == mode)
 
-hasAttrOp :: OperatorInfo
-hasAttrOp = getSpecialOperator NHasAttrOp
+maybeWrapDoc :: WrapMode -> NOperatorDef -> NixDoc ann -> Doc ann
+maybeWrapDoc mode host sub =
+  bool
+    parens
+    id
+    (needsParens mode host (rootOp sub))
+    (getDoc sub)
 
 -- | Determine if to return doc wraped into parens,
 -- according the given operator.
-precedenceWrap :: OperatorInfo -> NixDoc ann -> Doc ann
-precedenceWrap op subExpr =
-  maybeWrap $ getDoc subExpr
- where
-  maybeWrap :: Doc ann -> Doc ann
-  maybeWrap =
-    bool
-      parens
-      id
-      needsParens
-   where
-    needsParens :: Bool
-    needsParens =
-      precedence root < precedence op
-      || (  precedence    root == precedence    op
-         && associativity root == associativity op
-         && associativity op   /= NAssocNone
-         )
+wrap :: NOperatorDef -> NixDoc ann -> Doc ann
+wrap = maybeWrapDoc ProcessAllWrap
 
-    root = rootOp subExpr
-
+precedenceWrap :: NOperatorDef -> NixDoc ann -> Doc ann
+precedenceWrap = maybeWrapDoc PrecedenceWrap
 
 -- Used in the selector case to print a path in a selector as
 -- "${./abc}"
-wrapPath :: OperatorInfo -> NixDoc ann -> Doc ann
+wrapPath :: NOperatorDef -> NixDoc ann -> Doc ann
 wrapPath op sub =
   bool
-    (precedenceWrap op sub)
+    (wrap op sub)
     (dquotes $ antiquote sub)
     (wasPath sub)
 
@@ -243,7 +245,7 @@ exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
   NList xs ->
-    prettyContainer "[" (precedenceWrap appOpNonAssoc) "]" xs
+    prettyContainer "[" (precedenceWrap appOpDef) "]" xs
   NSet NonRecursive xs ->
     prettyContainer "{" prettyBind "}" xs
   NSet Recursive xs ->
@@ -256,39 +258,48 @@ exprFNixDoc = \case
           , getDoc body
           ]
   NApp fun arg ->
-    mkNixDoc appOp (precedenceWrap appOp fun <> " " <> precedenceWrap appOpNonAssoc arg)
+    mkNixDoc appOpDef (wrap appOpDef fun <> " " <> precedenceWrap appOpDef arg)
   NBinary op r1 r2 ->
     mkNixDoc
-      opInfo $
+      opDef $
       hsep
-        [ f NAssocLeft r1
-        , pretty $ operatorName opInfo
-        , f NAssocRight r2
+        [ pickWrapMode NAssocLeft r1
+        , pretty @Text $ coerce @NOpName $ getOpName op
+        , pickWrapMode NAssocRight r2
         ]
    where
-    opInfo = getBinaryOperator op
-    f :: NAssoc -> NixDoc ann -> Doc ann
-    f x =
-      precedenceWrap
-        $ bool
-            opInfo
-            (opInfo { associativity = NAssocNone })
-            (associativity opInfo /= x)
+    opDef = getOpDef op
+
+    pickWrapMode :: NAssoc -> NixDoc ann -> Doc ann
+    pickWrapMode x =
+      bool
+        wrap
+        precedenceWrap
+        (getOpAssoc opDef /= x)
+        opDef
   NUnary op r1 ->
     mkNixDoc
-      opInfo $
-      pretty (operatorName opInfo) <> precedenceWrap opInfo r1
+      opDef $
+      pretty @Text (coerce $ getOpName op) <> wrap opDef r1
    where
-    opInfo = getUnaryOperator op
+    opDef = getOpDef op
   NSelect o r' attr ->
     maybe
       (mkNixDoc selectOp)
       (const leastPrecedence)
       o
-      $ wrapPath selectOp (mkNixDoc selectOp (precedenceWrap appOpNonAssoc r')) <> "." <> prettySelector attr <>
-        ((" or " <>) . precedenceWrap appOpNonAssoc) `whenJust` o
+      $ wrapPath selectOp (mkNixDoc selectOp (wrap appOpDef r')) <> "." <> prettySelector attr <>
+        ((" or " <>) . precedenceWrap appOpDef) `whenJust` o
+   where
+    selectOp :: NOperatorDef
+    selectOp = getOpDef NSelectOp
+
   NHasAttr r attr ->
-    mkNixDoc hasAttrOp (precedenceWrap hasAttrOp r <> " ? " <> prettySelector attr)
+    mkNixDoc hasAttrOp (wrap hasAttrOp r <> " ? " <> prettySelector attr)
+   where
+    hasAttrOp :: NOperatorDef
+    hasAttrOp = getOpDef NHasAttrOp
+
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
   NLiteralPath p ->
     pathExpr $
@@ -314,15 +325,14 @@ exprFNixDoc = \case
   NIf cond trueBody falseBody ->
     leastPrecedence $
       group $
-        nest 2 $
-          ifThenElse getDoc
+        nest 2 ifThenElse
    where
-    ifThenElse :: (NixDoc ann -> Doc ann) -> Doc ann
-    ifThenElse wp =
+    ifThenElse :: Doc ann
+    ifThenElse =
       sep
-        [ "if " <> wp cond
-        , align ("then " <> wp trueBody)
-        , align ("else " <> wp falseBody)
+        [         "if "   <> getDoc cond
+        , align $ "then " <> getDoc trueBody
+        , align $ "else " <> getDoc falseBody
         ]
   NWith scope body ->
     prettyAddScope "with " scope body

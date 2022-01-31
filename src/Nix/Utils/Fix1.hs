@@ -5,7 +5,12 @@
 {-# language PolyKinds #-}
 {-# language UndecidableInstances #-}
 
-module Nix.Utils.Fix1 where
+module Nix.Utils.Fix1
+  ( Fix1(..)
+  , Fix1T(..)
+  , MonadFix1T
+  )
+where
 
 import           Nix.Prelude
 import           Control.Monad.Fix              ( MonadFix )
@@ -22,6 +27,7 @@ import           Control.Monad.Catch            ( MonadCatch
 -- https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
 newtype Fix1 (t :: (k -> Type) -> k -> Type) (a :: k) = Fix1 { unFix1 :: t (Fix1 t) a }
 
+deriving instance Generic (Fix1 t a)
 deriving instance Functor (t (Fix1 t))
   => Functor (Fix1 t)
 deriving instance Applicative (t (Fix1 t))
@@ -49,6 +55,7 @@ deriving instance MonadState s (t (Fix1 t))
 newtype Fix1T (t :: (k -> Type) -> (Type -> Type) -> k -> Type) (m :: Type -> Type) (a :: k)
   = Fix1T { unFix1T :: t (Fix1T t m) m a }
 
+deriving instance Generic (Fix1T t m m)
 deriving instance Functor (t (Fix1T t m) m)
   => Functor (Fix1T t m)
 deriving instance Applicative (t (Fix1T t m) m)
@@ -95,7 +102,6 @@ instance
   writeRef r = lift . writeRef r
   {-# inline writeRef #-}
 
-
 instance
   ( MonadFix1T t m
   , MonadAtomicRef m
@@ -109,8 +115,10 @@ instance
 
 newtype Flip (f :: i -> j -> *) (a :: j) (b :: i) = Flip { unFlip :: f b a }
 
--- | Natural Transformations (Included from
---   [compdata](https://hackage.haskell.org/package/compdata))
+-- | Natural Transformations
+--  ( Included from
+--   [compdata](https://hackage.haskell.org/package/compdata)
+--  )
 type (:->) f g = forall a. f a -> g a
 
 class HFunctor f where

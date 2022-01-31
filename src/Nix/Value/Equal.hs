@@ -31,9 +31,9 @@ checkComparable
   -> m ()
 checkComparable x y =
   case (x, y) of
-    (NVConstant (NFloat _), NVConstant (NInt   _)) -> stub
-    (NVConstant (NInt   _), NVConstant (NFloat _)) -> stub
     (NVConstant (NInt   _), NVConstant (NInt   _)) -> stub
+    (NVConstant (NInt   _), NVConstant (NFloat _)) -> stub
+    (NVConstant (NFloat _), NVConstant (NInt   _)) -> stub
     (NVConstant (NFloat _), NVConstant (NFloat _)) -> stub
     (NVStr       _        , NVStr       _        ) -> stub
     (NVPath      _        , NVPath      _        ) -> stub
@@ -62,7 +62,8 @@ alignEqM eq fa fb =
             (Data.Semialign.align fa fb)
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
-alignEq eq fa fb = runIdentity $ alignEqM ((Identity .) . eq) fa fb
+alignEq eq fa fb =
+  runIdentity $ alignEqM ((Identity .) . eq) fa fb
 
 isDerivationM
   :: Monad m
@@ -73,17 +74,13 @@ isDerivationM
   -> m Bool
 isDerivationM f m =
   maybe
-    (pure False)
-    p
-    (HashMap.Lazy.lookup "type" m)
- where
-  p t =
-    maybe
-      -- We should probably really make sure the context is empty here
-      -- but the C++ implementation ignores it.
-      False
-      ((==) "derivation" . ignoreContext)
-      <$> f t
+    False
+    -- (2019-03-18):
+    -- We should probably really make sure the context is empty here
+    -- but the C++ implementation ignores it.
+    ((==) "derivation" . ignoreContext)
+    . join <$> traverse f (HashMap.Lazy.lookup "type" m)
+
 
 isDerivation
   :: Monad m
@@ -141,21 +138,14 @@ compareAttrSetsM
   -> AttrSet t
   -> m Bool
 compareAttrSetsM f eq lm rm =
-  do
-    l <- isDerivationM f lm
-    bool
-      compareAttrs
-      (do
-        r <- isDerivationM f rm
-        case r of
-          True
-            | Just lp <- HashMap.Lazy.lookup "outPath" lm,
-              Just rp <- HashMap.Lazy.lookup "outPath" rm -> eq lp rp
-          _ -> compareAttrs
-      )
-      l
+  bool
+    compareAttrs
+    (fromMaybe compareAttrs equalOutPaths)
+    =<< areDerivations
  where
-  compareAttrs = alignEqM eq lm rm
+  areDerivations = on (liftA2 (&&)) (isDerivationM f              ) lm rm
+  equalOutPaths  = on (liftA2   eq) (HashMap.Lazy.lookup "outPath") lm rm
+  compareAttrs   =     alignEqM eq                                  lm rm
 
 compareAttrSets
   :: (t -> Maybe NixString)
@@ -163,11 +153,12 @@ compareAttrSets
   -> AttrSet t
   -> AttrSet t
   -> Bool
-compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
+compareAttrSets f eq lm rm =
+  runIdentity $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
 
 valueEqM
-  :: (MonadThunk t m (NValue t f m), NVConstraint f)
+  :: forall t f m
+   . (MonadThunk t m (NValue t f m), NVConstraint f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
@@ -176,12 +167,13 @@ valueEqM (  Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
 valueEqM x@(Free _) (  Pure y) = (`thunkEqM` y) =<< thunk (pure x)
 valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
   valueFEqM
-    (compareAttrSetsM f valueEqM)
+    (compareAttrSetsM findNVStr valueEqM)
     valueEqM
     x
     y
  where
-  f =
+  findNVStr :: NValue t f m -> m (Maybe NixString)
+  findNVStr =
     free
       (pure .
         (\case
@@ -195,6 +187,8 @@ valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
           _        -> mempty
       )
 
+-- This function has mutual recursion with `valueEqM`, and this function so far is not used across the project,
+-- but that one is.
 thunkEqM :: (MonadThunk t m (NValue t f m), NVConstraint f) => t -> t -> m Bool
 thunkEqM lt rt =
   do
@@ -203,9 +197,10 @@ thunkEqM lt rt =
 
     let
       unsafePtrEq =
-        case (lt, rt) of
-          (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
-          _                                             -> valueEqM lv rv
+        bool
+          (valueEqM lv rv)
+          (pure True)
+          $ on (==) thunkId lt rt
 
     case (lv, rv) of
       (NVClosure _ _, NVClosure _ _) -> unsafePtrEq

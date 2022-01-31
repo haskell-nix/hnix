@@ -15,14 +15,11 @@ module Nix.Parser
   , parseFromText
   , Result
   , reservedNames
-  , OperatorInfo(..)
-  , NSpecialOp(..)
   , NAssoc(..)
-  , NOperatorDef
-  , getUnaryOperator
-  , getAppOperator
-  , getBinaryOperator
-  , getSpecialOperator
+  , NOpPrecedence(..)
+  , NOpName(..)
+  , NSpecialOp(..)
+  , NOperatorDef(..)
   , nixExpr
   , nixExprAlgebra
   , nixSet
@@ -38,6 +35,10 @@ module Nix.Parser
   , nixBool
   , nixNull
   , whiteSpace
+
+  --  2022-01-26: NOTE: Try to hide it after OperatorInfo is removed
+  , NOp(..)
+  , appOpDef
   )
 where
 
@@ -61,9 +62,9 @@ import           Data.Char                      ( isAlpha
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
+import           Data.List.Extra                ( groupSort )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
-import qualified Data.Map                      as Map
 import qualified Data.Text                     as Text
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
@@ -98,7 +99,7 @@ isAlphanumeric :: Char -> Bool
 isAlphanumeric x = isAlpha x || isDigit x
 {-# inline isAlphanumeric #-}
 
--- | @<|>@ with additional preservation of @MonadPlus@ constraint.
+-- | Alternative "<|>" with additional preservation of 'MonadPlus' constraint.
 infixl 3 <|>
 (<|>) :: MonadPlus m => m a -> m a -> m a
 (<|>) = mplus
@@ -137,14 +138,11 @@ reserved :: Text -> Parser ()
 reserved n =
   lexeme $ try $ chunk n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
-exprAfterP :: Parser a -> Parser NExprLoc
-exprAfterP p = p *> nixExpr
-
 exprAfterSymbol :: Char -> Parser NExprLoc
-exprAfterSymbol p = exprAfterP $ symbol p
+exprAfterSymbol p = symbol p *> nixExpr
 
 exprAfterReservedWord :: Text -> Parser NExprLoc
-exprAfterReservedWord word = exprAfterP $ reserved word
+exprAfterReservedWord word = reserved word *> nixExpr
 
 -- | A literal copy of @megaparsec@ one but with addition of the @\r@ for Windows EOL case (@\r\n@).
 -- Overall, parser should simply @\r\n -> \n@.
@@ -174,7 +172,7 @@ symbols :: Text -> Parser Text
 symbols = lexeme . chunk
 
 -- We restrict the type of 'parens' and 'brackets' here because if they were to
--- take a @Parser NExprLoc@ argument they would parse additional text which
+-- take a 'Parser NExprLoc' argument they would parse additional text which
 -- wouldn't be captured in the source location annotation.
 --
 -- Braces and angles in hnix don't enclose a single expression so this type
@@ -321,17 +319,16 @@ indented =
     try $
       do
         indentedQuotationMark
-        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
+        Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$')
           <|>
             do
-              _ <- char '\\'
-              c <- escapeCode
+              c <- char '\\' *> escapeCode
 
               pure $
                 bool
                   EscapedNewline
                   (Plain $ one c)
-                  (c /= '\n')
+                  ('\n' /= c)
 
   -- | Enclosed into indented quatation "'' <expr> ''"
   inIndentedQuotation :: Parser a -> Parser a
@@ -465,24 +462,19 @@ nixSearchPath =
 
 -- ** Operators
 
-data NSpecialOp = NHasAttrOp | NSelectOp
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+--  2022-01-26: NOTE: Rename to 'literal'
+newtype NOpName = NOpName Text
+  deriving
+    (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
-data NAssoc = NAssocNone | NAssocLeft | NAssocRight
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+instance IsString NOpName where
+  fromString = coerce . fromString @Text
 
-data NOperatorDef
-  = NUnaryDef          NUnaryOp   Text
-  | NAppDef            NAssoc     Text
-  | NBinaryDef  NAssoc NBinaryOp  Text
-  | NSpecialDef NAssoc NSpecialOp Text
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+instance ToString NOpName where
+  toString = toString @Text . coerce
 
-manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
-manyUnaryOp f = foldr1 (.) <$> some f
-
-operator :: Text -> Parser Text
-operator op =
+operator :: NOpName -> Parser Text
+operator (coerce -> op) =
   case op of
     c@"-" -> c `without` '>'
     c@"/" -> c `without` '/'
@@ -494,180 +486,209 @@ operator op =
   without opChar noNextChar =
     lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
 
-opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> Text -> Parser a
-opWithLoc f op name =
-  do
-    AnnUnit ann _ <-
-      annotateLocation1 $
-        operator name
+opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> NOpName -> Parser a
+opWithLoc f op name = f . (op <$) <$> annotateLocation1 (operator name)
 
-    pure . f $ AnnUnit ann op
+--  2022-01-26: NOTE: Make presedence free and type safe by moving it into type level:
+--  https://youtu.be/qaPdg0mZavM?t=1757
+--  https://wiki.haskell.org/The_Monad.Reader/Issue5/Number_Param_Types
+newtype NOpPrecedence = NOpPrecedence Int
+  deriving (Eq, Ord, Generic, Bounded, Typeable, Data, Show, NFData)
+
+instance Enum NOpPrecedence where
+  toEnum = coerce
+  fromEnum = coerce
+
+instance Num NOpPrecedence where
+  (+) = coerce ((+) @Int)
+  (*) = coerce ((*) @Int)
+  abs = coerce (abs @Int)
+  signum = coerce (signum @Int)
+  fromInteger = coerce (fromInteger @Int)
+  negate = coerce (negate @Int)
+
+--  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
+data NAppOp = NAppOp
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+--  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
+data NSpecialOp
+  = NHasAttrOp
+  | NSelectOp
+  | NTerm -- ^ For special handling of internal special cases.
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+data NAssoc
+  = NAssocLeft
+  -- Nota bene: @parser-combinators@ named "associative property" as 'InfixN' stating it as "non-associative property".
+  -- Binary operators having some associativity is a basis property in mathematical algebras in use (for example, in Category theory). Having no associativity in operators makes theory mostly impossible in use and so non-associativity is not encountered in notations, therefore under 'InfixN' @parser-combinators@ meant "associative".
+  -- | Bidirectional associativity, or simply: associative property.
+  | NAssoc
+  | NAssocRight
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+--  2022-01-31: NOTE: This type and related typeclasses & their design, probably need a refinement.
+--
+-- In the "Nix.Pretty", the code probably should be well-typed to the type of operations its processes.
+-- Therefor splitting operation types into separate types there is probably needed.
+--
+-- After that:
+--
+-- > { NAssoc, NOpPrecedence, NOpName }
+--
+-- Can be formed into a type.
+--
+-- Also 'NAppDef' really has only 1 implementation, @{ NAssoc, NOpPrecedence, NOpName }@
+-- were added there only to make type uniformal.
+-- All impossible cases ideally should be unrepresentable.
+-- | Single operator grammar entries.
+data NOperatorDef
+  = NAppDef     NAppOp     NAssoc NOpPrecedence NOpName
+  | NUnaryDef   NUnaryOp   NAssoc NOpPrecedence NOpName
+  | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
+  | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
+  --  2022-01-26: NOTE: Ord can be the order of evaluation of precedence (which 'Pretty' printing also accounts for).
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+-- Supplied since its definition gets called/used frequently.
+-- | Functional application operator definition, left associative, high precedence.
+appOpDef :: NOperatorDef
+appOpDef = NAppDef NAppOp NAssocLeft 1 " " -- This defined as "2" in Nix lang spec.
+
+--  2022-01-26: NOTE: When total - make sure to hide & inline all these instances to get free solution.
+-- | Class to get a private free construction to abstract away the gap between the Nix operation types
+-- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
+-- And in doing remove 'OperatorInfo' from existance.
+class NOp a where
+  {-# minimal getOpDef, getOpAssoc, getOpPrecedence, getOpName #-}
+
+  getOpDef :: a -> NOperatorDef
+  getOpAssoc :: a -> NAssoc
+  getOpPrecedence :: a -> NOpPrecedence
+  getOpName :: a -> NOpName
+
+instance NOp NAppOp where
+  getOpDef NAppOp = appOpDef
+  getOpAssoc _op = fun appOpDef
+   where
+    fun (NAppDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, funapp operation should been matched."
+  getOpPrecedence _op = fun appOpDef
+   where
+    fun (NAppDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, funapp operation should been matched."
+  getOpName _ = fun appOpDef
+   where
+    fun (NAppDef _op _assoc _prec name) = name
+    fun _ = error "Impossible happened, funapp operation should been matched."
+
+instance NOp NUnaryOp where
+  getOpDef =
+    \case
+      NNeg -> NUnaryDef NNeg NAssocRight 3 "-"
+      NNot -> NUnaryDef NNot NAssocRight 8 "!"
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NUnaryDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, unary operation should been matched."
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NUnaryDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, unary operation should been matched."
+  getOpName = fun . getOpDef
+   where
+    fun (NUnaryDef _op _assoc _prec name) = name
+    fun _ = error "Impossible happened, unary operation should been matched."
+
+instance NOp NBinaryOp where
+  getOpDef =
+    \case
+      NConcat -> NBinaryDef NConcat NAssocRight  5 "++"
+      NMult   -> NBinaryDef NMult   NAssocLeft   6 "*"
+      NDiv    -> NBinaryDef NDiv    NAssocLeft   6 "/"
+      NPlus   -> NBinaryDef NPlus   NAssocLeft   7 "+"
+      NMinus  -> NBinaryDef NMinus  NAssocLeft   7 "-"
+      NUpdate -> NBinaryDef NUpdate NAssocRight  9 "//"
+      NLt     -> NBinaryDef NLt     NAssocLeft  10 "<"
+      NLte    -> NBinaryDef NLte    NAssocLeft  10 "<="
+      NGt     -> NBinaryDef NGt     NAssocLeft  10 ">"
+      NGte    -> NBinaryDef NGte    NAssocLeft  10 ">="
+      NEq     -> NBinaryDef NEq     NAssoc      11 "=="
+      NNEq    -> NBinaryDef NNEq    NAssoc      11 "!="
+      NAnd    -> NBinaryDef NAnd    NAssocLeft  12 "&&"
+      NOr     -> NBinaryDef NOr     NAssocLeft  13 "||"
+      NImpl   -> NBinaryDef NImpl   NAssocRight 14 "->"
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NBinaryDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, binary operation should been matched."
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NBinaryDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, binary operation should been matched."
+  getOpName = fun . getOpDef
+   where
+    fun (NBinaryDef _op _assoc _prec name) = name
+    fun _ = error "Impossible happened, binary operation should been matched."
+
+instance NOp NSpecialOp where
+  getOpDef =
+    \case
+      NSelectOp  -> NSpecialDef NSelectOp  NAssocLeft 1 "."
+      NHasAttrOp -> NSpecialDef NHasAttrOp NAssocLeft 4 "?"
+      NTerm      -> NSpecialDef NTerm      NAssocLeft 1 "???"
+  getOpAssoc = fun . getOpDef
+   where
+    fun (NSpecialDef _op assoc _prec _name) = assoc
+    fun _ = error "Impossible happened, special operation should been matched."
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NSpecialDef _op _assoc prec _name) = prec
+    fun _ = error "Impossible happened, special operation should been matched."
+  getOpName = fun . getOpDef
+   where
+    fun (NSpecialDef _op _assoc _prec name) = name
+    fun _ = error "Impossible happened, special operation should been matched."
+
+instance NOp NOperatorDef where
+  getOpDef op = op
+  getOpAssoc = \case
+    (NAppDef     _op assoc _prec _name) -> assoc
+    (NUnaryDef   _op assoc _prec _name) -> assoc
+    (NBinaryDef  _op assoc _prec _name) -> assoc
+    (NSpecialDef _op assoc _prec _name) -> assoc
+  getOpPrecedence = fun . getOpDef
+   where
+    fun (NAppDef     _op _assoc prec _name) = prec
+    fun (NUnaryDef   _op _assoc prec _name) = prec
+    fun (NBinaryDef  _op _assoc prec _name) = prec
+    fun (NSpecialDef _op _assoc prec _name) = prec
+  getOpName = fun . getOpDef
+   where
+    fun (NAppDef     _op _assoc _prec name) = name
+    fun (NUnaryDef   _op _assoc _prec name) = name
+    fun (NBinaryDef  _op _assoc _prec name) = name
+    fun (NSpecialDef _op _assoc _prec name) = name
+
+prefix :: NUnaryOp -> Operator Parser NExprLoc
+prefix op =
+  Prefix $ manyUnaryOp $ opWithLoc annNUnary op $ getOpName op
+-- postfix name op = (NUnaryDef name op,
+--                    Postfix (opWithLoc annNUnary op name))
+
+manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
+manyUnaryOp f = foldr1 (.) <$> some f
 
 binary
-  :: NAssoc
-  -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
-  -> NBinaryOp
-  -> Text
-  -> (NOperatorDef, b)
-binary assoc fixity op name =
-  (NBinaryDef assoc op name, fixity $ opWithLoc annNBinary op name)
+  :: NBinaryOp
+  -> Operator Parser NExprLoc
+binary op =
+  mapAssocToInfix (getOpAssoc op) $ opWithLoc annNBinary op (getOpName op)
 
-binaryN, binaryL, binaryR :: NBinaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
-binaryN =
-  binary NAssocNone InfixN
-binaryL =
-  binary NAssocLeft InfixL
-binaryR =
-  binary NAssocRight InfixR
-
-prefix :: NUnaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
-prefix op name =
-  (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
--- postfix name op = (NUnaryDef name op,
---                    Postfix (opWithLoc name op annNUnary))
-
-nixOperators
-  :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
-  -> [[ ( NOperatorDef
-       , Operator Parser NExprLoc
-       )
-    ]]
-nixOperators selector =
-  [ -- This is not parsed here, even though technically it's part of the
-    -- expression table. The problem is that in some cases, such as list
-    -- membership, it's also a term. And since terms are effectively the
-    -- highest precedence entities parsed by the expression parser, it ends up
-    -- working out that we parse them as a kind of "meta-term".
-
-    -- {-  1 -}
-    -- [ ( NSpecialDef "." NSelectOp NAssocLeft
-    --   , Postfix $
-    --       do
-    --         sel <- seldot *> selector
-    --         mor <- optional (reserved "or" *> term)
-    --         pure $ \x -> annNSelect x sel mor)
-    -- ]
-
-    {-  2 -}
-    one
-      ( NAppDef NAssocLeft " "
-      ,
-        -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ annNApp <$ symbols mempty
-      )
-  , {-  3 -}
-    one $ prefix  NNeg "-"
-  , {-  4 -}
-    one
-      ( NSpecialDef NAssocLeft NHasAttrOp "?"
-      , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
-      )
-  , {-  5 -}
-    one $ binaryR NConcat "++"
-  , {-  6 -}
-    [ binaryL NMult "*"
-    , binaryL NDiv  "/"
-    ]
-  , {-  7 -}
-    [ binaryL NPlus "+"
-    , binaryL NMinus "-"
-    ]
-  , {-  8 -}
-    one $ prefix  NNot "!"
-  , {-  9 -}
-    one $ binaryR NUpdate "//"
-  , {- 10 -}
-    [ binaryL NLt "<"
-    , binaryL NGt ">"
-    , binaryL NLte "<="
-    , binaryL NGte ">="
-    ]
-  , {- 11 -}
-    [ binaryN NEq "=="
-    , binaryN NNEq "!="
-    ]
-  , {- 12 -}
-    one $ binaryL NAnd "&&"
-  , {- 13 -}
-    one $ binaryL NOr "||"
-  , {- 14 -}
-    one $ binaryR NImpl "->"
-  ]
-
---  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
---  2021-08-10: NOTE:
---  All this is a sidecar:
---  * This type
---  * detectPrecedence
---  * getUnaryOperation
---  * getBinaryOperation
---  * getSpecialOperation
---  can reduced in favour of adding precedence field into @NOperatorDef@.
--- details: https://github.com/haskell-nix/hnix/issues/982
-data OperatorInfo =
-  OperatorInfo
-    { precedence    :: Int
-    , associativity :: NAssoc
-    , operatorName  :: Text
-    }
- deriving (Eq, Ord, Generic, Typeable, Data, Show)
-
-detectPrecedence
-  :: Ord a
-  => ( Int
-    -> (NOperatorDef, Operator Parser NExprLoc)
-    -> [(a, OperatorInfo)]
-    )
-  -> a
-  -> OperatorInfo
-detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
- where
-  mapOfOpWithPrecedence =
-    Map.fromList $
-      fold $
-        zipWith
-          (foldMap . spec)
-          [1 ..]
-          l
-   where
-    l :: [[(NOperatorDef, Operator Parser NExprLoc)]]
-    l = nixOperators $ fail "unused"
-
-getUnaryOperator :: NUnaryOp -> OperatorInfo
-getUnaryOperator = detectPrecedence spec
- where
-  spec :: Int -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
-  spec i =
-    \case
-      (NUnaryDef op name, _) -> one (op, OperatorInfo i NAssocNone name)
-      _                      -> mempty
-
-getAppOperator :: OperatorInfo
-getAppOperator =
-  OperatorInfo
-    { precedence    = 1 -- inside the code it is 1, inside the Nix they are +1
-    , associativity = NAssocLeft
-    , operatorName  = " "
-    }
-
-getBinaryOperator :: NBinaryOp -> OperatorInfo
-getBinaryOperator = detectPrecedence spec
- where
-  spec :: Int -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
-  spec i =
-    \case
-      (NBinaryDef assoc op name, _) -> one (op, OperatorInfo i assoc name)
-      _                             -> mempty
-
-getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
-getSpecialOperator o         = detectPrecedence spec o
- where
-  spec :: Int -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
-  spec i =
-      \case
-        (NSpecialDef assoc op name, _) -> one (op, OperatorInfo i assoc name)
-        _                              -> mempty
+mapAssocToInfix :: NAssoc -> m (a -> a -> a) -> Operator m a
+mapAssocToInfix NAssocLeft  = InfixL
+mapAssocToInfix NAssoc      = InfixN
+mapAssocToInfix NAssocRight = InfixR
 
 -- ** x: y lambda function
 
@@ -696,13 +717,13 @@ argExpr =
     try $
       do
         name             <- identifier <* symbol '@'
-        (pset, variadic) <- params
+        (variadic, pset) <- params
         pure $ ParamSet (pure name) variadic pset
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight =
     do
-      (pset, variadic) <- params
+      (variadic, pset) <- params
       name             <- optional $ symbol '@' *> identifier
       pure $ ParamSet name variadic pset
 
@@ -711,18 +732,20 @@ argExpr =
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- an flag indication if the parameters are variadic.
+  getParams :: Parser (Variadic, [(VarName, Maybe NExprLoc)])
   getParams = go mempty
    where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, Variadic) <$ symbols "...") <|> getMore
+    go :: [(VarName, Maybe NExprLoc)] -> Parser (Variadic, [(VarName, Maybe NExprLoc)])
+    go acc = ((Variadic, acc) <$ symbols "...") <|> getMore
      where
-      getMore :: Parser ([(VarName, Maybe NExprLoc)], Variadic)
+      getMore :: Parser (Variadic, [(VarName, Maybe NExprLoc)])
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, mempty) $
+        option (mempty, acc) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -733,7 +756,7 @@ argExpr =
             let args = acc <> one pair
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, mempty) $ symbol ',' *> go args
+            option (mempty, args) $ symbol ',' *> go args
 
 nixLambda :: Parser NExprLoc
 nixLambda =
@@ -749,14 +772,16 @@ nixLet =
   annotateNamedLocation "let block" $
     reserved "let" *> (letBody <|> letBinders)
  where
+  -- | Expressions `let {..., body = ...}' are just desugared
+  -- into `(rec {..., body = ...}).body'.
+  letBody    = (\ expr -> NSelect Nothing expr (one $ StaticKey "body")) <$> attrset
+   where
+    attrset       = annotateLocation $ NSet Recursive <$> braces nixBinders
+  -- | Regular `let`
   letBinders =
     liftA2 NLet
       nixBinders
       (exprAfterReservedWord "in")
-  -- Let expressions `let {..., body = ...}' are just desugared
-  -- into `(rec {..., body = ...}).body'.
-  letBody    = (\x -> NSelect Nothing x (one $ StaticKey "body")) <$> aset
-  aset       = annotateLocation $ NSet Recursive <$> braces nixBinders
 
 -- ** if then else
 
@@ -789,8 +814,8 @@ nixAssert =
 
 -- ** . - reference (selector) into attr
 
-selDot :: Parser ()
-selDot = label "." $ try (symbol '.' *> notFollowedBy nixPath)
+selectorDot :: Parser ()
+selectorDot = label "." $ try (symbol '.' *> notFollowedBy nixPath)
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <|> staticKey
@@ -800,23 +825,20 @@ keyName = dynamicKey <|> staticKey
 
 nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
 nixSelector =
-  annotateLocation1 $
-    do
-      (x : xs) <- keyName `sepBy1` selDot
-      pure $ x :| xs
+  annotateLocation1 $ fromList <$> keyName `sepBy1` selectorDot
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
 nixSelect term =
   do
     res <-
-      liftA2 build
+      liftA2 builder
         term
         (optional $
-          liftA2 (,)
-            (selDot *> nixSelector)
+          liftA2 (flip (,))
+            (selectorDot *> nixSelector)
             (optional $ reserved "or" *> nixTerm)
         )
-    continues <- optional $ lookAhead selDot
+    continues <- optional $ lookAhead selectorDot
 
     maybe
       id
@@ -824,23 +846,58 @@ nixSelect term =
       continues
       (pure res)
  where
-  build
+  builder
     :: NExprLoc
     -> Maybe
-      ( AnnUnit SrcSpan (NAttrPath NExprLoc)
-      , Maybe NExprLoc
+      ( Maybe NExprLoc
+      , AnnUnit SrcSpan (NAttrPath NExprLoc)
       )
     -> NExprLoc
-  build t =
+  builder t =
     maybe
       t
-      (\ (a, m) -> (`annNSelect` t) m a)
+      (uncurry (`annNSelect` t))
 
 
 -- ** _ - syntax hole
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
+nixSynHole =
+  annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
+
+-- List of Nix operation parsers with their precedence.
+opParsers :: [(NOpPrecedence, Operator Parser NExprLoc)]
+opParsers =
+  -- This is not parsed here, even though technically it's part of the
+  -- expression table. The problem is that in some cases, such as list
+  -- membership, it's also a term. And since terms are effectively the
+  -- highest precedence entities parsed by the expression parser, it ends up
+  -- working out that we parse them as a kind of "meta-term".
+
+  -- {-  1 -}
+  -- [ ( NSpecialDef "." NSelectOp NAssocLeft
+  --   , Postfix $
+  --       do
+  --         sel <- seldot *> selector
+  --         mor <- optional (reserved "or" *> term)
+  --         pure $ \x -> annNSelect x sel mor)
+  -- ]
+
+  -- NApp is left associative
+  -- 2018-05-07: jwiegley: Thanks to Brent Yorgey for showing me this trick!
+  specialBuilder NAppOp (InfixL $ annNApp <$ symbols mempty) <>
+  specialBuilder NHasAttrOp (Postfix $ symbol '?' *> (flip annNHasAttr <$> nixSelector)) <>
+  builder prefix <>
+  builder binary
+ where
+  specialBuilder :: NOp t => t -> b -> [(NOpPrecedence, b)]
+  specialBuilder op parser = one (entry op (const parser))
+
+  builder :: (Enum t, Bounded t, NOp t) => (t -> b) -> [(NOpPrecedence, b)]
+  builder tp = fmap (`entry` tp) universe
+
+  entry :: NOp t => t -> (t -> b) -> (NOpPrecedence, b)
+  entry op parser = (getOpPrecedence op, parser op)
 
 
 -- ** Expr & its constituents (Language term, expr algebra)
@@ -871,15 +928,19 @@ nixTerm =
                 <> [ nixNull | c == 'n' ]
                 <> one (nixSelect nixSym)
 
+-- | Bundles parsers into @[[]]@ based on precedence (form is required for `megaparsec`).
+nixOperators :: [[ Operator Parser NExprLoc ]]
+nixOperators =
+  snd <$>
+    groupSort opParsers
+
 -- | Nix expression algebra parser.
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.
 nixExprAlgebra :: Parser NExprLoc
 nixExprAlgebra =
   makeExprParser
     nixTerm
-    (snd <<$>>
-      nixOperators nixSelector
-    )
+    nixOperators
 
 nixExpr :: Parser NExprLoc
 nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
@@ -891,24 +952,24 @@ nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
 
 type Result a = Either (Doc Void) a
 
-parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
-parseFromFileEx parser file =
-  do
-    input <- liftIO $ readFile file
 
-    pure $
-      either
-        (Left . pretty . errorBundlePretty)
-        pure
-        $ (`evalState` initialPos (coerce file)) $ runParserT parser (coerce file) input
-
-parseFromText :: Parser a -> Text -> Result a
-parseFromText parser input =
-  let stub = "<string>" in
+parseWith
+  :: Parser a
+  -> Path
+  -> Text
+  -> Either (Doc Void) a
+parseWith parser file input =
   either
     (Left . pretty . errorBundlePretty)
     pure
-    $ (`evalState` initialPos stub) $ (`runParserT` stub) parser input
+    $ (`evalState` initialPos (coerce file)) $ (`runParserT` coerce file) parser input
+
+
+parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
+parseFromFileEx parser file = parseWith parser file <$> readFile file
+
+parseFromText :: Parser a -> Text -> Result a
+parseFromText = (`parseWith` "<string>")
 
 fullContent :: Parser NExprLoc
 fullContent = whiteSpace *> nixExpr <* eof
@@ -937,7 +998,7 @@ parseNixTextLoc :: Text -> Result NExprLoc
 parseNixTextLoc =
   parseNixText' id
 
-parseExpr :: (MonadFail m) => Text -> m NExpr
+parseExpr :: MonadFail m => Text -> m NExpr
 parseExpr =
   either
     (fail . show)

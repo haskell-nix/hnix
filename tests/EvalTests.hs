@@ -646,7 +646,7 @@ assertNixEvalThrows a =
             (normalForm =<< nixEvalExprLoc mempty a')
         )
         (\(_ :: NixException) -> pure True)
-    unless errored $ assertFailure "Did not catch nix exception"
+    when (not errored) $ assertFailure "Did not catch nix exception"
 
 sameFreeVars :: Text -> [VarName] -> Assertion
 sameFreeVars a xs =

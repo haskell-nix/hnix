@@ -594,15 +594,15 @@ data NExprF r
   -- environment variable. For example, @<nixpkgs/pkgs>@.
   --
   -- > NEnvPath "x"                                ~  <x>
+  | NApp !r !r
+  -- ^ Functional application (aka F.A., apply a function to an argument).
+  --
+  -- > NApp f x  ~  f x
   | NUnary !NUnaryOp !r
   -- ^ Application of a unary operator to an expression.
   --
   -- > NUnary NNeg x                               ~  - x
   -- > NUnary NNot x                               ~  ! x
-  | NApp !r !r
-  -- ^ Functional application (aka F.A., apply a function to an argument).
-  --
-  -- > NApp f x  ~  f x
   | NBinary !NBinaryOp !r !r
   -- ^ Application of a binary operator to two expressions.
   --

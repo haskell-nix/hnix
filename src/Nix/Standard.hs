@@ -47,14 +47,9 @@ newtype StdCited m a =
   StdCited
     (Cited (StdThunk m) (StdCited m) m a)
   deriving
-    ( Generic
-    , Typeable
-    , Functor
-    , Applicative
-    , Foldable
-    , Traversable
-    , Comonad
-    , ComonadEnv [Provenance m (StdValue m)]
+    ( Generic, Typeable
+    , Functor, Applicative, Comonad, ComonadEnv [Provenance m (StdValue m)]
+    , Foldable, Traversable
     )
 
 newtype StdThunk m =
@@ -172,6 +167,8 @@ instance
 
 
 -- * @instance MonadThunkF@ (Kleisli functor HOFs)
+
+-- | This is a functorized version in CPS.
 
 -- Please do not use MonadThunkF instances to define MonadThunk. as MonadThunk uses specialized functions.
 instance

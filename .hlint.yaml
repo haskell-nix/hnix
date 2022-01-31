@@ -15,6 +15,8 @@
   - "-XTypeApplications"
   - "-XViewPatterns"
 - ignore:
+    name: Use unless
+- ignore:
     name: Use head
 - ignore:
     name: Use Foldable.forM_
@@ -125,19 +127,19 @@
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: orM s
 - hint:
-    lhs: "fmap and (mapM f s)"
+    lhs: "fmap and (traversable f s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: allM f s
 - hint:
-    lhs: "and <$> mapM f s"
+    lhs: "and <$> traversable f s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: allM f s
 - hint:
-    lhs: "fmap or (mapM f s)"
+    lhs: "fmap or (traversable f s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: anyM f s
 - hint:
-    lhs: "or <$> mapM f s"
+    lhs: "or <$> traversable f s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: anyM f s
 - warn:
@@ -180,9 +182,6 @@
     lhs: forever
     note: "'forever' is loosely typed and may hide errors"
     rhs: infinitely
-- warn:
-    lhs: "whenM (not <$> x)"
-    rhs: unlessM x
 - warn:
     lhs: "unlessM (not <$> x)"
     rhs: whenM x
@@ -951,11 +950,6 @@
     note: "'guard' is already exported from Relude"
     rhs: guard
 - warn:
-    lhs: Control.Monad.unless
-    name: "Use 'unless' from Relude"
-    note: "'unless' is already exported from Relude"
-    rhs: unless
-- warn:
     lhs: Control.Monad.when
     name: "Use 'when' from Relude"
     note: "'when' is already exported from Relude"
@@ -1141,15 +1135,14 @@
     note: "'foldl'' is already exported from Relude"
     rhs: "foldl'"
 - warn:
-    lhs: Data.Foldable.forM_
-    name: "Use 'forM_' from Relude"
-    note: "'forM_' is already exported from Relude"
-    rhs: forM_
+    lhs: forM_ b a
+    name: "Use 'traverse_'"
+    rhs: traverse_ a b
 - warn:
-    lhs: Data.Foldable.for_
-    name: "Use 'for_' from Relude"
+    lhs: for_ b a
+    name: "Use 'traverse_'"
     note: "'for_' is already exported from Relude"
-    rhs: for_
+    rhs: traverse a b
 - warn:
     lhs: Data.Foldable.sequenceA_
     name: "Use 'sequenceA_' from Relude"
@@ -1161,15 +1154,9 @@
     note: "'toList' is already exported from Relude"
     rhs: toList
 - warn:
-    lhs: Data.Foldable.traverse_
-    name: "Use 'traverse_' from Relude"
-    note: "'traverse_' is already exported from Relude"
-    rhs: traverse_
-- warn:
-    lhs: Data.Traversable.forM
-    name: "Use 'forM' from Relude"
-    note: "'forM' is already exported from Relude"
-    rhs: forM
+    lhs: forM b a
+    name: "Use 'traverse'"
+    rhs: traverse a b
 - warn:
     lhs: Data.Traversable.mapAccumL
     name: "Use 'mapAccumL' from Relude"
@@ -2747,3 +2734,13 @@
     lhs: "map"
     note: "Use `fmap`"
     rhs: fmap
+
+- hint:
+    lhs: "mapM"
+    note: "Use `traverse`"
+    rhs: traverse
+
+- hint:
+    lhs: "unless b"
+    note: "Use `when not` as it reads intuitively."
+    rhs: when (not b)

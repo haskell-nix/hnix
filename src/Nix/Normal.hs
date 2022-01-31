@@ -34,39 +34,42 @@ normalizeValue
      )
   => NValue t f m
   -> m (NValue t f m)
-normalizeValue v = run $ iterNValueM run (flip go) (fmap Free . sequenceNValue' run) v
+normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
  where
   start = 0 :: Int
+  maxDepth = 2000
   table = mempty
 
   run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
   run = (`evalStateT` table) . (`runReaderT` start)
 
   go
-    :: t
-    -> (  NValue t f m
+    :: (  NValue t f m
        -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
        )
+    -> t
     -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
-  go t k = do
-    b <- seen t
+  go k tnk  =
     bool
       (do
         i <- ask
-        when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
+        when (i > maxDepth) $ fail $ "Exceeded maximum normalization depth of " <> show maxDepth <> " levels."
         (lifted . lifted)
-          (=<< force t)
-          (local succ . k)
+          (=<< force tnk)
+          (local (+1) . k)
       )
-      (pure $ pure t)
-      b
-
-  seen t = do
-    let tid = thunkId t
-    lift $ do
-      res <- gets $ member tid
-      unless res $ modify $ insert tid
-      pure res
+      (pure $ pure tnk)
+      =<< seen tnk
+   where
+    seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
+    seen t =
+      do
+        let tnkid = thunkId t
+        lift $
+          do
+            thunkWasVisited <- gets $ member tnkid
+            when (not thunkWasVisited) $ modify $ insert tnkid
+            pure thunkWasVisited
 
 -- 2021-05-09: NOTE: This seems a bit excessive. If these functorial versions are not used for recursion schemes - just free from it.
 -- | Normalization HOF (functorial) version of @normalizeValue@. Accepts the special thunk operating/forcing/nirmalizing function & internalizes it.
@@ -80,39 +83,42 @@ normalizeValueF
   => (forall r . t -> (NValue t f m -> m r) -> m r)
   -> NValue t f m
   -> m (NValue t f m)
-normalizeValueF f = run . iterNValueM run (flip go) (fmap Free . sequenceNValue' run)
+normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
  where
   start = 0 :: Int
+  maxDepth = 2000
   table = mempty
 
   run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
   run = (`evalStateT` table) . (`runReaderT` start)
 
   go
-    :: t
-    -> (  NValue t f m
+    :: (  NValue t f m
        -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
        )
+    -> t
     -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
-  go t k = do
-    b <- seen t
+  go k tnk  =
     bool
       (do
         i <- ask
-        when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
+        when (i > maxDepth) $ fail $ "Exceeded maximum normalization depth of " <> show maxDepth <> " levels."
         (lifted . lifted)
-          (f t)
-          (local succ . k)
+          (f tnk)
+          (local (+1) . k)
       )
-      (pure $ pure t)
-      b
-
-  seen t = do
-    let tid = thunkId t
-    lift $ do
-      res <- gets $ member tid
-      unless res $ modify $ insert tid
-      pure res
+      (pure $ pure tnk)
+      =<< seen tnk
+   where
+    seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
+    seen t =
+      do
+        let tnkid = thunkId t
+        lift $
+          do
+            thunkWasVisited <- gets $ member tnkid
+            when (not thunkWasVisited) $ modify $ insert tnkid
+            pure thunkWasVisited
 
 -- | Normalize value.
 -- Detect cycles.

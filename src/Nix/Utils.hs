@@ -74,7 +74,6 @@ import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.Text                     as Text
-import qualified Data.Text.IO                 as Text
 import           Lens.Family2                  as X
                                                 ( view
                                                 , over
@@ -210,6 +209,7 @@ whenJust =
 
 isPresent :: Foldable t => t a -> Bool
 isPresent = not . null
+{-# inline isPresent #-}
 
 
 -- | 'maybe'-like eliminator, for foldable empty/inhabited structures.
@@ -219,6 +219,7 @@ handlePresence d f t =
     d
     (f t)
     (isPresent t)
+{-# inline handlePresence #-}
 
 whenText
   :: a -> (Text -> a) -> Text -> a
@@ -308,8 +309,8 @@ replaceExtension :: Path -> String -> Path
 replaceExtension = coerce FilePath.replaceExtension
 
 -- | 'Path's 'FilePath.readFile'.
-readFile :: Path -> IO Text
-readFile = Text.readFile . coerce
+readFile :: MonadIO m => Path -> m Text
+readFile = readFileText . coerce
 
 
 -- * Recursion scheme

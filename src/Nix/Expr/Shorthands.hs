@@ -215,7 +215,7 @@ mkIf e1 e2 = Fix . NIf e1 e2
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
--- | General dot-reference with optional alternative if the jey does not exist.
+-- | General dot-reference with optional alternative if the key does not exist.
 --  @since 0.15.0
 getRefOrDefault :: Maybe NExpr -> NExpr -> Text -> NExpr
 getRefOrDefault alt obj = Fix . NSelect alt obj . mkSelector
