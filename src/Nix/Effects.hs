@@ -316,7 +316,7 @@ instance MonadHttp IO where
         -- using addTextToStore' result in different hash from the nix-instantiate.
         -- have no idea why.
         -- (addTextToStore' name (decodeUtf8 body) mempty False)
-        -- the current computation of hash is teh same with nix-instantiate.
+        -- the current computation of hash is the same with nix-instantiate.
         (either (\ err -> pure $ Left $ ErrorCall $ "name: '" <> toString name <> "' is not a valid path name: " <> err)
               (pure . Right. toStorePath . Store.makeFixedOutputPath "/nix/store" False digest)
               (Store.makeStorePathName name))
