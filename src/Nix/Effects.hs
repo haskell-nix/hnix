@@ -6,6 +6,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+-- {-# language OverloadedStrings#-}
 
 {-# options_ghc -Wno-orphans #-}
 
@@ -19,6 +20,8 @@ import qualified Nix.Prelude                   as Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
+import qualified Data.ByteString               as B
+import qualified Data.ByteString.Lazy          as BL
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -287,6 +290,8 @@ class
   default getURL :: (MonadTrans t, MonadHttp m', m ~ t m') => Text -> m (Either ErrorCall StorePath)
   getURL = lift . getURL
 
+baseNameOf :: Text -> Text
+baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
 
 -- ** Instances
 
@@ -301,17 +306,22 @@ instance MonadHttp IO where
           (newManager defaultManagerSettings)
           newTlsManager
           (secure req)
-      -- print req
       response <- httpLbs (req { method = "GET" }) manager
       let status = statusCode $ responseStatus response
-      pure $ Left $ ErrorCall $
-        bool
-          ("fail, got " <> show status <> " when fetching url = ")
-          -- do
-          -- let bstr = responseBody response
-          "success in downloading but hnix-store is not yet ready; url = "
-          (status == 200)
-          <> urlstr
+      let body = responseBody response
+      let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
+      let name = baseNameOf url
+      bool 
+        (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr) 
+        -- using addTextToStore' result in different hash from the nix-instantiate.
+        -- have no idea why.
+        -- (addTextToStore' name (decodeUtf8 body) mempty False)
+        -- the current computation of hash is teh same with nix-instantiate.
+        (either (\ err -> pure $ Left $ ErrorCall $ "name: '" <> toString name <> "' is not a valid path name: " <> err)
+              (pure . Right. toStorePath . Store.makeFixedOutputPath "/nix/store" False digest)
+              (Store.makeStorePathName name))
+        (status == 200)
+
 
 deriving
   instance
@@ -391,7 +401,9 @@ class
   default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
-
+-- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
+toStorePath :: Store.StorePath -> StorePath
+toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath
 -- *** Instances
 
 instance MonadStore IO where
@@ -405,7 +417,7 @@ instance MonadStore IO where
           res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (Store.Nar.dumpPath $ coerce path) recursive repair 
           either
             Left -- err
-            (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- store path
+            (pure . toStorePath) -- store path
             <$> parseStoreResult "addToStore" res
       )
       (Store.makeStorePathName name)
@@ -415,7 +427,7 @@ instance MonadStore IO where
       res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
       either
         Left -- err
-        (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- path
+        (pure . toStorePath) -- path
         <$> parseStoreResult "addTextToStore" res
 
 
