@@ -327,7 +327,55 @@ flag profiling
   manual: True
   default: False
 
+common shared
+  default-language: Haskell2010
+  default-extensions:
+      NoImplicitPrelude
+    , OverloadedStrings
+    , DeriveGeneric
+    , DeriveDataTypeable
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , DeriveLift
+    , FlexibleContexts
+    , FlexibleInstances
+    , ScopedTypeVariables
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeSynonymInstances
+    , InstanceSigs
+    , MultiParamTypeClasses
+    , TupleSections
+    , LambdaCase
+    , BangPatterns
+    , ViewPatterns
+  build-depends:
+      base >= 4.12 && < 4.16
+    , data-fix >= 0.3.0 && < 0.4
+    , exceptions >= 0.10.0 && < 0.11
+    , filepath >= 1.4.2 && < 1.5
+    , optparse-applicative >= 0.14.3 && < 0.17
+    , relude >= 1.0.0 && < 1.1.0
+    , serialise >= 0.2.1 && < 0.3
+    , template-haskell >= 2.13 && < 2.18
+    , time >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.10
+  ghc-options:
+    -Wall
+    -fprint-potential-instances
+  if flag(optimize)
+    default-extensions:
+      ApplicativeDo
+    ghc-options:
+      -O2
+      -fexpose-all-unfoldings
+      -fspecialise-aggressively
+  -- if !flag(profiling)
+  --   build-depends:
+  --       ghc-datasize
+
 library
+  import: shared
   exposed-modules:
     Nix
     Nix.Prelude
@@ -386,26 +434,19 @@ library
     Paths_hnix
   hs-source-dirs:
     src
-  ghc-options:
-    -Wall
-    -fprint-potential-instances
   build-depends:
       aeson >= 1.4.2 && < 1.6 || >= 2.0 && < 2.1
     , array >= 0.4 && < 0.6
-    , base >= 4.12 && < 4.16
     , base16-bytestring >= 0.1.1 && < 1.1
     , binary >= 0.8.5 && < 0.9
     , bytestring >= 0.10.8 && < 0.12
     , cryptonite
     , comonad >= 5.0.4 && < 5.1
     , containers >= 0.5.11.0 && < 0.7
-    , data-fix >= 0.3.0 && < 0.4
     , deepseq >= 1.4.3 && <1.5
     , deriving-compat >= 0.3 && < 0.7
     , directory >= 1.3.1 && < 1.4
-    , exceptions >= 0.10.0 && < 0.11
     , extra >= 1.7 && < 1.8
-    , filepath >= 1.4.2 && < 1.5
     , free >= 5.1 && < 5.2
     , gitrev >= 1.1.0 && < 1.4
     , hashable >= 1.2.5 && < 1.5
@@ -424,21 +465,17 @@ library
     , monadlist >= 0.0.2 && < 0.1
     , mtl >= 2.2.2 && < 2.3
     , neat-interpolation >= 0.4 && < 0.6
-    , optparse-applicative >= 0.14.3 && < 0.17
     , parser-combinators >= 1.0.1 && < 1.4
     , pretty-show >= 1.9.5 && < 1.11
     , prettyprinter >= 1.7.0 && < 1.8
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.5 && < 0.6
     , regex-tdfa >= 1.2.3 && < 1.4
-    , relude >= 1.0.0 && < 1.1.0
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1.2 && < 1.3
-    , serialise >= 0.2.1 && < 0.3
     , some >= 1.0.1 && < 1.1
     , split >= 0.2.3 && < 0.3
     , syb >= 0.7 && < 0.8
-    , template-haskell >= 2.13 && < 2.18
     -- provides:
     --   * compat instances for old versions of TH for old GHCs
     --   * orphan instances for TH missing instances
@@ -447,47 +484,15 @@ library
     , th-lift-instances >= 0.1 && < 0.2
     , text >= 1.2.3 && < 1.3
     , these >= 1.0.1 && < 1.2
-    , time >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.10
     , transformers >= 0.5.5 && < 0.6
     , transformers-base >= 0.4.5 && < 0.5
     , unix-compat >= 0.4.3 && < 0.6
     , unordered-containers >= 0.2.9 && < 0.3
     , vector >= 0.12.0 && < 0.13
     , xml >= 1.3.14 && < 1.4
-  default-extensions:
-      NoImplicitPrelude
-    , OverloadedStrings
-    , DeriveGeneric
-    , DeriveDataTypeable
-    , DeriveFunctor
-    , DeriveFoldable
-    , DeriveTraversable
-    , DeriveLift
-    , FlexibleContexts
-    , FlexibleInstances
-    , ScopedTypeVariables
-    , StandaloneDeriving
-    , TypeApplications
-    , TypeSynonymInstances
-    , InstanceSigs
-    , MultiParamTypeClasses
-    , TupleSections
-    , LambdaCase
-    , BangPatterns
-    , ViewPatterns
-  if flag(optimize)
-    default-extensions:
-      ApplicativeDo
-    ghc-options:
-      -O2
-      -fexpose-all-unfoldings
-      -fspecialise-aggressively
-  -- if !flag(profiling)
-  --   build-depends:
-  --       ghc-datasize
-  default-language: Haskell2010
 
 executable hnix
+  import: shared
   hs-source-dirs:
     main
   main-is: Main.hs
@@ -496,64 +501,25 @@ executable hnix
     Paths_hnix
   autogen-modules:
     Paths_hnix
-  ghc-options:
-    -Wall
   build-depends:
-      aeson
-    , base
+      hnix
+    , aeson
     , comonad
     , containers
-    , data-fix
     , deepseq
-    , exceptions
-    , filepath
     , free
     , haskeline >= 0.8.0.0 && < 0.9
-    , hnix
-    , optparse-applicative
     , pretty-show
     , prettyprinter
     , ref-tf
-    , relude
     , repline >= 0.4.0.0 && < 0.5
-    , serialise
-    , template-haskell
-    , time
-  default-extensions:
-      NoImplicitPrelude
-    , OverloadedStrings
-    , DeriveGeneric
-    , DeriveDataTypeable
-    , DeriveFunctor
-    , DeriveFoldable
-    , DeriveTraversable
-    , DeriveLift
-    , FlexibleContexts
-    , FlexibleInstances
-    , ScopedTypeVariables
-    , StandaloneDeriving
-    , TypeApplications
-    , TypeSynonymInstances
-    , InstanceSigs
-    , MultiParamTypeClasses
-    , TupleSections
-    , LambdaCase
-    , BangPatterns
-    , ViewPatterns
-  if flag(optimize)
-    default-extensions:
-      ApplicativeDo
-    ghc-options:
-      -O2
-      -fexpose-all-unfoldings
-      -fspecialise-aggressively
   if impl(ghc < 8.10)
     -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
     -- To simplify CI, we just disable the component.
     buildable: False
-  default-language: Haskell2010
 
 test-suite hnix-tests
+  import: shared
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
@@ -566,113 +532,33 @@ test-suite hnix-tests
     TestCommon
   hs-source-dirs:
     tests
-  ghc-options:
-    -Wall
-    -threaded
   build-depends:
-      Diff
+      hnix
+    , Diff
     , Glob
-    , base
     , containers
-    , data-fix
     , directory
-    , exceptions
-    , filepath
     , hedgehog
-    , hnix
     , megaparsec
     , neat-interpolation
-    , optparse-applicative
     , pretty-show
     , prettyprinter
     , process
-    , relude
     , split
     , tasty
     , tasty-hedgehog
     , tasty-hunit
     , tasty-th
-    , serialise
-    , template-haskell
-    , time
     , unix-compat
-  default-extensions:
-      NoImplicitPrelude
-    , OverloadedStrings
-    , DeriveGeneric
-    , DeriveDataTypeable
-    , DeriveFunctor
-    , DeriveFoldable
-    , DeriveTraversable
-    , DeriveLift
-    , FlexibleContexts
-    , FlexibleInstances
-    , ScopedTypeVariables
-    , StandaloneDeriving
-    , TypeApplications
-    , TypeSynonymInstances
-    , InstanceSigs
-    , MultiParamTypeClasses
-    , TupleSections
-    , LambdaCase
-    , BangPatterns
-    , ViewPatterns
-  if flag(optimize)
-    default-extensions:
-      ApplicativeDo
-    ghc-options:
-      -O2
-      -fexpose-all-unfoldings
-      -fspecialise-aggressively
-  default-language: Haskell2010
 
 benchmark hnix-benchmarks
+  import: shared
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
     ParserBench
   hs-source-dirs:
     benchmarks
-  ghc-options:
-    -Wall
   build-depends:
-      base
+    hnix
     , criterion
-    , data-fix
-    , exceptions
-    , filepath
-    , hnix
-    , optparse-applicative
-    , relude
-    , serialise
-    , template-haskell
-    , time
-  default-extensions:
-      NoImplicitPrelude
-    , OverloadedStrings
-    , DeriveGeneric
-    , DeriveDataTypeable
-    , DeriveFunctor
-    , DeriveFoldable
-    , DeriveTraversable
-    , DeriveLift
-    , FlexibleContexts
-    , FlexibleInstances
-    , ScopedTypeVariables
-    , StandaloneDeriving
-    , TypeApplications
-    , TypeSynonymInstances
-    , InstanceSigs
-    , MultiParamTypeClasses
-    , TupleSections
-    , LambdaCase
-    , BangPatterns
-    , ViewPatterns
-  if flag(optimize)
-    default-extensions:
-      ApplicativeDo
-    ghc-options:
-      -O2
-      -fexpose-all-unfoldings
-      -fspecialise-aggressively
-  default-language: Haskell2010
