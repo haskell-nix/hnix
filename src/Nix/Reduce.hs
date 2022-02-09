@@ -22,7 +22,7 @@ module Nix.Reduce
 
 import           Nix.Prelude
 import           Control.Monad.Catch            ( MonadCatch(catch) )
-#if !MIN_VERSION_base(4,13,0)
+#if !MIN_VERSION_base(4,12,0)
 import           Prelude                 hiding ( fail )
 import           Control.Monad.Fail
 #endif
