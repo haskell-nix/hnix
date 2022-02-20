@@ -159,7 +159,7 @@ askSpan :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
 askSpan = askLocal
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
-wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
+wrapExprLoc span x = Fix $ NSymAnn span Unknown "<?>" <$ x
 {-# inline wrapExprLoc #-}
 
 --  2021-01-07: NOTE: This instance belongs to be beside MonadEval type class.
@@ -193,7 +193,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       scope                  <- askScopes
       span@(SrcSpan delta _) <- askSpan
       addProvenance @_ @_ @(NValue t f m)
-        (Provenance scope . NSymAnnF span $ coerce @Text "__curPos") <$>
+        (Provenance scope . NSymAnnF span Unknown $ coerce @Text "__curPos") <$>
           toValue delta
 
   evaledSym name val =
@@ -202,7 +202,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       span  <- askSpan
       pure $
         addProvenance @_ @_ @(NValue t f m)
-          (Provenance scope $ NSymAnnF span name)
+          (Provenance scope $ NSymAnnF span Unknown name)
           val
 
   evalConstant c =
@@ -543,7 +543,7 @@ addTracing k v = do
       let
         rendered =
           bool
-            (prettyNix $ Fix $ Fix (NSym "?") <$ x)
+            (prettyNix $ Fix $ Fix (NSym Unknown "?") <$ x)
             (pretty $ PS.ppShow $ void x)
             (getVerbosity opts >= Chatty)
         msg x = pretty ("eval: " <> replicate depth ' ') <> x

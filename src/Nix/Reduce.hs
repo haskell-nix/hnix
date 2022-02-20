@@ -152,8 +152,8 @@ reduce
 
 -- | Reduce the variable to its value if defined.
 --   Leave it as it is otherwise.
-reduce (NSymAnnF ann var) =
-  fromMaybe (NSymAnn ann var) <$> lookupVar var
+reduce (NSymAnnF ann offset var) =
+  fromMaybe (NSymAnn ann offset var) <$> lookupVar offset var
 
 -- | Reduce binary and integer negation.
 reduce (NUnaryAnnF uann op arg) =
@@ -173,7 +173,7 @@ reduce (NUnaryAnnF uann op arg) =
 --       scope and recursively reducing its body.
 reduce (NAppAnnF bann fun arg) =
   (\case
-    f@(NSymAnn _ "import") ->
+    f@(NSymAnn _ _ "import") ->
       (\case
           -- NEnvPathAnn     pann origPath -> staticImport pann origPath
         NLiteralPathAnn pann origPath -> staticImport pann origPath
@@ -325,9 +325,9 @@ reduce (NAbsAnnF ann params body) = do
   let
     scope = coerce $
       case params' of
-        Param    name     -> one (name, NSymAnn ann name)
+        Param    name     -> one (name, NSymAnn ann Unknown name)
         ParamSet _ _ pset ->
-          HM.fromList $ (\(k, _) -> (k, NSymAnn ann k)) <$> pset
+          HM.fromList $ (\(k, _) -> (k, NSymAnn ann Unknown k)) <$> pset
   NAbsAnn ann params' <$> pushScope scope body
 
 reduce v = reduceLayer v

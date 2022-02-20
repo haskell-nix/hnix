@@ -97,7 +97,7 @@ renderFrame (NixFrame level f)
   | otherwise = fail $ "Unrecognized frame: " <> show f
 
 wrapExpr :: NExprF r -> NExpr
-wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
+wrapExpr x = Fix (Fix (NSym Unknown "<?>") <$ x)
 
 renderEvalFrame
   :: forall e m v ann
@@ -164,7 +164,7 @@ renderExpr _level longLabel shortLabel e@(Ann _ x) =
       expr :: NExpr
       expr = stripAnnotation e
 
-      concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
+      concise = prettyNix $ Fix $ Fix (NSym Unknown "<?>") <$ x
 
       chatty =
         bool

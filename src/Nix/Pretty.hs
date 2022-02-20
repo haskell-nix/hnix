@@ -313,7 +313,7 @@ exprFNixDoc = \case
               ("./" <> path)
               path
               (any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"])
-  NSym name -> simpleExpr $ prettyVarName name
+  NSym _ name -> simpleExpr $ prettyVarName name
   NLet binds body ->
     leastPrecedence $
       group $
@@ -355,7 +355,7 @@ exprFNixDoc = \case
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
 valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
  where
-  thk = Fix . NSym $ "<expr>"
+  thk = Fix . NSym Unknown $ "<expr>"
 
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
@@ -365,9 +365,9 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
     [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`M.lookup` p) k)
     | (k, v) <- toList s
     ]
-  phi (NVClosure'  _    _) = NSym "<closure>"
+  phi (NVClosure'  _    _) = NSym Unknown "<closure>"
   phi (NVPath'     p     ) = NLiteralPath p
-  phi (NVBuiltin'  name _) = NSym $ coerce ((mappend @Text) "builtins.") name
+  phi (NVBuiltin'  name _) = NSym Unknown $ coerce ((mappend @Text) "builtins.") name
 
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann

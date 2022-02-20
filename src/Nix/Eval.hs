@@ -103,11 +103,11 @@ instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 -- eval :: forall v m . MonadNixEval v m => NExprF v -> m v
 eval :: forall v m . MonadNixEval v m => NExprF (m v) -> m v
 
-eval (NSym "__curPos") = evalCurPos
+eval (NSym _ "__curPos") = evalCurPos
 
-eval (NSym var       ) =
+eval (NSym offset var  ) =
   do
-    mVal <- lookupVar var
+    mVal <- lookupVar offset var
     maybe
       (freeVariable var)
       (evaledSym var <=< demand)
@@ -396,12 +396,12 @@ evalBinds isRecursive binds =
           (attrMissing (one var) Nothing)
           demand
           =<< maybe
-              (withScopes scopes $ lookupVar var)
+              (withScopes scopes $ lookupVar Unknown var)
               (\ s ->
                 do
                   (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
 
-                  clearScopes $ pushScope @v scope $ lookupVar var
+                  clearScopes $ pushScope @v scope $ lookupVar Unknown var
               )
               ms
       )

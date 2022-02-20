@@ -58,7 +58,7 @@ class Scoped a m | m -> a where
   askScopes :: m (Scopes m a)
   clearScopes   :: m r -> m r
   pushScopes    :: Scopes m a -> m r -> m r
-  lookupVar     :: VarName -> m (Maybe a)
+  lookupVar     :: VarOffset -> VarName -> m (Maybe a)
 
 askScopesReader
   :: forall m a e
@@ -107,31 +107,35 @@ lookupVarReader
   . ( MonadReader e m
     , Has e (Scopes m a)
     )
-  => VarName
+  => VarOffset
+  -> VarName
   -> m (Maybe a)
-lookupVarReader k =
-  do
+lookupVarReader offset k = case offset of
+  Static (StaticOffset lvl _) -> do
+    mres <- asks $ M.lookup k . unscope <=< (!!? lvl) . lexicalScopes @m . view hasLens
+    maybe (error "binding analysis error") (pure . Just) mres
+  Dynamic -> dynamicLookup
+  Unknown -> do
     mres <- asks $ scopeLookup k . lexicalScopes @m . view hasLens
+    maybe dynamicLookup (pure . Just) mres
+ where
+  unscope (Scope s) = s
+  dynamicLookup =
+    do
+      ws <- asks $ dynamicScopes . view hasLens
 
-    maybe
-      (do
-        ws <- asks $ dynamicScopes . view hasLens
+      foldr
+        (\ weakscope rest ->
+          do
+            mres' <- M.lookup k . coerce @(Scope a) <$> weakscope
 
-        foldr
-          (\ weakscope rest ->
-            do
-              mres' <- M.lookup k . coerce @(Scope a) <$> weakscope
-
-              maybe
-                rest
-                (pure . pure)
-                mres'
-          )
-          (pure Nothing)
-          ws
-      )
-      (pure . pure)
-      mres
+            maybe
+              rest
+              (pure . pure)
+              mres'
+        )
+        (pure Nothing)
+        ws
 
 withScopes
   :: Scoped a m

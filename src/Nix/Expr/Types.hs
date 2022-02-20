@@ -556,6 +556,34 @@ data NBinaryOp
 
 $(makeTraversals ''NBinaryOp)
 
+-- | An offset counts the number of scopes between a variable and the
+-- particular scope where it is bound. The displacement can be used to access
+-- the right var in that scope. Think de Bruyn indices for nix expressions
+-- where each scope can provide many variables.
+data StaticOffset = StaticOffset { level :: !Int, displacement :: !Int }
+  deriving
+    ( Eq, Ord, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
+
+data VarOffset
+  = Unknown
+  -- ^ No binding analysis was ever performed.
+  -- Easier to allow that than defining variants of this AST.
+  | Dynamic
+  -- ^ Dynamic binding, have to look up into all the enclosing `NWith` envs.
+  | Static {-# UNPACK #-} !StaticOffset
+  -- ^ Static scope binding, with `level` and `displacement` inside level.
+  -- Because we know where to look up, it can be faster.
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
+
+$(makeTraversals ''VarOffset)
+$(makeTraversals ''StaticOffset)
 
 -- * data NExprF - Nix expressions, base functor
 
@@ -568,7 +596,7 @@ data NExprF r
   -- ^ Constants: ints, floats, bools, URIs, and null.
   | NStr !(NString r)
   -- ^ A string, with interpolated expressions.
-  | NSym !VarName
+  | NSym !VarOffset !VarName
   -- ^ A variable. For example, in the expression @f a@, @f@ is represented
   -- as @NSym "f"@ and @a@ as @NSym "a"@.
   --
@@ -675,7 +703,7 @@ type NExpr = Fix NExprF
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
 instance IsString NExpr where
-  fromString = Fix . NSym . fromString
+  fromString = Fix . NSym Unknown . fromString
 
 instance Serialise NExpr
 
@@ -805,7 +833,7 @@ getFreeVars e =
   case unFix e of
     (NConstant    _               ) -> mempty
     (NStr         string          ) -> mapFreeVars string
-    (NSym         var             ) -> one var
+    (NSym         _    var        ) -> one var
     (NList        list            ) -> mapFreeVars list
     (NSet   NonRecursive  bindings) -> bindFreeVars bindings
     (NSet   Recursive     bindings) -> diffBetween bindFreeVars bindDefs bindings
