@@ -45,7 +45,7 @@ jobs:
         run: cabal v2-freeze $cabalConfig
 
       - name: "Configuring GitHub cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ${{ steps.HaskEnvSetup.outputs.cabal-store }}
