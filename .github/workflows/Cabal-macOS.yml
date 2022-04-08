@@ -38,7 +38,7 @@ jobs:
 
       # Still required for Remote and some builtins
       - name: "Install Nix"
-        uses: cachix/install-nix-action@v16
+        uses: cachix/install-nix-action@v17
 
       # NOTE: Freeze is for the caching
       - name: "Configuration freeze"
