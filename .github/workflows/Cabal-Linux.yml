@@ -29,10 +29,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: recursive
-          
+
       - name: "Haskell env setup"
         id: HaskEnvSetup
-        uses: haskell/actions/setup@v1
+        uses: haskell/actions/setup@v2
         with:
           ghc-version: ${{ matrix.ghc }}
 
@@ -41,7 +41,7 @@ jobs:
 
       #  2020-08-01: NOTE: Nix instantiate still needed for HNix tests
       - name: "Install Nix"
-        uses: cachix/install-nix-action@v16
+        uses: cachix/install-nix-action@v17
 
       - name: "Repository update"
         run: cabal v2-update
@@ -57,7 +57,8 @@ jobs:
             ${{ steps.HaskEnvSetup.outputs.cabal-store }}
             dist-newstyle
           key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-
+          # 2022-04-22: `v2-` added to invalidate corrupted caches, can be removed after one week
+          restore-keys: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-v2-
 
       - name: "Build"
         run: cabal v2-build $cabalConfig
