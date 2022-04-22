@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: recursive
-          
+
       - name: "Haskell env setup"
         id: HaskEnvSetup
         uses: haskell/actions/setup@v2
