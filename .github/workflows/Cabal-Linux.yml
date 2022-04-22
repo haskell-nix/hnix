@@ -57,7 +57,8 @@ jobs:
             ${{ steps.HaskEnvSetup.outputs.cabal-store }}
             dist-newstyle
           key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-
+          # 2022-04-22: `v2-` added to invalidate corrupted caches, can be removed after one week
+          restore-keys: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-v2-
 
       - name: "Build"
         run: cabal v2-build $cabalConfig
