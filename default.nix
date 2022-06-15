@@ -93,7 +93,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "b165ce0c4efbb74246714b5c66b6bcdce8cde175"
+, rev ? "ce6aa13369b667ac2542593170993504932eb836"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" > 0
@@ -104,7 +104,7 @@
           else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
         // {
           # Try to build dependencies even if they are marked broken.
-          config.allowBroken = true;
+          # config.allowBroken = true;
         }
       else abort "Requires Nix >= 2.0"
 
@@ -156,8 +156,7 @@ let
       else overlay;
   };
 
-  haskellPackages = pkgs.haskell.packages.${compilerPackage}.override
-    overrideHaskellPackages;
+  haskellPackages = pkgs.haskell.packages.${compilerPackage};
 
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
   listSwitchFunc =
@@ -191,8 +190,8 @@ let
 
     overrides = self: super: {
 
-      semialign = super.semialign_1_2;
-      relude = super.relude_1_0_0_1;
+      # semialign = super.semialign_1_2;
+      # relude = super.relude_1_0_0_1;
 
     };
 
