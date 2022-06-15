@@ -131,33 +131,17 @@ let
       then getDefaultGHC
       else compiler;
 
-  # Overlay source
-  # hnix-store-src = pkgs.fetchFromGitHub {
-  #   owner = "haskell-nix";
-  #   repo = "hnix-store";
-  #   rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
-  #   sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
-  # };
-
-  overlay = lib.foldr lib.composeExtensions (_: _: {}) [
-    # (import "${hnix-store-src}/overlay.nix" pkgs hlib)
-    (self: super:
-      lib.optionalAttrs withHoogle {
-      ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
-      ghcWithPackages = self.ghc.withPackages;
-    })
-  ];
-
-  overrideHaskellPackages = orig: {
-    buildHaskellPackages =
-      orig.buildHaskellPackages.override overrideHaskellPackages;
-    overrides = if orig ? overrides
-      then lib.composeExtensions orig.overrides overlay
-      else overlay;
-  };
-
-   haskellPackages = pkgs.haskell.packages.${compilerPackage}.override
-    overrideHaskellPackages;
+  haskellPackages = (
+      pkgs.haskell.packages.${compilerPackage}.override {  
+              overrides = (self: super:
+                {
+                  ghcWithPackages = super.ghcWithPackages.override {
+                      withHoogle = withHoogle;
+                  };
+                }
+              );
+            }
+  );
 
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
   listSwitchFunc =
