@@ -93,7 +93,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "b165ce0c4efbb74246714b5c66b6bcdce8cde175"
+, rev ? "ce6aa13369b667ac2542593170993504932eb836"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" > 0
@@ -104,7 +104,7 @@
           else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
         // {
           # Try to build dependencies even if they are marked broken.
-          config.allowBroken = true;
+          # config.allowBroken = true;
         }
       else abort "Requires Nix >= 2.0"
 
@@ -131,35 +131,12 @@ let
       then getDefaultGHC
       else compiler;
 
-  # Overlay source
-  # hnix-store-src = pkgs.fetchFromGitHub {
-  #   owner = "haskell-nix";
-  #   repo = "hnix-store";
-  #   rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
-  #   sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
-  # };
+  haskellPackages = pkgs.haskell.packages.${compilerPackage};
 
-  overlay = lib.foldr lib.composeExtensions (_: _: {}) [
-    # (import "${hnix-store-src}/overlay.nix" pkgs hlib)
-    (self: super:
-      lib.optionalAttrs withHoogle {
-      ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
-      ghcWithPackages = self.ghc.withPackages;
-    })
-  ];
-
-  overrideHaskellPackages = orig: {
-    buildHaskellPackages =
-      orig.buildHaskellPackages.override overrideHaskellPackages;
-    overrides = if orig ? overrides
-      then lib.composeExtensions orig.overrides overlay
-      else overlay;
-  };
-
-  haskellPackages = pkgs.haskell.packages.${compilerPackage}.override
-    overrideHaskellPackages;
-
-  # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
+  # Application of functions from this list to the package in code here happens 
+  # in the reverse order (from the tail). Some options depend on & override others, 
+  # so if enabling options caused Nix error or not expected result - change the order, 
+  # and please do not change this order without proper testing.
   listSwitchFunc =
     [
       { switch = sdistTarball;                           function = hlib.sdistTarball; }
@@ -190,10 +167,6 @@ let
     root = packageRoot;
 
     overrides = self: super: {
-
-      semialign = super.semialign_1_2;
-      relude = super.relude_1_0_0_1;
-
     };
 
     modifier = drv: hlib.overrideCabal drv (attrs: {
@@ -224,17 +197,17 @@ let
 
       passthru = {
         nixpkgs = pkgs;
-        inherit haskellPackages;
       };
     });
 
-    inherit returnShellEnv;
+    inherit returnShellEnv withHoogle;
   };
 
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
   # Other part - are function wrappers over pkg. Fold allows to compose those.
   # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
   composedPackage = lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
-
-in composedPackage
+in 
+  # when returnShellEnv is enable, package is an shell env, we do not apply switch function. 
+  if returnShellEnv then package else composedPackage
 
