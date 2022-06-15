@@ -156,7 +156,8 @@ let
       else overlay;
   };
 
-  haskellPackages = pkgs.haskell.packages.${compilerPackage};
+   haskellPackages = pkgs.haskell.packages.${compilerPackage}.override
+    overrideHaskellPackages;
 
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
   listSwitchFunc =
@@ -189,10 +190,6 @@ let
     root = packageRoot;
 
     overrides = self: super: {
-
-      # semialign = super.semialign_1_2;
-      # relude = super.relude_1_0_0_1;
-
     };
 
     modifier = drv: hlib.overrideCabal drv (attrs: {
