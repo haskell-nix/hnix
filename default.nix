@@ -131,19 +131,12 @@ let
       then getDefaultGHC
       else compiler;
 
-  haskellPackages = (
-      pkgs.haskell.packages.${compilerPackage}.override {  
-              overrides = (self: super:
-                {
-                  ghcWithPackages = super.ghcWithPackages.override {
-                      withHoogle = withHoogle;
-                  };
-                }
-              );
-            }
-  );
+  haskellPackages = pkgs.haskell.packages.${compilerPackage};
 
-  # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
+  # Application of functions from this list to the package in code here happens 
+  # in the reverse order (from the tail). Some options depend on & override others, 
+  # so if enabling options caused Nix error or not expected result - change the order, 
+  # and please do not change this order without proper testing.
   listSwitchFunc =
     [
       { switch = sdistTarball;                           function = hlib.sdistTarball; }
@@ -204,17 +197,17 @@ let
 
       passthru = {
         nixpkgs = pkgs;
-        inherit haskellPackages;
       };
     });
 
-    inherit returnShellEnv;
+    inherit returnShellEnv withHoogle;
   };
 
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
   # Other part - are function wrappers over pkg. Fold allows to compose those.
   # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
   composedPackage = lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
-
-in composedPackage
+in 
+  # when returnShellEnv is enable, package is an shell env, we do not apply switch function. 
+  if returnShellEnv then package else composedPackage
 
