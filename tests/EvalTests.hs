@@ -534,6 +534,11 @@ case_attrset_function_nested_bottom_equal =
     "true"
     "let nested = { y = _: (let x = x; in x); }; in nested == nested"
 
+case_if_follow_by_with = 
+  constantEqualText
+    "1"
+    "let x = { a = true; b = 2; }; in if with x; a then 1 else 2"
+
 -- Regression test for #527
 
 case_add_string_thunk_left =
