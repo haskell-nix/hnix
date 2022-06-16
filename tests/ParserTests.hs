@@ -383,6 +383,14 @@ case_if_syntax_mistakes =
     "if true then false else false else"
     "1 + 2 then"
 
+-- ** If follow by with
+
+case_if_follow_by_with = checks 
+  (
+    mkLets (one $ "x" $= mkNonRecSet ["a" $= mkBool True, "b" $= mkInt 2 ]) 
+      $ mkIf (mkWith (mkSym "x") (mkSym "a")) (mkInt 1) (mkInt 2)
+    , "let x = { a = true; b = 2; }; in if with x; a then 1 else 2"
+  )
 
 -- ** Literal expressions in vals
 

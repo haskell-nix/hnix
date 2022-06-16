@@ -789,7 +789,7 @@ nixIf :: Parser NExprLoc
 nixIf =
   annotateNamedLocation "if" $
     liftA3 NIf
-      (reserved "if"   *> nixExprAlgebra)
+      (reserved "if"   *> nixExpr)
       (exprAfterReservedWord "then")
       (exprAfterReservedWord "else")
 
