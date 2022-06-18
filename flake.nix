@@ -2,9 +2,9 @@
   description = "A Haskell re-implementation of the Nix expression language";
 
   inputs = {
-    nixpkgs.url = "nixpkgs";
+    nixpkgs.url = "nixpkgs/ce6aa13369b667ac2542593170993504932eb836";
     nix = {
-      url = "nix/61e816217bfdfffd39c130c7cd24f07e640098fc";
+      url = "nix/624e38aa43f304fbb78b4779172809add042b513";
       flake = false;
     };
   };
@@ -16,7 +16,7 @@
   } @ inp: let
 
     l = builtins //nixpkgs.lib;
-    supportedSystems = ["x86_64-linux"];
+    supportedSystems = ["x86_64-linux" "aarch64-darwin"];
 
     forAllSystems = f: l.genAttrs supportedSystems
       (system: f system (nixpkgs.legacyPackages.${system}));
