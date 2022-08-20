@@ -402,7 +402,7 @@ instance MonadStore IO where
       (\ pathName ->
         do
           -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (Store.Nar.dumpPath $ coerce path) False repair 
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (Store.Nar.dumpPath $ coerce path) recursive repair 
           either
             Left -- err
             (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- store path
