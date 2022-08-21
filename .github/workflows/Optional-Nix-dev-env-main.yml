@@ -22,7 +22,7 @@ env:
   ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
   ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
   ###
-  rev: "ce6aa13369b667ac2542593170993504932eb836"
+  rev: "272fad732d39b24c4549c475176e0d8cbc8c897a"
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   allowInconsistentDependencies: "false"
@@ -83,7 +83,7 @@ jobs:
 
 
   build20:
-    name: "Default Nixpkgs GHC (8.10), strict quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
+    name: "Nixpkgs GHC (8.10), strict quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -102,7 +102,7 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: "Determined Nix-build"
       env:
-        compiler: "default"
+        compiler: "ghc8107"
         buildFromSdist: "true"
         buildStrictly: "true"
         linkWithGold: "true"
