@@ -19,8 +19,6 @@ import qualified Nix.Prelude                   as Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
-import qualified Data.ByteString               as B
-import qualified Data.ByteString.Lazy          as BL
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -38,9 +36,7 @@ import           System.Process
 
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
-import qualified System.Nix.ReadonlyStore      as Store
 import qualified System.Nix.Nar                as Store.Nar
-import qualified System.Nix.Nar as Nix.Nar
 
 -- | A path into the nix store
 newtype StorePath = StorePath Path
@@ -385,9 +381,9 @@ type StorePathSet = HS.HashSet StorePath
 
 data NarContent = NarFile Path | NarText ByteString
 -- convert NarContent to NarSource needed in the store API
-toNarSource :: MonadIO m => NarContent -> Nix.Nar.NarSource m
-toNarSource (NarFile path) = Nix.Nar.dumpPath $ coerce path
-toNarSource (NarText text) = Nix.Nar.dumpString text
+toNarSource :: MonadIO m => NarContent -> Store.Nar.NarSource m
+toNarSource (NarFile path) = Store.Nar.dumpPath $ coerce path
+toNarSource (NarText text) = Store.Nar.dumpString text
 
 -- ** @class MonadStore m@
 
