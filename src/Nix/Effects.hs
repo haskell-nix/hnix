@@ -6,7 +6,6 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
--- {-# language OverloadedStrings#-}
 
 {-# options_ghc -Wno-orphans #-}
 
@@ -39,7 +38,9 @@ import           System.Process
 
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
+import qualified System.Nix.ReadonlyStore      as Store
 import qualified System.Nix.Nar                as Store.Nar
+import qualified System.Nix.Nar as Nix.Nar
 
 -- | A path into the nix store
 newtype StorePath = StorePath Path
@@ -293,6 +294,10 @@ class
 baseNameOf :: Text -> Text
 baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
 
+-- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
+toStorePath :: Store.StorePath -> StorePath
+toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath
+
 -- ** Instances
 
 instance MonadHttp IO where
@@ -309,17 +314,13 @@ instance MonadHttp IO where
       response <- httpLbs (req { method = "GET" }) manager
       let status = statusCode $ responseStatus response
       let body = responseBody response
-      let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
+      -- let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
       let name = baseNameOf url
       bool 
         (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr) 
-        -- using addTextToStore' result in different hash from the nix-instantiate.
-        -- have no idea why.
-        -- (addTextToStore' name (decodeUtf8 body) mempty False)
-        -- the current computation of hash is the same with nix-instantiate.
-        (either (\ err -> pure $ Left $ ErrorCall $ "name: '" <> toString name <> "' is not a valid path name: " <> err)
-              (pure . Right. toStorePath . Store.makeFixedOutputPath "/nix/store" False digest)
-              (Store.makeStorePathName name))
+        -- using addTextToStore' result in different hash from the addToStore.
+        -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
+        (addToStore name (NarText $ toStrict body) False False)
         (status == 200)
 
 
@@ -382,17 +383,23 @@ type StorePathName = Text
 type PathFilter m = Path -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
+data NarContent = NarFile Path | NarText ByteString
+-- convert NarContent to NarSource needed in the store API
+toNarSource :: MonadIO m => NarContent -> Nix.Nar.NarSource m
+toNarSource (NarFile path) = Nix.Nar.dumpPath $ coerce path
+toNarSource (NarText text) = Nix.Nar.dumpString text
+
 -- ** @class MonadStore m@
 
 class
   Monad m
   => MonadStore m where
 
-  -- | Copy the contents of a local path to the store.  The resulting store
+  -- | Copy the contents of a local path(Or pure text) to the store.  The resulting store
   -- path is returned.  Note: This does not support yet support the expected
   -- `filter` function that allows excluding some files.
-  addToStore :: StorePathName -> Path -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Path -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  addToStore :: StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
   addToStore a b c d = lift $ addToStore a b c d
 
   -- | Like addToStore, but the contents written to the output path is a
@@ -401,20 +408,17 @@ class
   default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
--- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
-toStorePath :: Store.StorePath -> StorePath
-toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath
+
 -- *** Instances
 
 instance MonadStore IO where
 
-  addToStore name path recursive repair =
+  addToStore name content recursive repair =
     either
       (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
       (\ pathName ->
         do
-          -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (Store.Nar.dumpPath $ coerce path) recursive repair 
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (toNarSource content) recursive repair 
           either
             Left -- err
             (pure . toStorePath) -- store path
@@ -455,7 +459,7 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (fromString $ coerce takeFileName p) p True False
+    =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
 toFile_ p contents = addTextToStore (fromString $ coerce p) contents mempty False
