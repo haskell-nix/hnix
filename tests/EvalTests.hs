@@ -662,7 +662,7 @@ sameFreeVars a xs =
     assertEqual mempty (S.fromList xs) free'
 
 maskedFiles :: [Path]
-maskedFiles = one "builtins.fetchurl-01.nix"
+maskedFiles = []
 
 testDir :: Path
 testDir = "tests/eval-compare"
