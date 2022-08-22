@@ -36,6 +36,7 @@ import           System.Process
 
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
+import qualified System.Nix.Nar                as Store.Nar
 
 -- | A path into the nix store
 newtype StorePath = StorePath Path
@@ -401,7 +402,7 @@ instance MonadStore IO where
       (\ pathName ->
         do
           -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (coerce path) recursive (const False) repair
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (Store.Nar.dumpPath $ coerce path) recursive repair 
           either
             Left -- err
             (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- store path
