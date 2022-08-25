@@ -3,7 +3,14 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.16.0...0.17.0#files_bucket) 0.17.0
 
+* Additional
+  * `Nix.Effect`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1051) Introduction of new type NarContent, a tagged union type of `byteString` and `FilePath`.
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1051) getURL of instance MonadHttp IO is finally working through hnix-store. Which also means
+      builtins.fetchurl is working through it.
 * Breaking:
+  * `Nix.Effect`
+    * [(link)](https://github.com/haskell-nix/hnix/pull/1051) MonadStore's addToStore signature changed to `StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)` with new introduction of NarContent. Which enable us to add byteString as file to Store. It is corresponding to the hnix-store api change.
   * `Nix.Expr.Types`
     * [(link)](https://github.com/haskell-nix/hnix/pull/1042/files) The central HNix type `NExprF` changed, the `NApp` was moved out of `NBinary` & now a `NExprF` constructor of its own, the type signatures were changed accordingly.
     * [(link)](https://github.com/haskell-nix/hnix/pull/1038/files) project was using `megaparsec` `{,Source}Pos` and to use it shipped a lot of orphan instances. To improve the situation & performance (reports [#1026](https://github.com/haskell-nix/hnix/issues/1026), [#746](https://github.com/haskell-nix/hnix/issues/746)) project uses `N{,Source}Pos` types, related type signatures were changed accordingly.

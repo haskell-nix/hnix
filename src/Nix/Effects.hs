@@ -379,13 +379,14 @@ type StorePathName = Text
 type PathFilter m = Path -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
+
+-- ** @class MonadStore m@
+
 data NarContent = NarFile Path | NarText ByteString
--- convert NarContent to NarSource needed in the store API
+-- | convert NarContent to NarSource needed in the store API
 toNarSource :: MonadIO m => NarContent -> Store.Nar.NarSource m
 toNarSource (NarFile path) = Store.Nar.dumpPath $ coerce path
 toNarSource (NarText text) = Store.Nar.dumpString text
-
--- ** @class MonadStore m@
 
 class
   Monad m
