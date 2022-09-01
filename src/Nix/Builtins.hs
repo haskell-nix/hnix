@@ -912,7 +912,7 @@ pathNix arg =
     name      <- toText <$> attrGetOr (takeFileName path) (fmap (coerce . toString) . fromStringNoContext) "name" attrs
     recursive <- attrGetOr True pure "recursive" attrs
 
-    Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name path recursive False
+    Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name (NarFile path) recursive False
     -- TODO: Ensure that s matches sha256 when not empty
     pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
  where

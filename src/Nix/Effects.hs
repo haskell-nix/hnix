@@ -287,6 +287,12 @@ class
   default getURL :: (MonadTrans t, MonadHttp m', m ~ t m') => Text -> m (Either ErrorCall StorePath)
   getURL = lift . getURL
 
+baseNameOf :: Text -> Text
+baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
+
+-- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
+toStorePath :: Store.StorePath -> StorePath
+toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath
 
 -- ** Instances
 
@@ -301,17 +307,18 @@ instance MonadHttp IO where
           (newManager defaultManagerSettings)
           newTlsManager
           (secure req)
-      -- print req
       response <- httpLbs (req { method = "GET" }) manager
       let status = statusCode $ responseStatus response
-      pure $ Left $ ErrorCall $
-        bool
-          ("fail, got " <> show status <> " when fetching url = ")
-          -- do
-          -- let bstr = responseBody response
-          "success in downloading but hnix-store is not yet ready; url = "
-          (status == 200)
-          <> urlstr
+      let body = responseBody response
+      -- let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
+      let name = baseNameOf url
+      bool 
+        (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr) 
+        -- using addTextToStore' result in different hash from the addToStore.
+        -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
+        (addToStore name (NarText $ toStrict body) False False)
+        (status == 200)
+
 
 deriving
   instance
@@ -372,17 +379,24 @@ type StorePathName = Text
 type PathFilter m = Path -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
+
 -- ** @class MonadStore m@
+
+data NarContent = NarFile Path | NarText ByteString
+-- | convert NarContent to NarSource needed in the store API
+toNarSource :: MonadIO m => NarContent -> Store.Nar.NarSource m
+toNarSource (NarFile path) = Store.Nar.dumpPath $ coerce path
+toNarSource (NarText text) = Store.Nar.dumpString text
 
 class
   Monad m
   => MonadStore m where
 
-  -- | Copy the contents of a local path to the store.  The resulting store
+  -- | Copy the contents of a local path(Or pure text) to the store.  The resulting store
   -- path is returned.  Note: This does not support yet support the expected
   -- `filter` function that allows excluding some files.
-  addToStore :: StorePathName -> Path -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Path -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  addToStore :: StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
   addToStore a b c d = lift $ addToStore a b c d
 
   -- | Like addToStore, but the contents written to the output path is a
@@ -396,16 +410,15 @@ class
 
 instance MonadStore IO where
 
-  addToStore name path recursive repair =
+  addToStore name content recursive repair =
     either
       (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
       (\ pathName ->
         do
-          -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (Store.Nar.dumpPath $ coerce path) recursive repair 
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (toNarSource content) recursive repair 
           either
             Left -- err
-            (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- store path
+            (pure . toStorePath) -- store path
             <$> parseStoreResult "addToStore" res
       )
       (Store.makeStorePathName name)
@@ -415,7 +428,7 @@ instance MonadStore IO where
       res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
       either
         Left -- err
-        (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- path
+        (pure . toStorePath) -- path
         <$> parseStoreResult "addTextToStore" res
 
 
@@ -443,7 +456,7 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (fromString $ coerce takeFileName p) p True False
+    =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
 toFile_ p contents = addTextToStore (fromString $ coerce p) contents mempty False
