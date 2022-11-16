@@ -359,7 +359,7 @@ common shared
     , relude >= 1.0.0 && < 1.2
     , serialise >= 0.2.1 && < 0.3
     , template-haskell >= 2.13 && < 2.20
-    , time >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.10
+    , time >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.13
   ghc-options:
     -Wall
     -Wno-incomplete-uni-patterns
