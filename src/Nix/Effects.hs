@@ -6,6 +6,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+{-# language TypeOperators #-}
 
 {-# options_ghc -Wno-orphans #-}
 
@@ -312,8 +313,8 @@ instance MonadHttp IO where
       let body = responseBody response
       -- let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
       let name = baseNameOf url
-      bool 
-        (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr) 
+      bool
+        (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr)
         -- using addTextToStore' result in different hash from the addToStore.
         -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
         (addToStore name (NarText $ toStrict body) False False)
@@ -415,7 +416,7 @@ instance MonadStore IO where
       (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
       (\ pathName ->
         do
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (toNarSource content) recursive repair 
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (toNarSource content) recursive repair
           either
             Left -- err
             (pure . toStorePath) -- store path

@@ -1,3 +1,7 @@
 packages:
   ./hnix.cabal
 
+allow-newer:
+  lens-family-th:template-haskell,
+  relude:base,
+  relude:ghc-prim,

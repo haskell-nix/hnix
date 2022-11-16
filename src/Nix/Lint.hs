@@ -503,7 +503,7 @@ instance MonadThrow (Lint s) where
   throwM e = Lint $ ReaderT $ const (throw e)
 
 instance MonadCatch (Lint s) where
-  catch _m _h = Lint $ ReaderT $ const (fail "Cannot catch in 'Lint s'")
+  catch _m _h = Lint $ ReaderT $ const (error "Cannot catch in 'Lint s'")
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts action =
