@@ -267,10 +267,10 @@ hoistNValueF lft =
 -- * @__NValue'__@: forming the (F(A))
 
 -- | NVConstraint constraint the f layer in @NValue'@.
--- It makes bijection between sub category of Hask and Nix Value possible. 
+-- It makes bijection between sub category of Hask and Nix Value possible.
 -- 'Comonad' enable Nix Value to Hask part.
 -- 'Applicative' enable Hask to Nix Value part.
-type NVConstraint f = (Comonad f, Applicative f) 
+type NVConstraint f = (Comonad f, Applicative f)
 
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
@@ -400,7 +400,7 @@ unliftNValue' = hoistNValue' lift
 --
 -- Since it is a proper way of scientific implementation, we would eventually form a
 -- lawful functor.
--- 
+--
 -- Module pattens use @language PatternSynonyms@: bidirectional synonyms (@<-@),
 -- and @ViewPatterns@: (@->@) at the same time.
 -- @ViewPatterns Control.Comonad.extract@ extracts
@@ -425,7 +425,7 @@ pattern NVConstant' x <- NValue' (extract -> NVConstantF x)
 -- | Haskell text & context to the Nix text & context,
 pattern NVStr' :: NVConstraint w => NixString -> NValue' t w m a
 pattern NVStr' ns <- NValue' (extract -> NVStrF ns)
-  where NVStr' = NValue' . pure . NVStrF 
+  where NVStr' = NValue' . pure . NVStrF
 
 -- | Haskell @Path@ to the Nix path,
 pattern NVPath' :: NVConstraint w => Path -> NValue' t w m a
@@ -528,7 +528,7 @@ liftNValue
   => (forall x . u m x -> m x)
   -> NValue t f m
   -> NValue t f (u m)
-liftNValue = (`hoistNValue` lift)
+liftNValue f = hoistNValue f lift
 
 
 -- *** MonadTransUnlift
@@ -603,7 +603,7 @@ pattern NVStr ns = Free (NVStr' ns)
 pattern NVPath x = Free (NVPath' x)
 pattern NVList l = Free (NVList' l)
 pattern NVSet s x = Free (NVSet' s x)
-pattern NVBuiltin name f = Free (NVBuiltin' name f) 
+pattern NVBuiltin name f = Free (NVBuiltin' name f)
 pattern NVClosure x f = Free (NVClosure' x f)
 {-# complete NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
 
