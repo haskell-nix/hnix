@@ -16,7 +16,7 @@ jobs:
     - name: 'Installing'
       uses: haskell/actions/hlint-setup@v2
       with:
-        version: '3.3.1'
+        version: '3.5'
 
     - name: 'Checking code'
       uses: haskell/actions/hlint-run@v2
