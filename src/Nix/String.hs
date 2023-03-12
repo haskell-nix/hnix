@@ -211,8 +211,8 @@ toNixLikeContext stringContext =
       stringContext
  where
   fun :: (StringContext -> AttrSet NixLikeContextValue -> AttrSet NixLikeContextValue)
-  fun sc hm =
-    uncurry (M.insertWith (<>)) (swap $ toNixLikeContextValue sc) hm
+  fun sc =
+    uncurry (M.insertWith (<>)) (swap $ toNixLikeContextValue sc)
 
 -- | Add 'StringContext's into the resulting set.
 addStringContext
