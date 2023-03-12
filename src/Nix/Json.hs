@@ -25,8 +25,8 @@ toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
   A.Object m ->
     A.pairs
-      . fold
-      . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
+      . foldMap
+      (\(k, v) -> A.pair k $ toEncodingSorted v)
       . sortWith fst $
 #if MIN_VERSION_aeson(2,0,0)
           AKM.toList
