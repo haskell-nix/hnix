@@ -62,8 +62,8 @@ import           Data.Char                      ( isAlpha
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
-import           Data.List.Extra                ( groupSort )
-import           Data.Fix                       ( Fix(..) )
+import           Data.List.Extra                ( groupSort, findIndex )
+import           Data.Fix                       ( Fix(..), foldFixM )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Text                     as Text
 import           Nix.Expr.Types
@@ -363,7 +363,7 @@ identifier =
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
 
 nixSym :: Parser NExprLoc
-nixSym = annotateLocation $ mkSymF <$> coerce identifier
+nixSym = annotateLocation $ mkSymF Unknown <$> coerce identifier
 
 
 -- ** ( ) parens
@@ -972,7 +972,7 @@ parseFromText :: Parser a -> Text -> Result a
 parseFromText = (`parseWith` "<string>")
 
 fullContent :: Parser NExprLoc
-fullContent = whiteSpace *> nixExpr <* eof
+fullContent = resolveBindings <$> (whiteSpace *> nixExpr <* eof)
 
 parseNixFile' :: MonadFile m => (Parser NExprLoc -> Parser a) -> Path -> m (Result a)
 parseNixFile' f =
@@ -1004,3 +1004,40 @@ parseExpr =
     (fail . show)
     pure
     . parseNixText
+
+resolveBindings :: NExprLoc -> NExprLoc
+resolveBindings = (`runReader` []) . proceed
+ where
+  proceed :: NExprLoc -> Reader [[VarName]] NExprLoc
+  proceed expr = case expr of
+    NSymAnn ann _ x -> (\offset -> NSymAnn ann offset x) <$> lookupOffset x
+    NSetAnn ann Recursive bindings ->
+      let scope = bindDefs bindings
+      in NSetAnn ann Recursive <$> local (scope:) (mapM (mapM proceed) bindings)
+    NAbsAnn ann params body ->
+      let scope = paramDefs params
+      in NAbsAnn ann <$> local (scope:) (mapM proceed params) <*> local (scope:) (proceed body)
+    NLetAnn ann bindings body ->
+      let scope = bindDefs bindings
+      in NLetAnn ann <$> local (scope:) (mapM (mapM proceed) bindings) <*> local (scope:) (proceed body)
+    _ -> fmap Fix . mapM proceed . unFix $ expr
+
+  lookupOffset :: VarName -> Reader [[VarName]] VarOffset
+  lookupOffset name = maybe Dynamic (\lvl -> Static $ StaticOffset lvl 0) . findIndex (elem name) <$> ask
+
+  bindDefs :: [Binding r] -> [VarName]
+  bindDefs = foldMap bind1Def
+   where
+    bind1Def :: Binding r -> [VarName]
+    bind1Def (Inherit   Nothing                  _    _) = mempty
+    bind1Def (Inherit  (Just _                 ) keys _) = toList keys
+    bind1Def (NamedVar (StaticKey  varname :| _) _    _) = one varname
+    bind1Def (NamedVar (DynamicKey _       :| _) _    _) = mempty
+
+  paramDefs :: Params a -> [VarName]
+  paramDefs (Param varname) = one varname
+  paramDefs (ParamSet varname _ pset) = (one `whenJust` varname) <> (fst <$> pset)
+
+
+
+

@@ -51,7 +51,7 @@ defaultToAbsolutePath origPath =
                       val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
                     ) <=< demand
                   )
-                  =<< lookupVar "__cur_file"
+                  =<< lookupVar Unknown "__cur_file"
             )
             (pure origPathExpanded)
             (isAbsolute origPathExpanded)
@@ -94,7 +94,7 @@ findEnvPathM name =
         l <- fromValue @[NValue t f m] =<< demand v
         findPathBy nixFilePath l name
     )
-    =<< lookupVar "__nixPath"
+    =<< lookupVar Unknown "__nixPath"
 
  where
   nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)

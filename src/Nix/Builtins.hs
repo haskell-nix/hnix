@@ -187,7 +187,7 @@ foldNixPath
   -> m r
 foldNixPath z f =
   do
-    mres <- lookupVar "__includes"
+    mres <- lookupVar Unknown "__includes"
     dirs <-
       maybe
         stub
@@ -1334,7 +1334,7 @@ scopedImportNix asetArg pathArg =
             traceM $ "Current file being evaluated is: " <> show p'
             pure $ takeDirectory p' </> path
         )
-        =<< lookupVar "__cur_file"
+        =<< lookupVar Unknown "__cur_file"
 
     clearScopes @(NValue t f m)
       $ withNixContext (pure path')
@@ -1544,7 +1544,7 @@ placeHolderNix p =
       body = ignoreContext
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readFileNix = toValue <=< Nix.Render.readFile <=< absolutePathFromValue <=< demand
+readFileNix = toValue <=< Nix.Render.readFile . coerce . toString . ignoreContext <=< fromValue @NixString
 
 findFileNix
   :: forall e t f m
@@ -2080,8 +2080,8 @@ withNixContext mpath action =
     base <- builtins
     opts <- askOptions
 
-    pushScope
-      (one ("__includes", NVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
+    pushWeakScope
+      (pure $ one ("__includes", NVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
       (pushScopes
         base $
         maybe
@@ -2089,7 +2089,7 @@ withNixContext mpath action =
           (\ path act ->
             do
               traceM $ "Setting __cur_file = " <> show path
-              pushScope (one ("__cur_file", NVPath path)) act
+              pushWeakScope (pure $ one ("__cur_file", NVPath path)) act
           )
           mpath
           action
@@ -2104,7 +2104,7 @@ builtins
 builtins =
   do
     ref <- defer $ NVSet mempty <$> buildMap
-    (`pushScope` askScopes) . coerce . M.fromList . (one ("builtins", ref) <>) =<< topLevelBuiltins
+    (`pushWeakScope` askScopes) . pure . coerce . M.fromList . (one ("builtins", ref) <>) =<< topLevelBuiltins
  where
   buildMap :: m (HashMap VarName (NValue t f m))
   buildMap         =  M.fromList . (mapping <$>) <$> builtinsList

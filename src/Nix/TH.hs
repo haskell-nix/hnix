@@ -54,7 +54,7 @@ instance ToExpr NExprLoc where
   toExpr = id
 
 instance ToExpr VarName where
-  toExpr = NSymAnn nullSpan
+  toExpr = NSymAnn nullSpan Unknown
 
 instance ToExpr Int where
   toExpr = NConstantAnn nullSpan . NInt . fromIntegral
@@ -66,12 +66,12 @@ instance ToExpr Float where
   toExpr = NConstantAnn nullSpan . NFloat
 
 metaExp :: Set VarName -> NExprLoc -> Maybe ExpQ
-metaExp fvs (NSymAnn _ x) | x `Set.member` fvs =
+metaExp fvs (NSymAnn _ _ x) | x `Set.member` fvs =
   pure [| toExpr $(varE (mkName $ toString x)) |]
 metaExp _ _ = Nothing
 
 metaPat :: Set VarName -> NExprLoc -> Maybe PatQ
-metaPat fvs (NSymAnn _ x) | x `Set.member` fvs =
+metaPat fvs (NSymAnn _ _ x) | x `Set.member` fvs =
   pure $ varP $ mkName $ toString x
 metaPat _ _ = Nothing
 

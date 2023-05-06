@@ -197,8 +197,8 @@ pattern NConstantAnnF    ann x      = AnnF ann (NConstant x)
 pattern NStrAnnF         :: SrcSpan -> NString r -> NExprLocF r
 pattern NStrAnnF         ann x      = AnnF ann (NStr x)
 
-pattern NSymAnnF         :: SrcSpan -> VarName -> NExprLocF r
-pattern NSymAnnF         ann x      = AnnF ann (NSym x)
+pattern NSymAnnF         :: SrcSpan -> VarOffset -> VarName -> NExprLocF r
+pattern NSymAnnF         ann x y    = AnnF ann (NSym x y)
 
 pattern NListAnnF        :: SrcSpan -> [r] -> NExprLocF r
 pattern NListAnnF        ann x      = AnnF ann (NList x)
@@ -255,8 +255,8 @@ pattern NConstantAnn    ann x      = Ann ann (NConstant x)
 pattern NStrAnn         :: SrcSpan -> NString NExprLoc -> NExprLoc
 pattern NStrAnn         ann x      = Ann ann (NStr x)
 
-pattern NSymAnn         :: SrcSpan -> VarName -> NExprLoc
-pattern NSymAnn         ann x      = Ann ann (NSym x)
+pattern NSymAnn         :: SrcSpan -> VarOffset -> VarName -> NExprLoc
+pattern NSymAnn         ann x y    = Ann ann (NSym x y)
 
 pattern NListAnn        :: SrcSpan -> [NExprLoc] -> NExprLoc
 pattern NListAnn        ann x      = Ann ann (NList x)

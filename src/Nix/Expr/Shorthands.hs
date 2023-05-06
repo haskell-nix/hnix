@@ -58,8 +58,8 @@ mkRelPath :: FilePath -> NExpr
 mkRelPath = Fix . mkRelPathF
 
 -- | Put a variable (symbol).
-mkSym :: Text -> NExpr
-mkSym = Fix . mkSymF
+mkSym :: VarOffset -> Text -> NExpr
+mkSym offset = Fix . mkSymF offset
 
 -- | Put syntactic hole.
 mkSynHole :: Text -> NExpr
@@ -252,8 +252,8 @@ mkRelPathF :: FilePath -> NExprF a
 mkRelPathF = mkPathF False
 
 -- | Unfixed @mkSym@.
-mkSymF :: Text -> NExprF a
-mkSymF = NSym . coerce
+mkSymF :: VarOffset -> Text -> NExprF a
+mkSymF offset = NSym offset . coerce
 
 -- | Unfixed @mkSynHole@.
 mkSynHoleF :: Text -> NExprF a
