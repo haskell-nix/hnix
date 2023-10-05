@@ -343,7 +343,7 @@ exprFNixDoc = \case
   prettyContainer h f t c =
     handlePresence
       (simpleExpr (h <> t))
-      (const $ simpleExpr $ group $ nest 2 $ vsep $ one h <> (f <$> c) <> one t)
+      (const $ simpleExpr $ group $ nest 2 (h <> line <> vsep (f <$> c)) <> line <> t)
       c
 
   prettyAddScope h c b =
