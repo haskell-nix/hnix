@@ -27,7 +27,6 @@ import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
                                                 , showsUnaryWith
                                                 , Eq1(liftEq) )
-import           Data.Eq.Deriving
 import qualified Text.Show
 import           Text.Show                      ( showsPrec
                                                 , showString
@@ -139,6 +138,16 @@ data NValueF p m r
       --   result.
   deriving (Generic, Typeable, Functor)
 
+
+-- ** Eq
+
+instance Eq r => Eq (NValueF p m r) where
+  (==) (NVConstantF x) (NVConstantF y) = x == y
+  (==) (NVStrF      x) (NVStrF      y) = x == y
+  (==) (NVPathF     x) (NVPathF     y) = x == y
+  (==) (NVListF     x) (NVListF     y) = x == y
+  (==) (NVSetF  _   x) (NVSetF _    y) = x == y
+  (==) _               _               = False
 
 -- ** Eq1
 
@@ -715,10 +724,17 @@ type MonadDataErrorContext t f m
 
 instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 
+
+-- * @instance Eq NValue'@
+
+instance (Eq a, Comonad f) => Eq (NValue' t f m a) where
+    (==) (NValue' (extract -> x)) (NValue' (extract -> y)) = x == y
+
 -- * @instance Eq1 NValue'@
 
 -- TH derivable works only after MonadDataContext
-$(deriveEq1 ''NValue')
+instance Comonad f => Eq1 (NValue' t f m) where
+  liftEq eq (NValue' (extract -> x)) (NValue' (extract -> y)) = liftEq eq x y
 
 
 -- * @NValueF@ traversals, getter & setters

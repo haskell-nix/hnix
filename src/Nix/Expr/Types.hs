@@ -224,7 +224,7 @@ data Params r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Hashable
+    , Show, Read, Hashable
     )
 
 instance IsString (Params r) where

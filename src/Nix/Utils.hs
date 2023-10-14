@@ -68,6 +68,7 @@ import           Relude                  hiding ( pass
 import           Data.Binary                    ( Binary )
 import           Data.Data                      ( Data )
 import           Codec.Serialise                ( Serialise )
+import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix(..) )
 import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
@@ -84,7 +85,6 @@ import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
 import qualified System.FilePath              as FilePath
-import Control.Monad.List (foldM)
 
 #if ENABLE_TRACING
 import qualified Relude.Debug                 as X
@@ -310,7 +310,7 @@ replaceExtension = coerce FilePath.replaceExtension
 
 -- | 'Path's 'FilePath.readFile'.
 readFile :: MonadIO m => Path -> m Text
-readFile = readFileText . coerce
+readFile = fmap decodeUtf8 . readFileBS . coerce
 
 
 -- * Recursion scheme
