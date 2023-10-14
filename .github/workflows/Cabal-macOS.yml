@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         # It is dev env, so trying to stick to last GHC.
-        ghc: [ "9.4" ]
+        ghc: [ "9.6" ]
     steps:
 
       - name: "Git checkout"

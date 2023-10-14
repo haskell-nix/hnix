@@ -14,7 +14,7 @@ import           Control.Monad.Catch  ( MonadCatch
                                       , MonadMask
                                       , MonadThrow
                                       )
-import           Control.Monad.Except ( MonadFix )
+import           Control.Monad.Fix    ( MonadFix )
 import           Control.Monad.Ref    ( MonadAtomicRef(..)
                                       , MonadRef(Ref)
                                       )

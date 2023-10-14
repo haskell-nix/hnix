@@ -19,7 +19,7 @@ import           Control.Monad.Catch            ( MonadThrow
 import           Control.Monad.Fail             ( MonadFail )
 #endif
 import           Control.Monad.Free             ( Free(Free) )
-import           Control.Monad.Reader           ( MonadFix )
+import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.Ref              ( MonadRef(newRef)
                                                 , MonadAtomicRef
                                                 )
