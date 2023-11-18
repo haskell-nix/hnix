@@ -27,7 +27,7 @@
       (system: pkgs: import ./default.nix {
         inherit pkgs;
         withHoogle = true;
-        compiler = "ghc8107";
+        compiler = "ghc947";
         packageRoot = pkgs.runCommand "hnix-src" {} ''
           cp -r ${./.} $out
           chmod -R +w $out
