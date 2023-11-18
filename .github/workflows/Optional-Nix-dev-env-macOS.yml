@@ -7,7 +7,7 @@ on:
 
 
 env:
-  rev: "272fad732d39b24c4549c475176e0d8cbc8c897a"
+  rev: "8e5e424b1c059e9ccf5db6a652458e30de05fa3a"
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   doCheck: "false"
