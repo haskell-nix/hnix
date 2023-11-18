@@ -1,7 +1,7 @@
 {
 # For current default and explicitly supported GHCs https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable, Nixpkgs implicitly supports older minor versions also, until the configuration departs from compatibility with them.
 # Compiler in a form ghc8101 <- GHC 8.10.1, just remove spaces and dots
-  compiler    ? "ghc8107"
+  compiler    ? "ghc947"
 
 # Deafult.nix is a unit package abstraciton that allows to abstract over packages even in monorepos:
 # Example: pass --arg cabalName --arg packageRoot "./subprojectDir", or map default.nix over a list of tiples for subprojects.
