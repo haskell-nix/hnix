@@ -22,7 +22,7 @@ env:
   ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
   ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
   ###
-  rev: "272fad732d39b24c4549c475176e0d8cbc8c897a"
+  rev: "c757e9bd77b16ca2e03c89bf8bc9ecb28e0c06ad"
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   allowInconsistentDependencies: "false"
