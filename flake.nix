@@ -2,7 +2,7 @@
   description = "A Haskell re-implementation of the Nix expression language";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/ce6aa13369b667ac2542593170993504932eb836";
+    nixpkgs.url = "nixpkgs/8e5e424b1c059e9ccf5db6a652458e30de05fa3a";
     nix = {
       url = "nix/624e38aa43f304fbb78b4779172809add042b513";
       flake = false;
