@@ -18,7 +18,9 @@
 # Escape the version bounds from the cabal file. You may want to avoid this function.
 , doJailbreak ? false
 # Nix dependency checking, compilation and execution of test suites listed in the package description file.
-, doCheck     ? true
+# TODO(srk): 2023-11-21
+# needs moving of the hnix-store-remote test harness to hnix-store-tests
+, doCheck     ? false
 
 # Just produce a SDist src tarball
 , sdistTarball ? false
