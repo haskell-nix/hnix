@@ -93,8 +93,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "ce6aa13369b667ac2542593170993504932eb836"
-
+, rev ? "c757e9bd77b16ca2e03c89bf8bc9ecb28e0c06ad"
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" > 0
       then
@@ -167,6 +166,11 @@ let
     root = packageRoot;
 
     overrides = self: super: {
+      # 2023-11-21 too strict bound on template-haskell
+      # https://github.com/DanBurton/lens-family-th/pull/20
+      lens-family-th = hlib.doJailbreak (super.lens-family-th);
+      hnix-store-core = super.hnix-store-core_0_6_1_0;
+      hnix-store-remote = super.hnix-store-remote_0_6_0_0;
     };
 
     modifier = drv: hlib.overrideCabal drv (attrs: {
