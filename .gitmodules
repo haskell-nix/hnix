@@ -1,3 +1,0 @@
-[submodule "data/nix"]
-	path = data/nix
-	url = https://github.com/haskell-nix/nix
