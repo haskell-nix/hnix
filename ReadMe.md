@@ -21,7 +21,7 @@ Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so
 ### Git clone
 
 ```shell
-git clone --recursive 'https://github.com/haskell-nix/hnix.git' && cd hnix
+git clone 'https://github.com/haskell-nix/hnix.git' && cd hnix
 ```
 
 
@@ -300,9 +300,6 @@ hnix \
     
     ```shell
     cabal v2-test
-    
-    # If forgot to clone recursively, run:
-    # git submodule update --init --recursive
     ```
     
     Please, check that all default tests that were passing prior are still passing. It's OK if no new tests are passing.
