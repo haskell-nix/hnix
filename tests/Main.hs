@@ -34,12 +34,9 @@ import           Test.Tasty.HUnit
 
 ensureLangTestsPresent :: Assertion
 ensureLangTestsPresent = do
-  exist <- fileExist "data/nix/tests/local.mk"
+  exist <- fileExist "data/nix/tests/lang/eval-okay-if.nix"
   when (not exist) $
-    errorWithoutStackTrace $ String.unlines
-      [ "Directory data/nix does not have any files."
-      , "Did you forget to run"
-          <> " \"git submodule update --init --recursive\"?" ]
+    errorWithoutStackTrace "Directory data/nix does not have any files."
 
 ensureNixpkgsCanParse :: Assertion
 ensureNixpkgsCanParse =
