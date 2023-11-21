@@ -253,7 +253,6 @@ extra-source-files:
   data/nix/tests/lang/parse-okay-url.nix
   data/nix/tests/lang/readDir/bar
   data/nix/tests/lang/readDir/foo/git-hates-directories
-  data/nix/tests/local.mk
   data/nixpkgs-all-packages.nix
   data/let-comments.nix
   data/let-comments-multiline.nix
