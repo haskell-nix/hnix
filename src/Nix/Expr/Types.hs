@@ -19,7 +19,7 @@
 --
 -- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations.
 module Nix.Expr.Types
-  ( module Nix.Expr.Types
+  ( module Nix.Expr.Types.Annotated
   , SourcePos(..)
   , unPos
   , mkPos
@@ -58,6 +58,7 @@ import           Data.Ord.Deriving              ( deriveOrd1 , deriveOrd2  )
 import           Data.Aeson.TH                  ( deriveJSON2 )
 import qualified Type.Reflection               as Reflection
 import           Nix.Atoms
+import           Nix.Expr.Types.Annotated
 #if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
 import           Instances.TH.Lift              ()  -- importing Lift Text for GHC 8.6
