@@ -1,6 +1,11 @@
 
 # ChangeLog
 
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.17.0...master#files_bucket) next
+
+* Additional
+  * Switch from `cryptonite` to `crypton`
+
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.16.0...0.17.0#files_bucket) 0.17.0
 
 * Additional
@@ -29,7 +34,7 @@
       * `wrapPath`
     * In `Nix.Parser`:
       * rm `get{App,Unary,Binary,Special}Operator`, currely `NOp` class instances are used instead.
-    
+
   * `Nix.Pretty`:
     * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) rm `appOp`, instead use `appOpDef`.
     * [(link)](https://github.com/haskell-nix/hnix/pull/1047/files) `precedenceWrap` behaviour is changed (to be literal to the name), the old behaviour is now a `wrap` function.
