@@ -44,7 +44,7 @@ jobs:
 
       #  2020-08-01: NOTE: Nix instantiate still needed for HNix tests
       - name: "Install Nix"
-        uses: cachix/install-nix-action@v24
+        uses: cachix/install-nix-action@v25
 
       - name: "Repository update"
         run: cabal v2-update
