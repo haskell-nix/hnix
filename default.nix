@@ -168,9 +168,6 @@ let
     root = packageRoot;
 
     overrides = self: super: {
-      # 2023-11-21 too strict bound on template-haskell
-      # https://github.com/DanBurton/lens-family-th/pull/20
-      lens-family-th = hlib.doJailbreak (super.lens-family-th);
       hnix-store-core = super.hnix-store-core_0_6_1_0;
       hnix-store-remote = super.hnix-store-remote_0_6_0_0;
     };
