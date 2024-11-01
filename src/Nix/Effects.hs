@@ -5,7 +5,6 @@
 {-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
-{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 {-# language TypeOperators #-}
 
 {-# options_ghc -Wno-orphans #-}
@@ -18,12 +17,13 @@ import           Nix.Prelude             hiding ( putStrLn
                                                 )
 import qualified Nix.Prelude                   as Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import qualified Data.HashSet                  as HS
+import           Data.Default.Class             ( Default(def) )
+import           Data.DList                     ( DList )
+import           Data.Some                      ( Some(Some) )
 import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
-import qualified "cryptonite" Crypto.Hash      as Hash
 import           Nix.Utils.Fix1
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames              hiding ( Proxy )
@@ -33,11 +33,18 @@ import           Nix.Value
 import qualified Paths_hnix
 import           System.Exit
 import qualified System.Info
-import           System.Process
-
+import           System.Nix.Hash                 ( HashAlgo(HashAlgo_SHA256) )
+import           System.Nix.Store.Types          ( FileIngestionMethod(..)
+                                                 , RepairMode(..)
+                                                 )
+import           System.Nix.Store.Remote         ( Logger
+                                                 , RemoteStoreError
+                                                 , StoreText(..)
+                                                 )
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Nar                as Store.Nar
+import           System.Process
 
 -- | A path into the nix store
 newtype StorePath = StorePath Path
@@ -293,7 +300,7 @@ baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
 
 -- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
 toStorePath :: Store.StorePath -> StorePath
-toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath
+toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath def
 
 -- ** Instances
 
@@ -317,7 +324,7 @@ instance MonadHttp IO where
         (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr)
         -- using addTextToStore' result in different hash from the addToStore.
         -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
-        (addToStore name (NarText $ toStrict body) False False)
+        (addToStore name (NarText $ toStrict body) FileIngestionMethod_Flat RepairMode_DontRepair)
         (status == 200)
 
 
@@ -374,12 +381,8 @@ print = putStrLn . show
 
 -- ** Data type synonyms
 
-type RecursiveFlag = Bool
-type RepairFlag = Bool
 type StorePathName = Text
 type PathFilter m = Path -> m Bool
-type StorePathSet = HS.HashSet StorePath
-
 
 -- ** @class MonadStore m@
 
@@ -396,14 +399,14 @@ class
   -- | Copy the contents of a local path(Or pure text) to the store.  The resulting store
   -- path is returned.  Note: This does not support yet support the expected
   -- `filter` function that allows excluding some files.
-  addToStore :: StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  addToStore :: StorePathName -> NarContent -> FileIngestionMethod -> RepairMode -> m (Either ErrorCall StorePath)
+  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> NarContent -> FileIngestionMethod -> RepairMode -> m (Either ErrorCall StorePath)
   addToStore a b c d = lift $ addToStore a b c d
 
   -- | Like addToStore, but the contents written to the output path is a
   -- regular file containing the given string.
-  addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  addTextToStore' :: StorePathName -> Text -> HashSet Store.StorePath -> RepairMode -> m (Either ErrorCall StorePath)
+  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> HashSet Store.StorePath -> RepairMode -> m (Either ErrorCall StorePath)
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 
@@ -413,37 +416,58 @@ instance MonadStore IO where
 
   addToStore name content recursive repair =
     either
-      (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
+      (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err)
       (\ pathName ->
         do
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (toNarSource content) recursive repair
+          res <-
+            Store.Remote.runStore
+            $ Store.Remote.addToStore
+                pathName
+                (toNarSource content)
+                recursive
+                (Some HashAlgo_SHA256)
+                repair
           either
             Left -- err
             (pure . toStorePath) -- store path
             <$> parseStoreResult "addToStore" res
       )
-      (Store.makeStorePathName name)
+      (Store.mkStorePathName name)
 
   addTextToStore' name text references repair =
-    do
-      res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
-      either
-        Left -- err
-        (pure . toStorePath) -- path
-        <$> parseStoreResult "addTextToStore" res
+    either
+      (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err)
+      (\ pathName ->
+        do
+          res <-
+            Store.Remote.runStore
+            $ Store.Remote.addTextToStore
+                (StoreText pathName text)
+                references
+                repair
+          either
+            Left -- err
+            (pure . toStorePath) -- path
+            <$> parseStoreResult "addTextToStore" res
+      )
+      (Store.mkStorePathName name)
 
 
 -- ** Functions
 
-parseStoreResult :: Monad m => Text -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
+parseStoreResult
+  :: Monad m
+  => Text
+  -> (Either RemoteStoreError a, DList Logger)
+  -> m (Either ErrorCall a)
 parseStoreResult name (res, logs) =
   pure $
     either
-      (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> msg <> "\n" <> show logs)
+      (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> show msg <> "\n" <> show logs)
       pure
       res
 
-addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
+addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> HashSet Store.StorePath -> RepairMode -> m StorePath
 addTextToStore a b c d =
   either
     throwError
@@ -457,7 +481,11 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
+    =<< addToStore
+          (fromString $ coerce takeFileName p)
+          (NarFile p)
+          FileIngestionMethod_FileRecursive
+          RepairMode_DontRepair
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
-toFile_ p contents = addTextToStore (fromString $ coerce p) contents mempty False
+toFile_ p contents = addTextToStore (fromString $ coerce p) contents mempty RepairMode_DontRepair
