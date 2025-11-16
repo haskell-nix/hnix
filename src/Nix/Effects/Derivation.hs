@@ -1,6 +1,7 @@
 {-# language DataKinds #-}
 {-# language NamedFieldPuns #-}
 {-# language RecordWildCards #-}
+{-# language RankNTypes #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
@@ -10,6 +11,11 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
                                                 )
+import "crypton" Crypto.Hash (Digest, SHA256)
+import qualified "crypton" Crypto.Hash
+import Data.Constraint.Extras (Has(has))
+import Data.Dependent.Sum (DSum((:=>)))
+import Data.Default.Class (Default(def))
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashMap.Strict           as MS ( insert )
 import qualified Data.HashSet                  as S
@@ -20,8 +26,6 @@ import qualified Data.Text                     as Text
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
-
-import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 import           Nix.Atoms
 import           Nix.Expr.Types          hiding ( Recursive )
@@ -38,8 +42,11 @@ import           Nix.String.Coerce
 import           Nix.Value
 import           Nix.Value.Monad
 
-import qualified System.Nix.ReadonlyStore      as Store
-import qualified System.Nix.Hash               as Store
+import System.Nix.Base (BaseEncoding(Base16))
+import System.Nix.Hash (HashAlgo, NamedAlgo)
+import System.Nix.Store.Types (FileIngestionMethod(..), RepairMode(..))
+import qualified System.Nix.Store.ReadOnly     as Store
+import qualified System.Nix.Hash
 import qualified System.Nix.StorePath          as Store
 
 
@@ -52,22 +59,19 @@ data Derivation = Derivation
   , builder :: Text -- should be typed as a store path
   , args :: [ Text ]
   , env :: Map Text Text
-  , mFixed :: Maybe Store.SomeNamedDigest
-  , hashMode :: HashMode
+  , mFixed :: Maybe (DSum HashAlgo Digest)
+  , hashMode :: FileIngestionMethod
   , useJson :: Bool
   }
   deriving Show
 
-data HashMode = Flat | Recursive
-  deriving (Show, Eq)
-
 makeStorePathName :: (Framed e m) => Text -> m Store.StorePathName
-makeStorePathName name = case Store.makeStorePathName name of
-  Left err -> throwError $ ErrorCall $ "Invalid name '" <> show name <> "' for use in a store path: " <> err
+makeStorePathName name = case Store.mkStorePathName name of
+  Left err -> throwError $ ErrorCall $ "Invalid name '" <> show name <> "' for use in a store path: " <> show err
   Right spname -> pure spname
 
 parsePath :: (Framed e m) => Text -> m Store.StorePath
-parsePath p = case Store.parsePath "/nix/store" (encodeUtf8 p) of
+parsePath p = case Store.parsePath def (encodeUtf8 p) of
   Left err -> throwError $ ErrorCall $ "Cannot parse store path " <> show p <> ":\n" <> show err
   Right path -> pure path
 
@@ -75,26 +79,31 @@ writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
-  path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
+  path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) RepairMode_DontRepair
   parsePath $ fromString $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
-hashDerivationModulo :: (MonadNix e t f m, MonadState (b, KeyMap Text) m) => Derivation -> m (Hash.Digest Hash.SHA256)
+hashDerivationModulo
+  :: ( MonadNix e t f m
+     , MonadState (b, KeyMap Text) m
+     )
+  => Derivation
+  -> m (Digest SHA256)
 hashDerivationModulo
   Derivation
-    { mFixed = Just (Store.SomeDigest (digest :: Hash.Digest hashType))
+    { mFixed = Just (hashAlgo :=> digest)
     , outputs
     , hashMode
     } =
   case Map.toList outputs of
     [("out", path)] -> pure $
-      Hash.hash @ByteString @Hash.SHA256 $
+      Crypto.Hash.hash @ByteString @SHA256 $
         encodeUtf8 $
           "fixed:out"
-          <> (if hashMode == Recursive then ":r" else mempty)
-          <> ":" <> (Store.algoName @hashType)
-          <> ":" <> Store.encodeDigestWith Store.Base16 digest
+          <> (if hashMode == FileIngestionMethod_FileRecursive then ":r" else mempty)
+          <> ":" <> System.Nix.Hash.algoToText hashAlgo
+          <> ":" <> System.Nix.Hash.encodeDigestWith Base16 digest
           <> ":" <> path
     _outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show _outputsList
 hashDerivationModulo
@@ -112,14 +121,14 @@ hashDerivationModulo
             maybe
               (do
                 drv' <- readDerivation $ coerce $ toString path
-                hash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
+                hash <- System.Nix.Hash.encodeDigestWith Base16 <$> hashDerivationModulo drv'
                 pure (hash, outs)
               )
               (\ hash -> pure (hash, outs))
               (M.lookup path cache)
           )
           (Map.toList inputDrvs)
-    pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 $ unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
+    pure $ Crypto.Hash.hash @ByteString @SHA256 $ encodeUtf8 $ unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
 
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} =
@@ -145,12 +154,17 @@ unparseDrv Derivation{..} =
       ]
   where
     produceOutputInfo (outputName, outputPath) =
-      let prefix = if hashMode == Recursive then "r:" else mempty in
+      let prefix =
+            if hashMode == FileIngestionMethod_FileRecursive
+                then "r:"
+                else mempty
+      in
       parens $ (s <$>) $ ([outputName, outputPath] <>) $
         maybe
           [mempty, mempty]
-          (\ (Store.SomeDigest (digest :: Hash.Digest hashType)) ->
-            [prefix <> Store.algoName @hashType, Store.encodeDigestWith Store.Base16 digest]
+          (\ (hashAlgo :=> digest) ->
+            [ prefix <> System.Nix.Hash.algoToText hashAlgo
+            , System.Nix.Hash.encodeDigestWith Base16 digest]
           )
           mFixed
     parens :: [Text] -> Text
@@ -223,21 +237,21 @@ derivationParser = do
   serializeList :: Parsec () Text a -> Parsec () Text [a]
   serializeList = wrap "[" "]"
 
-  parseFixed :: [(Text, Text, Text, Text)] -> (Maybe Store.SomeNamedDigest, HashMode)
+  parseFixed :: [(Text, Text, Text, Text)] -> (Maybe (DSum HashAlgo Digest), FileIngestionMethod)
   parseFixed fullOutputs = case fullOutputs of
     [("out", _path, rht, hash)] | rht /= mempty && hash /= mempty ->
       let
         (hashType, hashMode) = case Text.splitOn ":" rht of
-          ["r", ht] -> (ht, Recursive)
-          [ht] ->      (ht, Flat)
+          ["r", ht] -> (ht, FileIngestionMethod_FileRecursive)
+          [ht] ->      (ht, FileIngestionMethod_Flat)
           _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " <> show fullOutputs
       in
         either
           -- Please, no longer `error show` after migrating to Text
           (\ err -> error $ show $ "Unsupported hash " <> show (hashType <> ":" <> hash) <> "in .drv file: " <> err)
           (\ digest -> (pure digest, hashMode))
-          (Store.mkNamedDigest hashType hash)
-    _ -> (Nothing, Flat)
+          (System.Nix.Hash.mkNamedDigest hashType hash)
+    _ -> (Nothing, FileIngestionMethod_Flat)
 
 
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)
@@ -254,9 +268,16 @@ defaultDerivationStrict val = do
     -- Compute the output paths, and add them to the environment if needed.
     -- Also add the inputs, just computed from the strings contexts.
     drv' <- case mFixed drv of
-      Just (Store.SomeDigest digest) -> do
+      Just (hashAlgo :=> (digest :: Digest a)) -> do
         let
-          out = pathToText $ Store.makeFixedOutputPath "/nix/store" (hashMode drv == Recursive) digest drvName
+          -- XXX: NamedAlgo :/
+          out = pathToText
+            $ has @NamedAlgo hashAlgo
+            $ Store.makeFixedOutputPath @a
+                def
+                (hashMode drv)
+                digest
+                drvName
           env' = ifNotJsonModEnv $ Map.insert "out" out
         pure $ drv { inputs, env = env', outputs = one ("out", out) }
 
@@ -283,7 +304,7 @@ defaultDerivationStrict val = do
     (coerce @Text @VarName -> drvPath) <- pathToText <$> writeDerivation drv'
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
-    drvHash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
+    drvHash <- System.Nix.Hash.encodeDigestWith Base16 <$> hashDerivationModulo drv'
     modify $ second $ MS.insert (coerce drvPath) drvHash
 
     let
@@ -299,11 +320,11 @@ defaultDerivationStrict val = do
 
   where
 
-    pathToText = decodeUtf8 . Store.storePathToRawFilePath
+    pathToText = decodeUtf8 . Store.storePathToRawFilePath def
 
     makeOutputPath o h n = do
       name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then mempty else "-" <> o
-      pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> encodeUtf8 o) h name
+      pure $ pathToText $ Store.makeStorePath def ("output:" <> encodeUtf8 o) h name
 
     toStorePaths :: HashSet StringContext -> (Set Text, Map Text [Text])
     toStorePaths = foldl (flip addToInputs) mempty
@@ -335,7 +356,7 @@ buildDerivationWithContext drvAttrs = do
       builder     <- getAttr   "builder"                     extractNixString
       platform    <- getAttr   "system"                    $ assertNonNull <=< extractNoCtx
       mHash       <- getAttrOr "outputHash"        mempty  $ (pure . pure) <=< extractNoCtx
-      hashMode    <- getAttrOr "outputHashMode"    Flat    $ parseHashMode <=< extractNoCtx
+      hashMode    <- getAttrOr "outputHashMode"    FileIngestionMethod_Flat    $ parseFileIngestionMethod <=< extractNoCtx
       outputs     <- getAttrOr "outputs"       (one "out") $ traverse (extractNoCtx <=< fromValue')
 
       mFixedOutput <-
@@ -344,7 +365,12 @@ buildDerivationWithContext drvAttrs = do
           (\ hash -> do
             when (outputs /= one "out") $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
             hashType <- getAttr "outputHashAlgo" extractNoCtx
-            digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
+            digest <-
+              lift
+              $ either
+                  (throwError . ErrorCall)
+                  pure
+                  $ System.Nix.Hash.mkNamedDigest (if Text.null hashType then "sha256" else hashType) hash
             pure $ pure digest)
           mHash
 
@@ -429,10 +455,10 @@ buildDerivationWithContext drvAttrs = do
       when (Text.null t) $ lift $ throwError $ ErrorCall "Value must not be empty"
       pure t
 
-    parseHashMode :: MonadNix e t f m => Text -> WithStringContextT m HashMode
-    parseHashMode = \case
-      "flat" ->      pure Flat
-      "recursive" -> pure Recursive
+    parseFileIngestionMethod :: MonadNix e t f m => Text -> WithStringContextT m FileIngestionMethod
+    parseFileIngestionMethod = \case
+      "flat" ->      pure FileIngestionMethod_Flat
+      "recursive" -> pure FileIngestionMethod_FileRecursive
       other -> lift $ throwError $ ErrorCall $ "Hash mode " <> show other <> " is not valid. It must be either 'flat' or 'recursive'"
 
     -- Other helpers

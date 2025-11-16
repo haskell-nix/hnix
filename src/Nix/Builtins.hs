@@ -78,6 +78,9 @@ import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
 import           System.Nix.Base32             as Base32
+import           System.Nix.Store.Types         ( FileIngestionMethod(..)
+                                                , RepairMode(..)
+                                                )
 import           System.PosixCompat.Files       ( isRegularFile
                                                 , isDirectory
                                                 , isSymbolicLink
@@ -912,7 +915,15 @@ pathNix arg =
     name      <- toText <$> attrGetOr (takeFileName path) (fmap (coerce . toString) . fromStringNoContext) "name" attrs
     recursive <- attrGetOr True pure "recursive" attrs
 
-    Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name (NarFile path) recursive False
+    Right (coerce . toText . coerce @StorePath @String -> s) 
+      <- addToStore
+          name
+          (NarFile path)
+          (if recursive
+           then FileIngestionMethod_FileRecursive
+           else FileIngestionMethod_Flat
+          )
+          RepairMode_DontRepair
     -- TODO: Ensure that s matches sha256 when not empty
     pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
  where
