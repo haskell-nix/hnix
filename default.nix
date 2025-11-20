@@ -170,6 +170,7 @@ let
     overrides = self: super: {
       hnix-store-core = super.hnix-store-core_0_6_1_0;
       hnix-store-remote = super.hnix-store-remote_0_6_0_0;
+      hnix-store-nar = super.hnix-store-nar or self.hnix-store-nar;
     };
 
     modifier = drv: hlib.overrideCabal drv (attrs: {

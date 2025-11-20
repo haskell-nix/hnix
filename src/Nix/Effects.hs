@@ -38,9 +38,13 @@ import           System.Process
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Nar                as Store.Nar
+import qualified System.Nix.Hash               as Store.Hash
+import           Data.Some.Newtype              ( Some(..) )
+import           Data.Default.Class             ( def )
 
 -- | A path into the nix store
 newtype StorePath = StorePath Path
+  deriving (Eq, Ord, Show, Hashable)
 
 
 -- All of the following type classes defer to the underlying 'm'.
@@ -293,7 +297,7 @@ baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
 
 -- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
 toStorePath :: Store.StorePath -> StorePath
-toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath
+toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath def
 
 -- ** Instances
 
@@ -402,8 +406,8 @@ class
 
   -- | Like addToStore, but the contents written to the output path is a
   -- regular file containing the given string.
-  addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  addTextToStore' :: StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 
@@ -412,38 +416,60 @@ class
 instance MonadStore IO where
 
   addToStore name content recursive repair =
-    either
-      (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
-      (\ pathName ->
-        do
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (toNarSource content) recursive repair
-          either
-            Left -- err
-            (pure . toStorePath) -- store path
-            <$> parseStoreResult "addToStore" res
-      )
-      (Store.makeStorePathName name)
+    case Store.mkStorePathName name of
+      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
+      Right pathName -> do
+        let ingestionMethod = if recursive
+                              then Store.Remote.FileIngestionMethod_FileRecursive
+                              else Store.Remote.FileIngestionMethod_Flat
+            repairMode = if repair
+                         then Store.Remote.RepairMode_DoRepair
+                         else Store.Remote.RepairMode_DontRepair
+            -- Use Some constructor with HashAlgo_SHA256
+            hashAlgo = Some Store.Hash.HashAlgo_SHA256
+        res <- Store.Remote.runStore $ Store.Remote.addToStore
+                 pathName
+                 (toNarSource content)
+                 ingestionMethod
+                 hashAlgo
+                 repairMode
+        either
+          Left -- err
+          (pure . toStorePath) -- store path
+          <$> parseStoreResult "addToStore" res
 
   addTextToStore' name text references repair =
-    do
-      res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
-      either
-        Left -- err
-        (pure . toStorePath) -- path
-        <$> parseStoreResult "addTextToStore" res
+    case Store.mkStorePathName name of
+      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
+      Right pathName -> do
+        let storeText = Store.Remote.StoreText pathName text
+            repairMode = if repair
+                         then Store.Remote.RepairMode_DoRepair
+                         else Store.Remote.RepairMode_DontRepair
+            -- Convert our StorePathSet (HashSet of StorePath) to HashSet of Store.StorePath
+            storeDir = Store.StoreDir "/nix/store"
+            storeRefs = HS.map (\(StorePath p) -> Store.parsePath storeDir (encodeUtf8 $ toText p)) references
+            -- Filter out any parse failures and extract successful paths
+            validRefs = HS.fromList $ mapMaybe (either (const Nothing) Just) $ HS.toList storeRefs
+        res <- Store.Remote.runStore $ Store.Remote.addTextToStore storeText validRefs repairMode
+        either
+          Left -- err
+          (pure . toStorePath) -- path
+          <$> parseStoreResult "addTextToStore" res
 
 
 -- ** Functions
 
-parseStoreResult :: Monad m => Text -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
-parseStoreResult name (res, logs) =
+-- Import DList type (it's re-exported as part of the Run type signature)
+parseStoreResult :: Monad m => Text -> (Either Store.Remote.RemoteStoreError a, loggers) -> m (Either ErrorCall a)
+parseStoreResult name (res, _logs) =
   pure $
     either
-      (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> msg <> "\n" <> show logs)
+      (\ err -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> show err)
       pure
       res
 
-addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
+addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> StorePathSet -> RepairFlag -> m StorePath
 addTextToStore a b c d =
   either
     throwError

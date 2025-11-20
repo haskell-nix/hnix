@@ -2,39 +2,52 @@
   description = "A Haskell re-implementation of the Nix expression language";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/c757e9bd77b16ca2e03c89bf8bc9ecb28e0c06ad";
-    nix = {
-      url = "nix/624e38aa43f304fbb78b4779172809add042b513";
-      flake = false;
-    };
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    nix.url = "github:NixOS/nix";
+    haskellNix.url = "github:input-output-hk/haskell.nix";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = {
-    nix,
-    nixpkgs,
-    self,
-  } @ inp: let
-
-    l = builtins //nixpkgs.lib;
-    supportedSystems = ["x86_64-linux" "aarch64-darwin"];
-
-    forAllSystems = f: l.genAttrs supportedSystems
-      (system: f system (nixpkgs.legacyPackages.${system}));
-
-  in {
-
-    defaultPackage = forAllSystems
-      (system: pkgs: import ./default.nix {
-        inherit pkgs;
-        withHoogle = true;
-        compiler = "ghc947";
-        packageRoot = pkgs.runCommand "hnix-src" {} ''
-          cp -r ${./.} $out
-          chmod -R +w $out
-          cp -r ${nix} $out/data/nix
-        '';
+  outputs = { self, nixpkgs, nix, flake-utils, haskellNix }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system overlays;
+          inherit (haskellNix) config;
+        };
+        flake = pkgs.hnix.flake {
+        };
+        overlays = [ haskellNix.overlay
+          (final: prev: {
+            hnix =
+              final.haskell-nix.project' {
+                src = ./.;
+                supportHpack = true;
+                compiler-nix-name = "ghc910";
+                # packageRoot = pkgs.runCommand "hnix-src" {} ''
+                #   cp -r ${./.} $out
+                #   chmod -R +w $out
+                #   cp -r ${nix} $out/data/nix
+                # '';
+                shell = {
+                  tools = {
+                    cabal = {};
+                    haskell-language-server = {};
+                  };
+                  buildInputs = with pkgs; [
+                    pkg-config
+                  ];
+                  withHoogle = false;
+                };
+                # modules = [{
+                #   enableLibraryProfiling = true;
+                #   enableProfiling = true;
+                # }];
+              };
+          })
+        ];
+      in flake // {
+        packages.default = flake.packages."hnix:exe:hnix";
       });
-
-    devShell = forAllSystems (system: pkgs: self.defaultPackage.${system}.env);
-  };
 }
+
