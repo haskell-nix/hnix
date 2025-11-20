@@ -5,7 +5,6 @@
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 {-# language TypeApplications #-}
 {-# language ExistentialQuantification #-}
-{-# language StandaloneDeriving #-}
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
@@ -29,7 +28,7 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
 import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
-import qualified Data.ByteString               as Data.ByteString
+import qualified Data.ByteString
 import qualified System.Nix.Base32             as Base32
 
 import           Nix.Atoms
@@ -50,7 +49,6 @@ import           Nix.Value.Monad
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.ContentAddress     as Store
-import qualified "cryptonite" Crypto.Hash      as Hash
 import qualified "crypton" Crypto.Hash         as CryptonHash
 import           Data.Some.Newtype              ( Some(..) )
 import           Data.Dependent.Sum             ( DSum(..) )
@@ -98,8 +96,8 @@ parsePath p = case Store.parsePath def (encodeUtf8 p) of
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
-  referencePaths <- traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
-  let references = S.fromList $ map (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath def) referencePaths
+  referencePaths <- traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (fst <$> Map.toList inputDrvs))
+  let references = S.fromList $ fmap (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath def) referencePaths
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) references False
   parsePath $ fromString $ coerce path
 
@@ -288,7 +286,7 @@ defaultDerivationStrict val = do
       Just digest -> do
         -- Fixed-output derivation: output path is content-addressed
         outputPath <- makeFixedOutputPath drvName digest (hashMode drv)
-        let outputs' = Map.singleton "out" outputPath
+        let outputs' = one ("out", outputPath)
         pure $ drv
           { inputs
           , outputs = outputs'

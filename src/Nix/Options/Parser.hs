@@ -40,25 +40,23 @@ argPair =
 
 nixOptions :: UTCTime -> Parser Options
 nixOptions current =
-  Options <$>
-    (fromMaybe Informational <$>
-      optional
-        (option
+  Options . fromMaybe Informational <$>
+    optional
+      (option
 
-          (do
-            a <- str
-            bool
-              (fail "Argument to -v/--verbose must be a number")
-              (pure $ decodeVerbosity $ read a)
-              (all isDigit a)
-          )
-
-          (  short 'v'
-          <> long "verbose"
-          <> help "Verbose output"
-          )
-
+        (do
+          a <- str
+          bool
+            (fail "Argument to -v/--verbose must be a number")
+            (pure $ decodeVerbosity $ read a)
+            (all isDigit a)
         )
+
+        (  short 'v'
+        <> long "verbose"
+        <> help "Verbose output"
+        )
+
       )
     <*> switch
         (  long "trace"

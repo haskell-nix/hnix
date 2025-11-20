@@ -450,7 +450,7 @@ instance MonadStore IO where
             storeDir = Store.StoreDir "/nix/store"
             storeRefs = HS.map (\(StorePath p) -> Store.parsePath storeDir (encodeUtf8 $ toText p)) references
             -- Filter out any parse failures and extract successful paths
-            validRefs = HS.fromList $ mapMaybe (either (const Nothing) Just) $ HS.toList storeRefs
+            validRefs = HS.fromList $ rights $ HS.toList storeRefs
         res <- Store.Remote.runStore $ Store.Remote.addTextToStore storeText validRefs repairMode
         either
           Left -- err

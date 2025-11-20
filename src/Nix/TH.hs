@@ -77,10 +77,10 @@ instance (ToExpr a) => ToExpr (NonEmpty a) where
   toExpr = toExpr . toList
 
 instance ToExpr () where
-  toExpr () = Fix $ NConstant NNull
+  toExpr = const $ Fix $ NConstant NNull
 
 instance (ToExpr a) => ToExpr (Maybe a) where
-  toExpr = maybe (toExpr ()) toExpr
+  toExpr = maybe (toExpr (mempty :: ())) toExpr
 
 instance (ToExpr a, ToExpr b) => ToExpr (Either a b) where
   toExpr = either toExpr toExpr

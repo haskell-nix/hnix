@@ -32,6 +32,7 @@
                 shell = {
                   tools = {
                     cabal = {};
+                    hlint = {};
                     haskell-language-server = {};
                   };
                   buildInputs = with pkgs; [
