@@ -1,181 +1,320 @@
 # HNix Codebase Guide for Claude Code
 
-This guide provides essential context for working with HNix - a Haskell implementation of the Nix expression language that uses advanced functional programming techniques including recursion schemes and abstract definitional interpreters.
+This guide provides essential context for working with HNix - a Haskell implementation of the Nix expression language using advanced functional programming techniques including recursion schemes and abstract definitional interpreters.
 
-## Build and Development Commands
+## Quick Start Commands
 
-### Primary Development Workflow
+### Essential Development Workflow
 ```bash
-# Enter development environment (recommended)
+# Enter development environment
 nix-shell
 
 # Build the project
 cabal v2-configure
 cabal v2-build
 
-# Run tests
-cabal v2-test                          # Default test suite
-env ALL_TESTS=yes cabal v2-test        # All tests including Nixpkgs parsing
-env NIXPKGS_TESTS=yes cabal v2-test    # Only Nixpkgs tests
+# Run a single test
+cabal v2-test --test-options="--pattern '/Parser/basic literals/'"
 
-# REPL for interactive development
+# Interactive REPL for exploration
 cabal v2-repl
+> :load Nix.Eval
+> :type evalExprLoc
 
-# Run the executable
-cabal v2-run hnix -- --help
+# Quick evaluation test
 cabal v2-run hnix -- --eval --expr '1 + 1'
-cabal v2-run hnix -- --repl
-
-# Benchmarks
-cabal v2-bench
 ```
 
-### Debugging and Profiling
+### Testing Commands
 ```bash
-# Full trace output with debug info
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
+# Standard test suite
+cabal v2-test
 
-# Generate profiling data (upload .prof to speedscope.app)
-cabal v2-run --enable-profiling --flags=profiling --enable-library-profiling \
-  --profiling-detail='all-functions' hnix -- \
-  --eval --expr '(import <nixpkgs> {}).firefox.outPath' +RTS -Pj
+# All tests including Nixpkgs parsing (slow)
+env ALL_TESTS=yes cabal v2-test
 
-# Reduce test cases for debugging
-hnix --reduce bug.nix --eval --expr 'import <nixpkgs> {}'
+# Only Nixpkgs compatibility tests
+env NIXPKGS_TESTS=yes cabal v2-test
+
+# Pretty-printer round-trip tests
+env PRETTY_TESTS=yes cabal v2-test
+
+# Test with coverage
+cabal v2-configure --enable-coverage
+cabal v2-test --enable-coverage
 ```
 
-## Architecture: Recursion Schemes and Abstract Definitional Interpreters
+### Debugging & Profiling
+```bash
+# Memory profiling (upload .prof to speedscope.app)
+cabal v2-run --enable-profiling --flags=profiling \
+  hnix -- --eval --expr 'builtins.length [1 2 3]' +RTS -hy -l
 
-HNix demonstrates production use of recursion schemes as described in John Wiegley's article "A win for recursion schemes". Understanding this architecture requires examining how multiple modules interact.
+# Stack trace on error
+cabal v2-run hnix -- --trace --eval --expr 'throw "error"' +RTS -xc
 
-### Core Expression Architecture
+# Heap profiling for thunk leaks
+cabal v2-run hnix -- --eval --expr 'import <nixpkgs> {}' \
+  +RTS -h -i0.1 -RTS && hp2ps -e8in -c hnix.hp
 
-The expression type uses a **functor-based representation** that separates structure from recursion:
+# Reduce complex expressions for minimal repro
+hnix --reduce bug.nix --eval --expr 'import ./bug.nix'
+```
+
+## Architecture: Working with Recursion Schemes
+
+### Core Expression Types
+```haskell
+-- The functor (non-recursive structure)
+data NExprF r  -- 18 constructors: NConstant, NStr, NSym, NList, etc.
+
+-- Fixed point gives recursion
+type NExpr = Fix NExprF
+
+-- Location annotations via composition
+type NExprLoc = Fix (AnnF SrcSpan NExprF)
+```
+
+### Using ADI for Custom Behavior
+
+The `adi` function (`src/Nix/Utils.hs:345`) enables behavior injection:
 
 ```haskell
--- src/Nix/Expr/Types.hs
-data NExprF r  -- Functor with 18 constructors (NConstant, NStr, NSym, NList, etc.)
-type NExpr = Fix NExprF  -- Fixed point gives recursive structure
-
--- src/Nix/Expr/Types/Annotated.hs
-type NExprLocF = AnnF SrcSpan NExprF  -- Composed annotation
-type NExprLoc = Fix NExprLocF         -- Location-annotated expressions
+-- Example: Add tracing to evaluation
+tracingEval :: NExprLoc -> m (NValue t f m)
+tracingEval = adi addTrace baseEval
+  where
+    addTrace :: Transform NExprLocF (m (NValue t f m))
+    addTrace f e = do
+      traceM $ "Evaluating: " ++ show (void e)
+      result <- f e
+      traceM $ "Result: " ++ show result
+      pure result
 ```
 
-This separation enables:
-- **Parser** produces `NExprLoc` (with source positions)
-- **Evaluator** works with `NExprF` (pure functor)
-- **Pretty-printer** consumes `NExpr` (fixed point)
-- **Annotations** compose via `Compose` without modifying core types
+Common ADI use cases:
+- **Error context**: `evalWithMetaInfo = adi addMetaInfo evalContent`
+- **Profiling**: Inject timing measurements at each recursion
+- **Memoization**: Cache results of sub-expressions
+- **Debugging**: Track evaluation path
 
-### Abstract Definitional Interpreters (ADI)
-
-The `adi` function (`src/Nix/Utils.hs:345-351`) enables behavior injection at recursion boundaries:
-
-```haskell
-adi :: Functor f => Transform f a -> Alg f a -> Fix f -> a
-```
-
-Key applications:
-- **Error context** (`src/Nix/Eval.hs`): `evalWithMetaInfo = adi addMetaInfo evalContent`
-- **Frame tracking** during evaluation without modifying core logic
-- **Scoping** and **variable resolution** layers
-
-### Program Reduction for Debugging
-
-`src/Nix/Reduce.hs` implements test case minimization using flagged trees:
-
-```haskell
-newtype FlaggedF f r = FlaggedF (IORef Bool, f r)  -- Wraps with evaluation markers
-type Flagged f = Fix (FlaggedF f)
-
--- Algorithm: flag → evaluate → prune unreferenced → simplify logic
-pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
-```
-
-This reduces massive expressions (1.2M lines) to minimal reproducers (<10k lines).
-
-### Value System with Free Monads
-
-Values use Free monads for lazy evaluation (`src/Nix/Value.hs`):
+### Free Monad Value System
 
 ```haskell
 type NValue t f m = Free (NValue' t f m) t
 -- Pure t = thunk (unevaluated)
--- Free (f (NValueF ...)) = evaluated value
+-- Free v = evaluated value
 ```
 
-Bidirectional pattern synonyms (v0.17.0) unify construction/deconstruction.
+**Memory implications**:
+- Thunks accumulate until forced
+- Use `force` explicitly to prevent buildup
+- Monitor with `+RTS -s` for thunk statistics
 
-### Thunk Abstraction
+## Working with the Effect System
 
-Type class-based thunks (`src/Nix/Thunk`) support multiple evaluation strategies:
+### Core Type Classes
 
 ```haskell
-class MonadThunk t m a | t -> m, t -> a where
-  thunk :: m a -> m t    -- Create thunk
-  force :: t -> m a      -- Force evaluation
+class MonadEval v m where
+  evalExprLoc :: NExprLoc -> m v  -- Evaluate expression
+  evalError :: Doc v -> m a        -- Report error
+
+class MonadThunk t m a | t -> m a where
+  thunk :: m a -> m t              -- Create thunk
+  force :: t -> m a                -- Force evaluation
+
+class (MonadEval v m, MonadThunk t m v) => MonadNix e t f m
 ```
 
-## Key Module Organization
+### Adding New Effects
 
-### Expression Layer (`src/Nix/Expr/*`)
-- `Types.hs` - Core `NExprF` functor and `NExpr` type
-- `Types/Annotated.hs` - Annotation composition via `Compose`
-- `Strings.hs` - String interpolation/antiquotation
-- `Shorthands.hs` - DSL for programmatic expression construction
+```haskell
+-- Define capability
+class Monad m => MonadMyEffect m where
+  myOperation :: String -> m Int
 
-### Evaluation Layer (`src/Nix/`)
-- `Eval.hs` - Core evaluation with `MonadEval` type class
-- `Exec.hs` - Execution context and higher-level evaluation
-- `Reduce.hs` - Expression reduction and test case minimization
-- `Utils.hs` - `adi` and other recursion schemes
+-- Add to evaluation monad
+newtype MyNix m a = MyNix (ReaderT MyEnv m a)
+  deriving (Functor, Applicative, Monad)
 
-### Value Layer (`src/Nix/Value/*`)
-- `Value.hs` - Free monad-based value representation
-- `Monad.hs` - Monadic value operations
-- `Equal.hs` - Value equality semantics
+instance MonadMyEffect (MyNix m) where
+  myOperation s = MyNix $ asks (lookupThing s . myEnvData)
+```
 
-### Thunk Layer (`src/Nix/Thunk/*`)
-- Abstract thunk interface for lazy evaluation
-- Support for both lazy and strict evaluation modes
+## Extending HNix
 
-### Built-ins (`src/Nix/Builtins.hs`)
-- 100+ built-in functions
-- Recent additions: `path`, `isPathNix`, `ceil`, `floor`, `hashFile`, `groupBy`
+### Adding Built-ins
 
-## Important Implementation Details
+1. Add to `src/Nix/Builtins.hs`:
+```haskell
+builtinsList :: [(Text, BuiltinType)]
+builtinsList =
+  [ ("myBuiltin", arity2 myBuiltinImpl)
+  -- ...
+  ]
+
+myBuiltinImpl :: MonadNix e t f m => NValue t f m -> NValue t f m -> m (NValue t f m)
+myBuiltinImpl arg1 arg2 = do
+  -- Force evaluation if needed
+  str <- fromStringNoContext =<< fromValue arg1
+  num <- fromValue arg2
+  -- Perform operation
+  pure $ nvStr $ makeNixString (str <> show num)
+```
+
+2. Test in `tests/EvalTests.hs`
+3. Document behavior matching Nix semantics
+
+### Modifying Evaluation
+
+```haskell
+-- Hook into evaluation via MonadEval instance
+instance MonadEval (NValue t f m) MyCustomNix where
+  evalExprLoc expr = do
+    -- Pre-evaluation hook
+    logExpression expr
+    -- Delegate to standard evaluation
+    result <- standardEvalExprLoc expr
+    -- Post-evaluation hook
+    recordMetrics expr result
+    pure result
+```
+
+## Common Pitfalls & Solutions
+
+### Memory Issues
+
+**Problem**: Thunk accumulation causing memory exhaustion
+```haskell
+-- BAD: Builds huge thunk chain
+foldl' (\acc x -> thunk (acc + x)) 0 [1..1000000]
+
+-- GOOD: Forces evaluation incrementally
+foldl' (\acc x -> force acc >>= \a -> pure (a + x)) 0 [1..1000000]
+```
+
+**Problem**: Lazy fields in strict data
+```haskell
+-- BAD: ~ makes field lazy despite ! on data
+data MyData = MyData { ~myField :: !Int }
+
+-- GOOD: Strict field in strict data
+data MyData = MyData { myField :: !Int }
+```
+
+### Debugging Infinite Recursion
+
+1. Enable tracing: `--trace` flag
+2. Use `--reduce` to minimize test case
+3. Add ADI transform to track recursion depth:
+```haskell
+depthCheck :: Transform NExprLocF (ReaderT Int m (NValue t f m))
+depthCheck f e = do
+  depth <- ask
+  when (depth > 1000) $ error "Recursion limit"
+  local (+1) (f e)
+```
+
+### Performance Optimization
+
+**Profile first**:
+```bash
+# Generate flamegraph
+cabal v2-run hnix -- --eval --expr 'import <nixpkgs> {}' \
+  +RTS -p -RTS
+```
+
+**Common optimizations**:
+1. Add strictness annotations to accumulators
+2. Use `HashMap` instead of association lists
+3. Cache frequently computed values
+4. Specialize polymorphic functions with `{-# SPECIALIZE #-}`
+
+## Module Organization & Dependencies
+
+### Layered Architecture
+```
+┌─────────────────┐
+│   Builtins      │ (100+ built-in functions)
+├─────────────────┤
+│   Effects       │ (MonadNix, MonadEval constraints)
+├─────────────────┤
+│   Exec          │ (High-level evaluation)
+├─────────────────┤
+│   Eval          │ (Core evaluation with ADI)
+├─────────────────┤
+│   Value/Thunk   │ (Free monad values, lazy evaluation)
+├─────────────────┤
+│   Expr          │ (NExprF functor, parser, pretty-printer)
+└─────────────────┘
+```
+
+### Key Files for Common Tasks
+
+- **Adding language features**: Start with `src/Nix/Parser.hs`, add to `NExprF` in `src/Nix/Expr/Types.hs`
+- **Modifying evaluation**: `src/Nix/Eval.hs` for core, `src/Nix/Exec.hs` for high-level
+- **Debugging issues**: `src/Nix/Reduce.hs` for test reduction, `src/Nix/Cited.hs` for error context
+- **Performance work**: `src/Nix/Thunk/Basic.hs` for thunk implementation
+- **Built-in functions**: `src/Nix/Builtins.hs` - match Nix semantics exactly
+
+## Testing Philosophy
+
+### Test Categories
+- **Language tests** (`tests/NixLanguageTests.hs`): Official Nix test suite
+- **Evaluation tests** (`tests/EvalTests.hs`): HNix-specific behavior
+- **Parser tests** (`tests/ParserTests.hs`): Round-trip properties
+- **Pretty tests** (`tests/PrettyTests.hs`): Pretty-printer correctness
+
+### Writing Effective Tests
+```haskell
+-- Property-based test for parser round-trip
+prop_parse_pretty :: NExpr -> Property
+prop_parse_pretty expr =
+  parseNixText (prettyNix expr) === Right expr
+
+-- Golden test for evaluation
+goldenEval :: String -> NExpr -> TestTree
+goldenEval name expr = goldenVsString name path $ do
+  result <- runLazyM defaultOptions $ evalExprLoc expr
+  pure $ encodeUtf8 $ prettyNValue result
+```
+
+## Important Implementation Notes
 
 ### Custom Prelude
-Uses `relude` instead of standard Prelude (`NoImplicitPrelude` enabled globally).
-
-### Position Tracking
-Custom `NSourcePos` type (not Megaparsec's) for performance - addresses issues #1026, #746.
+Uses `relude` with project utilities in `Nix.Utils`. Key differences:
+- `panic` instead of `error` for impossible cases
+- `pass` for noop in do-blocks
+- Strict `Text` by default
 
 ### String Context
-Nix strings carry derivation dependencies - crucial for correct store path handling.
+Nix strings carry derivation context - critical for store paths:
+```haskell
+-- Context propagates through operations
+makeNixString :: Text -> NixString  -- No context
+makeNixStringWithContext :: Text -> Context -> NixString
+```
 
 ### Store Integration
-**Warning**: `derivationStrict` produces real `/nix/store` entries via `hnix-store-remote`.
+**Warning**: `derivationStrict` creates real `/nix/store` entries. Use `--dry-run` for testing.
 
-### Test Environment Variables
-- `ALL_TESTS` - Run all tests including slow ones
-- `NIXPKGS_TESTS` - Test Nixpkgs parsing
-- `PRETTY_TESTS` - Pretty-printing round-trip tests
+### Position Tracking
+Custom `NSourcePos` for performance - strict fields prevent memory leaks during parsing.
 
-## Current Goals and Status
+## Current Status & Goals
 
-**Primary Goal**: Evaluate all of Nixpkgs (`hnix --eval --expr "import <nixpkgs> {}" --find`)
+**Primary Goal**: Evaluate all of Nixpkgs
+```bash
+hnix --eval --expr "import <nixpkgs> {}" --find
+```
 
-**Working**: Parser, lazy evaluation, most built-ins, REPL, type inference, store integration
+**Working**: Parser, lazy evaluation, most built-ins, REPL, type inference
 **In Progress**: Full Nixpkgs evaluation, performance optimization
-
-Tests are disabled by default (`doCheck = false` in `default.nix`) due to `hnix-store-remote` test harness needs.
+**Known Issues**: Tests disabled by default (`doCheck = false`) due to store interaction
 
 ## Resources
 
-- [Design of the HNix code base](https://github.com/haskell-nix/hnix/wiki/Design-of-the-HNix-code-base)
 - [Win for Recursion Schemes](https://newartisans.com/2018/04/win-for-recursion-schemes/) - Essential architectural context
-- [Project Status Wiki](https://github.com/haskell-nix/hnix/wiki/Project-status)
+- [Design of HNix](https://github.com/haskell-nix/hnix/wiki/Design-of-the-HNix-code-base)
 - [Gitter Chat](https://gitter.im/haskell-nix/Lobby)
