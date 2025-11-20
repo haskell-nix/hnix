@@ -14,12 +14,12 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: 'Installing'
-      uses: haskell/actions/hlint-setup@v2
+      uses: haskell-actions/hlint-setup@v2
       with:
         version: '3.5'
 
     - name: 'Checking code'
-      uses: haskell/actions/hlint-run@v2
+      uses: haskell-actions/hlint-run@v2
       with:
         path: .
         fail-on: warning
