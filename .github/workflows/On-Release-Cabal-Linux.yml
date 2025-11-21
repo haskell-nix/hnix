@@ -15,8 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Since CI by default tests boundary GHCs, test middle versions of GHCs
-        ghc: [ "9.0" ]
+        ghc: [ "9.10" ]
     steps:
       - name: "Git checkout"
         uses: actions/checkout@v4

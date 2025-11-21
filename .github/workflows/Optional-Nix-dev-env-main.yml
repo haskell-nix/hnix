@@ -78,7 +78,7 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: "Determined Nix-build"
       env:
-        compiler: "ghc884"
+        compiler: "ghc9102"
       run: ./build.sh
 
 
@@ -102,7 +102,7 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: "Determined Nix-build"
       env:
-        compiler: "ghc8107"
+        compiler: "ghc9102"
         buildFromSdist: "true"
         buildStrictly: "true"
         linkWithGold: "true"
