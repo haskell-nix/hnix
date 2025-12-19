@@ -10,7 +10,6 @@
 {-# language PatternSynonyms #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
-{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -27,11 +26,7 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch            ( MonadCatch(catch) )
 import           Control.Monad.ListM            ( sortByM )
-import           "hashing" Crypto.Hash
-import qualified "hashing" Crypto.Hash.MD5     as MD5
-import qualified "hashing" Crypto.Hash.SHA1    as SHA1
-import qualified "hashing" Crypto.Hash.SHA256  as SHA256
-import qualified "hashing" Crypto.Hash.SHA512  as SHA512
+import qualified Crypto.Hash                   as Hash
 import qualified Data.Aeson                    as A
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key                as AKM
@@ -51,6 +46,7 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.Scientific
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
+import qualified Data.Text.Encoding            as Text
 import           Data.Text.Read                 ( decimal )
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese, These )
@@ -1458,17 +1454,17 @@ hashStringNix nsAlgo ns =
 
       case algo of
         --  2021-03-04: Pattern can not be taken-out because hashes represented as different types
-        "md5"    -> f (show . mkHash @MD5.MD5)
-        "sha1"   -> f (show . mkHash @SHA1.SHA1)
-        "sha256" -> f (show . mkHash @SHA256.SHA256)
-        "sha512" -> f (show . mkHash @SHA512.SHA512)
+        "md5"    -> f (show . mkHash @Hash.MD5)
+        "sha1"   -> f (show . mkHash @Hash.SHA1)
+        "sha256" -> f (show . mkHash @Hash.SHA256)
+        "sha512" -> f (show . mkHash @Hash.SHA512)
 
         _ -> throwError $ ErrorCall $ "builtins.hashString: expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " <> show algo
 
        where
         -- This intermidiary `a` is only needed because of the type application
-        mkHash :: (Show a, HashAlgorithm a) => Text -> a
-        mkHash s = hash $ encodeUtf8 s
+        mkHash :: (Show a, Hash.HashAlgorithm a) => Text -> Hash.Digest a
+        mkHash s = Hash.hash $ Text.encodeUtf8 s
 
 
 -- | hashFileNix

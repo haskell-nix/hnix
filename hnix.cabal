@@ -442,7 +442,6 @@ library
     , binary >= 0.8.5 && < 0.9
     , bytestring >= 0.10.8 && < 0.13
     , crypton
-    , cryptonite
     , memory
     , comonad >= 5.0.4 && < 5.2
     , containers >= 0.5.11.0 && < 0.8
@@ -454,7 +453,6 @@ library
     , free >= 5.1 && < 5.3
     , gitrev >= 1.1.0 && < 1.4
     , hashable >= 1.2.5 && < 1.5
-    , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.6.0 && < 0.9
     , hnix-store-nar >= 0.1.0 && < 0.2
     , hnix-store-remote >= 0.6.0 && < 0.9
