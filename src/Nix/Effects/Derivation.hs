@@ -2,7 +2,6 @@
 {-# language DataKinds #-}
 {-# language NamedFieldPuns #-}
 {-# language RecordWildCards #-}
-{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 {-# language TypeApplications #-}
 {-# language ExistentialQuantification #-}
 
@@ -27,7 +26,7 @@ import qualified Data.Text                     as Text
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
-import qualified "crypton" Crypto.Hash         as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+import qualified Crypto.Hash                   as Hash
 import qualified System.Nix.Base32             as Base32
 
 import           Nix.Atoms

@@ -453,7 +453,6 @@ library
     , free >= 5.1 && < 5.3
     , gitrev >= 1.1.0 && < 1.4
     , hashable >= 1.2.5 && < 1.5
-    , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.6.0 && < 0.9
     , hnix-store-nar >= 0.1.0 && < 0.2
     , hnix-store-remote >= 0.6.0 && < 0.9
