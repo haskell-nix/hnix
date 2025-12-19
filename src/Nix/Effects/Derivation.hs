@@ -27,8 +27,7 @@ import qualified Data.Text                     as Text
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
-import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
-import qualified Data.ByteString
+import qualified "crypton" Crypto.Hash         as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 import qualified System.Nix.Base32             as Base32
 
 import           Nix.Atoms
@@ -48,15 +47,12 @@ import           Nix.Value.Monad
 
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
-import qualified System.Nix.ContentAddress     as Store
-import qualified "crypton" Crypto.Hash         as CryptonHash
-import           Data.Some.Newtype              ( Some(..) )
 import           Data.Dependent.Sum             ( DSum(..) )
 import qualified Data.Dependent.Sum            as DSum
 
 -- Type for fixed-output derivation hash digest
 -- Digest comes from crypton (Crypto.Hash.Digest)
-type HashDigest = DSum Store.HashAlgo CryptonHash.Digest
+type HashDigest = DSum Store.HashAlgo Hash.Digest
 
 -- Helper functions to work with HashDigest
 hashDigestAlgoText :: HashDigest -> Text
@@ -348,7 +344,7 @@ defaultDerivationStrict val = do
             Flat -> mempty
       let toHash = "fixed:out:" <> modePrefix <> algoText <> ":" <> hashText <> ":/nix/store:" <> Store.unStorePathName name
       -- Use SHA256 to compute the store path hash
-      let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
+      let hashPart = Store.mkStorePathHashPart @Hash.SHA256 (encodeUtf8 toHash)
       let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
       pure $ "/nix/store/" <> hashBase32 <> "-" <> Store.unStorePathName name
 
@@ -364,7 +360,7 @@ defaultDerivationStrict val = do
       let toHash = "output:" <> o <> ":sha256:" <> drvHashHex <> ":/nix/store:" <> Store.unStorePathName name
       -- Use hnix-store-core's mkStorePathHashPart which handles truncation and returns raw bytes
       -- Use crypton's SHA256 (compatible with hnix-store-core)
-      let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
+      let hashPart = Store.mkStorePathHashPart @Hash.SHA256 (encodeUtf8 toHash)
       -- Extract raw bytes and base32-encode using Nix base32
       let hashText = Base32.encode $ Store.unStorePathHashPart hashPart
       -- Build the store path

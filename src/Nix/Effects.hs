@@ -23,7 +23,6 @@ import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
-import qualified "cryptonite" Crypto.Hash      as Hash
 import           Nix.Utils.Fix1
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames              hiding ( Proxy )
