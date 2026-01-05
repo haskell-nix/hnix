@@ -11,10 +11,10 @@ import           Nix.Expr.Types.Annotated       ( SrcSpan
 --  2021-07-18: NOTE: It should be Options -> Scopes -> Frames -> Source(span)
 data Context m t =
   Context
-    { getOptions :: Options
-    , getScopes  :: Scopes m t
-    , getSource  :: SrcSpan
-    , getFrames  :: Frames
+    { getOptions :: !Options
+    , getScopes  :: !(Scopes m t)
+    , getSource  :: !SrcSpan
+    , getFrames  :: !Frames
     }
 
 instance Has (Context m t) (Scopes m t) where

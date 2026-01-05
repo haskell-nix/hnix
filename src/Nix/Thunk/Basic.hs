@@ -25,7 +25,7 @@ import           Nix.Thunk
 
 -- | Data is computed OR in a lazy thunk state which
 -- is still not evaluated.
-data Deferred m v = Computed v | Deferred (m v)
+data Deferred m v = Computed !v | Deferred (m v)
   deriving (Functor, Foldable, Traversable)
 
 -- ** Utils
@@ -80,7 +80,7 @@ unlock r = atomicModifyRef r unlockVal
 
 -- | The type of very basic thunks
 data NThunkF m v =
-  Thunk (ThunkId m) (ThunkRef m) (ThunkValueRef m v)
+  Thunk !(ThunkId m) !(ThunkRef m) !(ThunkValueRef m v)
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ _ == Thunk y _ _ = x == y

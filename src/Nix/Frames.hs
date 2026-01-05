@@ -25,8 +25,8 @@ data NixLevel = Fatal | Error | Warning | Info | Debug
 
 data NixFrame =
   NixFrame
-    { frameLevel :: NixLevel
-    , frame      :: SomeException
+    { frameLevel :: !NixLevel
+    , frame      :: !SomeException
     }
 
 instance Show NixFrame where

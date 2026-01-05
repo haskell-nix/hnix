@@ -11,7 +11,15 @@
 
 module Nix.Standard where
 
-import           Nix.Prelude
+import           Nix.Prelude                   hiding ( StateT
+                                                , runStateT
+                                                , evalStateT
+                                                , execStateT
+                                                )
+import           Control.Monad.Trans.State.Strict
+                                                ( StateT
+                                                , evalStateT
+                                                )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch            ( MonadThrow

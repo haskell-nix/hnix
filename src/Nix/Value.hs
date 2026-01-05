@@ -109,13 +109,13 @@ import           Nix.Thunk
 --   evaluated yet, as opposed to an NValue'.
 
 data NValueF p m r
-    = NVConstantF NAtom
+    = NVConstantF !NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStrF NixString
-    | NVPathF Path
+    | NVStrF !NixString
+    | NVPathF !Path
     | NVListF [r]
-    | NVSetF PositionSet (AttrSet r)
+    | NVSetF !PositionSet !(AttrSet r)
       -- ^
       --   Quite frequently actions/processing happens with values
       --   (for example - forcing of values & recreation of the monad),
@@ -288,6 +288,7 @@ newtype NValue' t f m a =
     {
     -- | Applying F-algebra Base functor data type (@NValueF@) to the F-algebra carrier (@NValue@), forming the \( F(A)-> A \)).
     _nValue :: f (NValueF (NValue t f m) m a)
+    -- NOTE: newtypes are always strict, so no bang needed
     }
   deriving (Generic, Typeable, Functor, Foldable)
 

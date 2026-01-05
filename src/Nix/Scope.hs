@@ -37,8 +37,8 @@ scopeLookup key = foldr fun Nothing
 
 data Scopes m a =
   Scopes
-    { lexicalScopes :: [Scope a]
-    , dynamicScopes :: [m (Scope a)]
+    { lexicalScopes :: ![Scope a]
+    , dynamicScopes :: ![m (Scope a)]
     }
 
 instance Show (Scopes m a) where
