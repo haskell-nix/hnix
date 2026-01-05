@@ -4,6 +4,7 @@
 {-# language PatternSynonyms    #-}
 {-# language RankNTypes         #-}
 {-# language TemplateHaskell    #-}
+{-# language TypeApplications   #-}
 
 -- | The source location annotated nix expression type and supporting types.
 --
@@ -30,10 +31,13 @@ import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
 import           GHC.Generics
+import qualified Language.Haskell.TH            as TH
+import qualified Language.Haskell.TH.Syntax     as TH
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Text.Read.Deriving
 import           Text.Show.Deriving
+import qualified Type.Reflection                as Reflection
 
 -- * data type @SrcSpan@ - a zone in a source file
 
@@ -143,6 +147,34 @@ type NExprLoc = Fix NExprLocF
 instance Serialise NExprLoc
 
 instance Binary NExprLoc
+
+instance TH.Lift NExprLoc where
+  lift =
+    TH.dataToExpQ
+      (\b ->
+        -- Handle Text values
+        (do
+          Reflection.HRefl <-
+            Reflection.eqTypeRep
+              (Reflection.typeRep @Text)
+              (Reflection.typeOf  b    )
+          pure [| $(TH.lift b) |]
+        )
+        <|>
+        -- Handle VarName values to use mkVarName instead of constructor
+        (do
+          Reflection.HRefl <-
+            Reflection.eqTypeRep
+              (Reflection.typeRep @VarName)
+              (Reflection.typeOf  b    )
+          pure $ TH.appE (TH.varE 'mkVarName) (TH.litE (TH.stringL (toString (varNameText b))))
+        )
+      )
+#if MIN_VERSION_template_haskell(2,17,0)
+  liftTyped = TH.unsafeCodeCoerce . TH.lift
+#elif MIN_VERSION_template_haskell(2,16,0)
+  liftTyped = TH.unsafeTExpCoerce . TH.lift
+#endif
 
 -- * Other
 

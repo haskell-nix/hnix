@@ -65,10 +65,10 @@ toJSON = \case
    where
 #if MIN_VERSION_aeson(2,0,0)
     lkup = AKM.lookup
-    kmap = AKM.fromHashMap $ HM.mapKeys (AKM.fromText . coerce) m
+    kmap = AKM.fromHashMap $ HM.mapKeys (AKM.fromText . varNameText) m
 #else
     lkup = HM.lookup
-    kmap = HM.mapKeys (coerce @VarName @Text) m
+    kmap = HM.mapKeys varNameText m
 #endif
   NVPath p ->
     do

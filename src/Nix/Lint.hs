@@ -329,7 +329,7 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
-  freeVariable var = symerr $ "Undefined variable '" <> coerce var <> "'"
+  freeVariable var = symerr $ "Undefined variable '" <> varNameText var <> "'"
 
   attrMissing ks ms =
     evalError @(Symbolic m) . ErrorCall . toString $
@@ -338,7 +338,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         (\ s ->  "Could not look up attribute " <> attr <> " in " <> show s)
         ms
    where
-    attr = Text.intercalate "." $ NE.toList $ coerce ks
+    attr = Text.intercalate "." $ NE.toList $ fmap varNameText ks
 
   evalCurPos =
     do

@@ -140,7 +140,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ NVBuiltin (coerce name) $ toBuiltin name . f <=< fromValue . Deeper
+    pure $ NVBuiltin (mkVarName name) $ toBuiltin name . f <=< fromValue . Deeper
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
@@ -241,7 +241,7 @@ foldNixPath z f =
 attrsetGet :: MonadNix e t f m => VarName -> AttrSet (NValue t f m) -> m (NValue t f m)
 attrsetGet k s =
   maybe
-    (throwError $ ErrorCall $ toString @Text $ "Attribute '" <> coerce k <> "' required")
+    (throwError $ ErrorCall $ toString @Text $ "Attribute '" <> varNameText k <> "' required")
     pure
     (M.lookup k s)
 
@@ -455,7 +455,7 @@ hasAttrNix
   -> m (NValue t f m)
 hasAttrNix x y =
   do
-    (coerce -> key) <- fromStringNoContext =<< fromValue x
+    (mkVarName -> key) <- fromStringNoContext =<< fromValue x
     (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
 
     toValue $ M.member key aset
@@ -471,7 +471,7 @@ getAttrNix
   -> m (NValue t f m)
 getAttrNix x y =
   do
-    (coerce -> key) <- fromStringNoContext =<< fromValue x
+    (mkVarName -> key) <- fromStringNoContext =<< fromValue x
     (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
 
     attrsetGet key aset
@@ -514,7 +514,7 @@ addDrvOutputDependenciesNix nv =
 
     let
       path = getStringContextPath sc
-      pathText = coerce path :: Text
+      pathText = varNameText path
       ensureDrv =
         when (not (".drv" `Text.isSuffixOf` pathText)) $
           throwError $ ErrorCall $ "builtins.addDrvOutputDependencies: path '" <> show pathText <> "' is not a derivation"
@@ -546,7 +546,7 @@ unsafeGetAttrPosNix nvX nvY =
         maybe
           (pure NVNull)
           toValue
-          (M.lookup @VarName (coerce $ ignoreContext ns) apos)
+          (M.lookup @VarName (mkVarName $ ignoreContext ns) apos)
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
 
 -- This function is a bit special in that it doesn't care about the contents
@@ -790,7 +790,7 @@ attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNamesNix =
     coersion . inHask @(AttrSet (NValue t f m))
-      (fmap (mkNixStringWithoutContext . coerce) . sort . M.keys)
+      (fmap (mkNixStringWithoutContext . varNameText) . sort . M.keys)
  where
   coersion = fmap (coerce :: CoerceDeeperToNValue t f m)
 
@@ -835,7 +835,7 @@ mapAttrsNix f xs =
 
       applyFunToKeyVal (key, val) =
         do
-          runFunForKey <- callFunc f $ mkNVStrWithoutContext (coerce key)
+          runFunForKey <- callFunc f $ mkNVStrWithoutContext (varNameText key)
           callFunc runFunForKey val
 
     newVals <-
@@ -878,7 +878,7 @@ zipAttrsWithNix f nvSets =
 
       applyFunToKeyVals (key, vals) =
         do
-          runFunForKey <- callFunc f $ mkNVStrWithoutContext (coerce key)
+          runFunForKey <- callFunc f $ mkNVStrWithoutContext (varNameText key)
           callFunc runFunForKey (NVList vals)
 
     newVals <-
@@ -914,7 +914,7 @@ catAttrsNix attrName xs =
 
     NVList . catMaybes <$>
       traverse
-        (fmap (M.lookup @VarName $ coerce n) . fromValue <=< demand)
+        (fmap (M.lookup @VarName $ mkVarName n) . fromValue <=< demand)
         l
 
 baseNameOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1002,7 +1002,7 @@ pathNix arg =
     name      <- toText <$> attrGetOr (takeFileName path) (fmap (coerce . toString) . fromStringNoContext) "name" attrs
     recursive <- attrGetOr True pure "recursive" attrs
 
-    Right (coerce . toText . coerce @StorePath @String -> s) <- addToStore name (NarFile path) recursive False
+    Right (mkVarName . toText . coerce @StorePath @String -> s) <- addToStore name (NarFile path) recursive False
     -- TODO: Ensure that s matches sha256 when not empty
     pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
  where
@@ -1035,7 +1035,7 @@ filterSourceNix filterFun nvpath = do
   -- Add temp directory to store
   res <- addToStore name (NarFile tmpDirPath) True False
   storePath <- either throwError pure res
-  let s = coerce . toText . coerce @StorePath @String $ storePath
+  let s = mkVarName . toText . coerce @StorePath @String $ storePath
 
   -- Clean up temp directory
   liftIO $ Directory.removeDirectoryRecursive tmpDir
@@ -1312,7 +1312,7 @@ removeAttrsNix set v =
   do
     (m, p) <- fromValue @(AttrSet (NValue t f m), PositionSet) set
     (nsToRemove :: [NixString]) <- fromValue $ Deeper v
-    (coerce -> toRemove) <- traverse fromStringNoContext nsToRemove
+    (fmap mkVarName -> toRemove) <- traverse fromStringNoContext nsToRemove
     toValue (fun m toRemove, fun p toRemove)
  where
   fun :: forall k v . (Eq k, Hashable k) => HashMap k v -> [k] -> HashMap k v
@@ -1359,7 +1359,7 @@ toFileNix name s =
         (ignoreContext s')
 
     let
-      storepath  = coerce (fromString @Text) mres
+      storepath  = mkVarName $ toText $ coerce @StorePath @String mres
       sc = StringContext DirectPath storepath
 
     toValue $ mkNixStringWithSingletonContext sc storepath
@@ -1386,7 +1386,7 @@ storePathNix nvpath =
     path <- absolutePathFromValue =<< demand nvpath
     let
       pathText = toText path
-      varPath = coerce pathText :: VarName
+      varPath = mkVarName pathText
     opts <- askOptions
     when (not (storeDirPrefix opts `Text.isPrefixOf` pathText)) $
       throwError $ ErrorCall $ "builtins.storePath: path '" <> show pathText <> "' is not in the Nix store (" <> show (storeDirText opts) <> ")"
@@ -1643,7 +1643,7 @@ listToAttrsNix lst =
         (\ nvattrset ->
           do
             a <- fromValue @(AttrSet (NValue t f m)) =<< demand nvattrset
-            (coerce -> name) <- fromStringNoContext =<< fromValue =<< demand =<< attrsetGet "name" a
+            (mkVarName -> name) <- fromStringNoContext =<< fromValue =<< demand =<< attrsetGet "name" a
             val  <- attrsetGet "value" a
 
             pure (name, val)
@@ -1903,7 +1903,7 @@ groupByNix nvfun nvlist = do
  where
   app f x = do
     name <- fromValue @Text =<< f x
-    pure (VarName name, one x)
+    pure (mkVarName name, one x)
   extractP (NVBuiltin _ f, NVList l) = pure (f, l)
   extractP (NVClosure _ f, NVList l) = pure (f, l)
   extractP _v =
@@ -2008,7 +2008,7 @@ readDirNix nvpath =
           s <- getSymbolicLinkStatus $ path </> item
           let t = fileTypeFromStatus s
 
-          pure (coerce @(String -> Text) fromString item, t)
+          pure (mkVarName $ toText item, t)
 
     itemsWithTypes <-
       if isStorePath opts path
@@ -2016,7 +2016,7 @@ readDirNix nvpath =
           res <- readStoreDir path
           entries <- either throwError pure res
           pure $
-            (\(p, t) -> (fromString (coerce p), t)) <$> entries
+            (\(p, t) -> (mkVarName $ fromString $ coerce p, t)) <$> entries
         else do
           items <- listDirectory path
           traverse detectFileTypes items
@@ -2045,7 +2045,7 @@ outputOfNix nvDrvRef nvOutputName =
           ensureDrvPath p
           pure p
         [] -> do
-          let p = coerce contents :: VarName
+          let p = mkVarName contents
           ensureDrvText contents
           pure p
         _ ->
@@ -2062,7 +2062,7 @@ outputOfNix nvDrvRef nvOutputName =
       throwError $ ErrorCall $ "builtins.outputOf: path '" <> show p <> "' is not a derivation"
 
   ensureDrvPath :: VarName -> m ()
-  ensureDrvPath = ensureDrvText . coerce
+  ensureDrvPath = ensureDrvText . varNameText
 
 fromJSONNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -2085,9 +2085,9 @@ fromJSONNix nvjson =
         traverseToNValue
           (NVSet mempty)
 #if MIN_VERSION_aeson(2,0,0)
-          (M.mapKeys (coerce . AKM.toText)  $ AKM.toHashMap m)
+          (M.mapKeys (mkVarName . AKM.toText)  $ AKM.toHashMap m)
 #else
-          (M.mapKeys coerce m)
+          (M.mapKeys mkVarName m)
 #endif
       A.Array  l -> traverseToNValue NVList (V.toList l)
       A.String s -> pure $ mkNVStrWithoutContext s
@@ -2702,7 +2702,7 @@ builtinsList =
     -> VarName
     -> a
     -> m (Builtin (NValue t f m))
-  add' = hAdd (toBuiltin . coerce)
+  add' = hAdd (toBuiltin . varNameText)
 
 
 -- * Exported
@@ -2757,4 +2757,4 @@ builtins =
     nameBuiltins :: Builtin v -> Builtin v
     nameBuiltins b@(Builtin TopLevel _) = b
     nameBuiltins (Builtin Normal nB) =
-      Builtin TopLevel $ first (coerce @(Text -> Text) ("__" <>)) nB
+      Builtin TopLevel $ first (\n -> mkVarName ("__" <> varNameText n)) nB

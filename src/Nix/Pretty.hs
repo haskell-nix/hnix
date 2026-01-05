@@ -187,7 +187,7 @@ normalizePathParts parts =
           else "./" <> t
 
 prettyVarName :: VarName -> Doc ann
-prettyVarName = pretty @Text . coerce
+prettyVarName = pretty . varNameText
 
 prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = prettyVarName n
@@ -196,8 +196,9 @@ prettyParams (ParamSet mname variadic pset) =
     toDoc `whenJust` mname
  where
   toDoc :: VarName -> Doc ann
-  toDoc (coerce -> name) =
-    ("@" <> pretty name) `whenFalse` Text.null name
+  toDoc vn =
+    let name = varNameText vn
+    in ("@" <> pretty name) `whenFalse` Text.null name
 
 prettyParamSet :: forall ann . Variadic -> ParamSet (NixDoc ann) -> Doc ann
 prettyParamSet variadic args =
@@ -230,7 +231,7 @@ prettyKeyName (StaticKey key) =
       (HashSet.member key reservedNames)
       (prettyVarName key)
     )
-    (not $ Text.null $ coerce key)
+    (not $ Text.null $ varNameText key)
 prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
@@ -376,7 +377,7 @@ exprFNixDoc = \case
     prettyAddScope "with " scope body
   NAssert cond body ->
     prettyAddScope "assert " cond body
-  NSynHole name -> simpleExpr $ pretty @Text ("^" <> coerce name)
+  NSynHole name -> simpleExpr $ pretty @Text ("^" <> varNameText name)
  where
   prettyContainer h f t c =
     handlePresence
@@ -405,7 +406,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
     ]
   phi (NVClosure'  _    _) = NSym "<closure>"
   phi (NVPath'     p     ) = NLiteralPath p
-  phi (NVBuiltin'  name _) = NSym $ coerce ((mappend @Text) "builtins.") name
+  phi (NVBuiltin'  name _) = NSym $ mkVarName ("builtins." <> varNameText name)
 
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
@@ -504,7 +505,7 @@ printNix =
     "{ " <>
       fold
         [ check k <> " = " <> v <> "; "
-        | (coerce -> k, v) <- sort $ toList s
+        | (varNameText -> k, v) <- sort $ toList s
         ] <> "}"
    where
     check :: Text -> Text
@@ -517,4 +518,4 @@ printNix =
       tryRead = fmap ((\ s -> "\"" <> s <> "\"") . show) $ readMaybe @a $ toString v
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fromString $ coerce fp
-  phi (NVBuiltin' name _) = "<<builtin " <> coerce name <> ">>"
+  phi (NVBuiltin' name _) = "<<builtin " <> varNameText name <> ">>"

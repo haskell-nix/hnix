@@ -66,7 +66,7 @@ mkSynHole :: Text -> NExpr
 mkSynHole = Fix . mkSynHoleF
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = one . StaticKey . coerce
+mkSelector = one . StaticKey . mkVarName
 
 -- | Put a binary operator.
 --  @since
@@ -129,7 +129,7 @@ mkNamedVariadicParamSet name params = mkGeneralParamSet (pure name) params True
 -- > False -> {}
 --  @since 0.15.0
 mkGeneralParamSet :: Maybe Text -> [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkGeneralParamSet mname params variadic = ParamSet (coerce mname) (Variadic `whenTrue` variadic) (coerce params)
+mkGeneralParamSet mname params variadic = ParamSet (mkVarName <$> mname) (Variadic `whenTrue` variadic) (first mkVarName <$> params)
 
 -- | > rec { .. }
 mkRecSet :: [Binding NExpr] -> NExpr
@@ -257,11 +257,11 @@ mkRelPathF = mkPathF False
 
 -- | Unfixed @mkSym@.
 mkSymF :: Text -> NExprF a
-mkSymF = NSym . coerce
+mkSymF = NSym . mkVarName
 
 -- | Unfixed @mkSynHole@.
 mkSynHoleF :: Text -> NExprF a
-mkSynHoleF = NSynHole . coerce
+mkSynHoleF = NSynHole . mkVarName
 
 
 -- * Other
@@ -453,4 +453,4 @@ mkBinop = mkOp2
 --   * `mkVariadicSet` is for variadic;
 --   * `mkGeneralParamSet` a general constructor.
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (coerce params)
+mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (first mkVarName <$> params)

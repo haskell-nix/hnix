@@ -168,7 +168,7 @@ wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
 -- Currently instance is stuck in orphanage between the requirements to be MonadEval, aka Eval stage, and emposed requirement to be MonadNix (Execution stage). MonadNix constraint tries to put the cart before horse and seems superflous, since Eval in Nix also needs and can throw exceptions. It is between `nverr` and `evalError`.
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
-    nverr @e @t @f $ ErrorCall $ toString @Text $ "Undefined variable '" <> coerce var <> "'"
+    nverr @e @t @f $ ErrorCall $ toString @Text $ "Undefined variable '" <> varNameText var <> "'"
 
   synHole name =
     do
@@ -188,14 +188,14 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         (\ s -> "Could not look up attribute " <> attr <> " in " <> show (prettyNValue s))
         ms
        where
-        attr = Text.intercalate "." $ NE.toList $ coerce ks
+        attr = Text.intercalate "." $ NE.toList $ fmap varNameText ks
 
   evalCurPos =
     do
       scope                  <- askScopes
       span@(SrcSpan delta _) <- askSpan
       addProvenance @_ @_ @(NValue t f m)
-        (Provenance scope . NSymAnnF span $ coerce @Text "__curPos") <$>
+        (Provenance scope . NSymAnnF span $ "__curPos") <$>
           toValue delta
 
   evaledSym name val =

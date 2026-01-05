@@ -274,7 +274,7 @@ derivationParser = do
 
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
-    s <- M.mapKeys coerce <$> fromValue @(AttrSet (NValue t f m)) val
+    s <- M.mapKeys varNameText <$> fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
     storeDir <- storeDirFromOptions
@@ -315,25 +315,25 @@ defaultDerivationStrict val = do
           , env = modEnv (outputs' <>)
           }
 
-    (coerce @Text @VarName -> drvPath) <- pathToText storeDir <$> writeDerivation drv'
+    (mkVarName -> drvPath) <- pathToText storeDir <$> writeDerivation drv'
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
     digestValue <- hashDerivationModulo drv'
     -- Nix uses base16 for derivation hashes
     let drvHashBytes = convert digestValue :: ByteString
     let drvHash = decodeUtf8 (convertToBase Base16 drvHashBytes :: ByteString)
-    modify $ second $ MS.insert (coerce drvPath) drvHash
+    modify $ second $ MS.insert (varNameText drvPath) drvHash
 
     let
       outputsWithContext =
         Map.mapWithKey
-          (\out (coerce -> path) -> mkNixStringWithSingletonContext (StringContext (DerivationOutput out) drvPath) path)
+          (\out (mkVarName -> path) -> mkNixStringWithSingletonContext (StringContext (DerivationOutput out) drvPath) path)
           (outputs drv')
       drvPathWithContext = mkNixStringWithSingletonContext (StringContext AllOutputs drvPath) drvPath
       attrSet = NVStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ NVSet mempty $ M.mapKeys coerce attrSet
+    pure $ NVSet mempty $ M.mapKeys mkVarName attrSet
 
   where
 
@@ -413,7 +413,7 @@ defaultDerivationStrict val = do
     toStorePaths = foldl (flip addToInputs) mempty
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
-    addToInputs (StringContext kind (coerce -> path)) =
+    addToInputs (StringContext kind (varNameText -> path)) =
       case kind of
         DirectPath -> first $ Set.insert path
         DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
@@ -500,7 +500,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ toJSONNixString $ NVSet mempty $ M.mapKeys coerce $
+          jsonString :: NixString <- lift $ toJSONNixString $ NVSet mempty $ M.mapKeys mkVarName $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)

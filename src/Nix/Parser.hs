@@ -353,17 +353,18 @@ identifier =
   lexeme $
     try $
       do
-        (coerce -> iD) <-
+        iD <-
           liftA2 Text.cons
             (satisfy (\x -> isAlpha x || x == '_'))
             (takeWhileP mempty identLetter)
-        guard $ not $ iD `HashSet.member` reservedNames
-        pure iD
+        let varName = mkVarName iD
+        guard $ not $ varName `HashSet.member` reservedNames
+        pure varName
  where
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
 
 nixSym :: Parser NExprLoc
-nixSym = annotateLocation $ mkSymF <$> coerce identifier
+nixSym = annotateLocation $ mkSymF . varNameText <$> identifier
 
 
 -- ** ( ) parens
@@ -888,7 +889,7 @@ nixSelect term =
 
 nixSynHole :: Parser NExprLoc
 nixSynHole =
-  annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
+  annotateLocation $ mkSynHoleF . varNameText <$> (char '^' *> identifier)
 
 -- List of Nix operation parsers with their precedence.
 opParsers :: [(NOpPrecedence, Operator Parser NExprLoc)]

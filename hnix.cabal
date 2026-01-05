@@ -358,6 +358,7 @@ common shared
     , optparse-applicative >= 0.14.3 && < 0.19
     , relude >= 1.0.0 && < 1.3
     , serialise >= 0.2.1 && < 0.3
+    , symbolize >= 1.0.0 && < 2
     , template-haskell >= 2.13 && < 2.23
     , time >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.13
     , unix >= 2.7 && < 2.9

@@ -1,9 +1,12 @@
 {-# language ConstraintKinds #-}
 {-# language CPP #-}
 {-# language DeriveAnyClass #-}
+{-# language DerivingStrategies #-}
 {-# language FunctionalDependencies #-}
+{-# language GeneralizedNewtypeDeriving #-}
 {-# language RankNTypes #-}
 {-# language TemplateHaskell #-}
+{-# language TemplateHaskellQuotes #-}
 {-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-orphans #-}
@@ -29,6 +32,8 @@ where
 import           Nix.Prelude
 import qualified Codec.Serialise               as Serialise
 import           Codec.Serialise                ( Serialise )
+import           Symbolize                      ( Symbol )
+import qualified Symbolize
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
 import qualified Data.Binary                   as Binary
@@ -41,8 +46,11 @@ import qualified Data.HashMap.Lazy             as MapL
 import qualified Data.Set                      as Set
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
+import qualified Text.Read
+import           Text.Read                      ( parens, lexP )
 import           Data.Traversable               ( fmapDefault, foldMapDefault )
 import           GHC.Generics
+import qualified Language.Haskell.TH            as TH
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
 import           Lens.Family2.TH
@@ -169,18 +177,72 @@ instance FromJSON NSourcePos
 
 -- ** newtype VarName
 
-newtype VarName = VarName Text
-  deriving
-    ( Eq, Ord, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
-    , Show, Read, Hashable
-    )
+newtype VarName = VarName { getVarNameSymbol :: Symbol }
+  deriving stock (Generic, Typeable)
+  deriving newtype (Eq, Ord, NFData, Hashable)
+
+-- | Create a VarName from Text by interning it as a Symbol.
+-- O(log n) where n is the number of unique symbols.
+mkVarName :: Text -> VarName
+mkVarName = VarName . Symbolize.intern
+{-# INLINE mkVarName #-}
+
+-- | Extract the Text from a VarName.
+-- O(1) operation.
+varNameText :: VarName -> Text
+varNameText = Symbolize.unintern . getVarNameSymbol
+{-# INLINE varNameText #-}
 
 instance IsString VarName where
-  fromString = coerce . fromString @Text
+  fromString = mkVarName . fromString
 
 instance ToString VarName where
-  toString = toString @Text . coerce
+  toString = toString . varNameText
+
+instance Show VarName where
+  show v = "VarName " <> show (varNameText v)
+
+instance Read VarName where
+  readPrec = parens $ Text.Read.prec 10 $ do
+    Text.Read.Ident "VarName" <- lexP
+    t <- Text.Read.readPrec
+    pure (mkVarName t)
+
+-- Custom Serialise instance: serialize as Text
+instance Serialise VarName where
+  encode = Serialise.encode . varNameText
+  decode = mkVarName <$> Serialise.decode
+
+-- Custom Binary instance: serialize as Text
+instance Binary VarName where
+  put = Binary.put . varNameText
+  get = mkVarName <$> Binary.get
+
+-- Custom JSON instances: serialize as Text
+instance ToJSON VarName where
+  toJSON = toJSON . varNameText
+  toEncoding = toEncoding . varNameText
+
+instance FromJSON VarName where
+  parseJSON = fmap mkVarName . parseJSON
+
+-- Data instance needs manual implementation since Symbol doesn't have Data
+instance Data VarName where
+  gfoldl k z v = z mkVarName `k` varNameText v
+  gunfold k z _ = k (z mkVarName)
+  toConstr _ = varNameConstr
+  dataTypeOf _ = varNameDataType
+
+varNameConstr :: Constr
+varNameConstr = mkConstr varNameDataType "VarName" [] Data.Data.Prefix
+
+varNameDataType :: DataType
+varNameDataType = mkDataType "Nix.Expr.Types.VarName" [varNameConstr]
+
+-- TH Lift instance: generate code that uses mkVarName
+instance TH.Lift VarName where
+  lift v = [| mkVarName $(TH.lift (varNameText v)) |]
+  liftTyped v = [|| mkVarName $$(TH.liftTyped (varNameText v)) ||]
 
 -- ** data Params
 
@@ -687,16 +749,23 @@ instance TH.Lift NExpr where
   lift =
     TH.dataToExpQ
       (\b ->
-        do
-          -- Binding on constructor ensures type match and gives type inference to TH.
-          -- Reflection is the ability of a process to examine, introspect, and modify its own structure and behavior.
-          -- Reflection is a key strategy in metaprogramming.
-          -- <https://en.wikipedia.org/wiki/Reflective_programming>
+        -- Handle Text values
+        (do
           HRefl <-
             Reflection.eqTypeRep
               (Reflection.typeRep @Text)
               (Reflection.typeOf  b    )
           pure [| $(TH.lift b) |]
+        )
+        <|>
+        -- Handle VarName values to use mkVarName instead of constructor
+        (do
+          HRefl <-
+            Reflection.eqTypeRep
+              (Reflection.typeRep @VarName)
+              (Reflection.typeOf  b    )
+          pure $ TH.appE (TH.varE 'mkVarName) (TH.litE (TH.stringL (toString (varNameText b))))
+        )
       )
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = TH.unsafeCodeCoerce . TH.lift
@@ -725,7 +794,7 @@ hashAt = alterF
     -> (Maybe v -> f (Maybe v))
     -> AttrSet v
     -> f (AttrSet v)
-  alterF (coerce -> k) f m =
+  alterF k f m =
     maybe
       (MapL.delete k m)
       (\ v -> MapL.insert k v m)

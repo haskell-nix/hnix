@@ -31,7 +31,7 @@ asciiText :: Gen Text
 asciiText = fromString <$> asciiString
 
 asciiVarName :: Gen VarName
-asciiVarName = coerce <$> asciiText
+asciiVarName = mkVarName <$> asciiText
 
 -- Might want to replace this instance with a constant value
 genNPos :: Gen NPos

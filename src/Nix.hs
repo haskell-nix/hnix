@@ -105,11 +105,12 @@ evaluateExpression
 evaluateExpression mpath evaluator handler expr =
   do
     opts <- askOptions
-    (coerce -> args) <-
+    args <-
+      fmap (first mkVarName) <$>
       (traverse . traverse)
         eval'
-        $  (second parseArg <$> getArg    opts)
-        <> (second mkStr    <$> getArgstr opts)
+        (  (second parseArg <$> getArg    opts)
+        <> (second mkStr    <$> getArgstr opts))
     f <- evaluator mpath expr
     f' <- demand f
     val <-
@@ -137,7 +138,7 @@ processResult h val =
     opts <- askOptions
     maybe
       (h val)
-      (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
+      (\ (fmap mkVarName . Text.splitOn "." -> keys) -> processKeys keys val)
       (getAttr opts)
  where
   processKeys :: [VarName] -> NValue t f m -> m a
@@ -148,7 +149,7 @@ processResult h val =
         do
           v' <- demand v
           case (k, v') of
-            (Text.decimal . coerce -> Right (n,""), NVList xs) -> processKeys ks $ xs !! n
+            (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ xs !! n
             (_,         NVSet _ xs) ->
               maybe
                 (errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''.")

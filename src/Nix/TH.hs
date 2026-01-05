@@ -26,13 +26,21 @@ quoteExprExp :: String -> ExpQ
 quoteExprExp s = do
   expr <- parseExpr $ fromString s
   vars <- removeMissingNames $ getFreeVars expr
-  dataToExpQ (extQOnFreeVars metaExp vars) expr
+  dataToExpQ (extQ (extQOnFreeVars metaExp vars) liftVarName) expr
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
   expr <- parseExpr @Q $ fromString s
   vars <- removeMissingNames $ getFreeVars expr
-  dataToPatQ (extQOnFreeVars @_ @NExprLoc @PatQ metaPat vars) expr
+  dataToPatQ (extQ (extQOnFreeVars @_ @NExprLoc @PatQ metaPat vars) liftVarNamePat) expr
+
+-- | Custom lifting for VarName to use mkVarName instead of the constructor
+liftVarName :: VarName -> Maybe ExpQ
+liftVarName v = Just $ appE (varE 'mkVarName) (litE (stringL (toString (varNameText v))))
+
+-- | Custom pattern for VarName
+liftVarNamePat :: VarName -> Maybe PatQ
+liftVarNamePat _ = Nothing  -- Use default Data-based pattern matching
 
 -- | Helper function.
 extQOnFreeVars

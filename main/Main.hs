@@ -253,7 +253,7 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
                     (pure . pure . Free)
                     nv
                 )
-                (sortWith fst $ M.toList $ M.mapKeys coerce s)
+                (sortWith fst $ M.toList $ M.mapKeys varNameText s)
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True , True )

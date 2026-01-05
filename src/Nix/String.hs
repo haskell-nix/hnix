@@ -37,8 +37,9 @@ import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell)
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S
 import qualified Data.Text                     as Text
-import           Nix.Expr.Types                 ( VarName(..)
+import           Nix.Expr.Types                 ( VarName
                                                 , AttrSet
+                                                , varNameText
                                                 )
 
 
@@ -131,7 +132,7 @@ mkNixStringWithoutContext = NixString mempty
 -- | Create NixString using a singleton context
 mkNixStringWithSingletonContext
   :: StringContext -> VarName -> NixString
-mkNixStringWithSingletonContext c s = NixString (one c) (coerce @VarName @Text s)
+mkNixStringWithSingletonContext c s = NixString (one c) (varNameText s)
 
 -- | Create NixString from a Text and context
 mkNixString

@@ -297,7 +297,7 @@ browse _ =
     traverse_
       (\(k, v) ->
         do
-          liftIO $ Text.putStr $ coerce k <> " = "
+          liftIO $ Text.putStr $ varNameText k <> " = "
           printValue v
       )
       (M.toList $ coerce $ replCtx state)
@@ -327,7 +327,7 @@ typeof src = do
     maybe
       (exec False src)
       (pure . pure)
-      (M.lookup (coerce src) (coerce $ replCtx state))
+      (M.lookup (mkVarName src) (coerce $ replCtx state))
 
   traverse_ printValueType mVal
 
@@ -408,7 +408,7 @@ completeFunc reversedPrev word
                     candidates
                   )
         )
-        (M.lookup (coerce var) $ coerce $ replCtx state)
+        (M.lookup (mkVarName var) $ coerce $ replCtx state)
 
   -- Builtins, context variables
   | otherwise =
@@ -455,10 +455,10 @@ completeFunc reversedPrev word
                    (("." <> f) <>)
                    . algebraicComplete fs <=< demand
                 )
-                (M.lookup (coerce f) m)
+                (M.lookup f m)
       in
       case val of
-        NVSet _ xs -> withMap (M.mapKeys coerce xs)
+        NVSet _ xs -> withMap (M.mapKeys varNameText xs)
         _          -> stub
 
 -- | HelpOption inspired by Dhall Repl

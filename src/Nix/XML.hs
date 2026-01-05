@@ -94,7 +94,7 @@ mkEVal :: Text -> Text -> Element
 mkEVal = (`mkElem` "value")
 
 mkEName :: Text -> VarName -> Element
-mkEName x (coerce -> y) = (`mkElem` "name") x y
+mkEName x (varNameText -> y) = (`mkElem` "name") x y
 
 paramsXML :: Params r -> [Content]
 paramsXML (Param name) = one $ Elem $ mkEName "varpat" name
