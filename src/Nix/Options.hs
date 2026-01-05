@@ -42,8 +42,16 @@ data Options =
     , getTime        :: UTCTime
     -- ^ The time can be set to reproduce time-dependent states.
     , getFilePaths   :: [Path]
+    , getStoreDir    :: Path
+    , getStoreMode   :: StoreMode
+    , isFetchurlNoDownload :: Bool
     }
     deriving Show
+
+data StoreMode
+    = StoreRemote
+    | StoreOverlay
+    deriving (Eq, Ord, Enum, Bounded, Show)
 
 defaultOptions :: UTCTime -> Options
 defaultOptions currentTime =
@@ -79,6 +87,9 @@ defaultOptions currentTime =
     , getFromFile    = mempty
     , getTime        = currentTime
     , getFilePaths   = mempty
+    , getStoreDir    = "/nix/store"
+    , getStoreMode   = StoreRemote
+    , isFetchurlNoDownload = False
     }
 
 data Verbosity

@@ -10,6 +10,7 @@ import           Nix.Atoms
 import           Nix.Expr.Types                 ( VarName )
 import           Nix.Effects
 import           Nix.Frames
+import           Nix.Options                   ( Options )
 import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
@@ -40,6 +41,7 @@ data CopyToStoreMode
 coerceToString
   :: forall e t f m
    . ( Framed e m
+     , Has e Options
      , MonadStore m
      , MonadThrow m
      , MonadDataErrorContext t f m
@@ -59,6 +61,7 @@ coerceToString call ctsm clevel =
 coerceAnyToNixString
   :: forall e t f m
    . ( Framed e m
+     , Has e Options
      , MonadStore m
      , MonadThrow m
      , MonadDataErrorContext t f m
@@ -109,6 +112,7 @@ coerceAnyToNixString call ctsm = go
 coerceStringlikeToNixString
   :: forall e t f m
    . ( Framed e m
+     , Has e Options
      , MonadStore m
      , MonadThrow m
      , MonadDataErrorContext t f m
@@ -126,7 +130,7 @@ coerceStringlikeToNixString ctsm =
 
 -- | Convert @Path@ into @NixString@.
 -- With an additional option to store the resolved path into Nix Store.
-coercePathToNixString :: (MonadStore m, Framed e m) => CopyToStoreMode -> Path -> m NixString
+coercePathToNixString :: (MonadStore m, Framed e m, Has e Options) => CopyToStoreMode -> Path -> m NixString
 coercePathToNixString =
   bool
     (pure . mkNixStringWithoutContext . fromString . coerce)

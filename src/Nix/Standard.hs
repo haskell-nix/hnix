@@ -2,6 +2,9 @@
 {-# language CPP #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
+{-# language ConstraintKinds #-}
 
 {-# options_ghc -Wno-orphans #-}
 
@@ -36,11 +39,13 @@ import           Nix.Fresh.Basic
 import           Nix.Options
 import           Nix.Render
 import           Nix.Scope
+import           Nix.Store.Overlay
 import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
+import qualified System.Nix.StorePath          as Store
 
 
 newtype StdCited m a =
@@ -57,10 +62,33 @@ newtype StdThunk m =
     (StdCited m (NThunkF m (StdValue m)))
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
-type StandardIO = StandardT (StdIdT IO)
+type StdM m = StandardT (StdIdT m)
+type StdValM m = StdValue (StdM m)
+type StdThunM m = StdThunk (StdM m)
+type StandardIO = StdM IO
 type StdVal = StdValue StandardIO
 type StdThun = StdThunk StandardIO
 type StdIO = StandardIO ()
+
+type StdBase m =
+  ( MonadFix m
+  , MonadFile m
+  , MonadCatch m
+  , MonadThrow m
+  , MonadMask m
+  , MonadEnv m
+  , MonadPaths m
+  , MonadExec m
+  , MonadHttp m
+  , MonadInstantiate m
+  , MonadIntrospect m
+  , MonadPlus m
+  , MonadPutStr m
+  , MonadStore m
+  , MonadStoreRead m
+  , MonadAtomicRef m
+  , Typeable m
+  )
 
 -- | Type alias:
 --
@@ -97,6 +125,7 @@ instance
   , MonadPlus m
   , MonadPutStr m
   , MonadStore m
+  , MonadStoreRead m
   , MonadAtomicRef m
   , Typeable m
   , Scoped (StdValue m) m
@@ -373,3 +402,23 @@ runWithBasicEffects opts =
 
 runWithBasicEffectsIO :: Options -> StandardIO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
+
+runWithStoreEffectsIO
+  :: forall a
+   . Options
+  -> (forall m. StdBase m => StdM m a)
+  -> IO a
+runWithStoreEffectsIO opts action =
+  case getStoreMode opts of
+    StoreRemote ->
+      runWithBasicEffects opts (action :: StdM IO a)
+    StoreOverlay ->
+      let
+        storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
+        cfg = OverlayStoreConfig
+          { overlayStoreDir = storeDir
+          , overlayReadThrough = True
+          }
+      in
+        evalOverlayStoreT cfg defaultOverlayStoreState $
+          runWithBasicEffects opts (action :: StdM (OverlayStoreT IO) a)

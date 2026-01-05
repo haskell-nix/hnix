@@ -1,6 +1,8 @@
 {-# language MultiWayIf #-}
 {-# language TypeFamilies #-}
 {-# language RecordWildCards #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
 
 module Main ( main ) where
 
@@ -43,11 +45,11 @@ main =
     main' opts
 
 main' :: Options -> IO ()
-main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
+main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
  where
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
-  execContentsFilesOrRepl :: StdIO
+  execContentsFilesOrRepl :: forall m. StdBase m => StdM m ()
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
@@ -56,7 +58,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         loadExpressionFromFile
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
-    loadFromCliFilePathList :: StdIO
+    loadFromCliFilePathList :: StdM m ()
     loadFromCliFilePathList =
       case getFilePaths of
         []     -> runRepl
@@ -64,18 +66,20 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         _paths -> processSeveralFiles (coerce _paths)
      where
       -- | Fall back to running the REPL
+      runRepl :: StdM m ()
       runRepl = withEmptyNixContext Repl.main
 
+      readExpressionFromStdin :: StdM m ()
       readExpressionFromStdin =
         processExpr =<< liftIO Text.getContents
 
-    processSeveralFiles :: [Path] -> StdIO
+    processSeveralFiles :: [Path] -> StdM m ()
     processSeveralFiles = traverse_ processFile
      where
       processFile path = handleResult (pure path) =<< parseNixFileLoc path
 
     -- |  The `--read` option: load expression from a serialized file.
-    loadBinaryCacheFile :: Maybe StdIO
+    loadBinaryCacheFile :: Maybe (StdM m ())
     loadBinaryCacheFile =
       (\ (binaryCacheFile :: Path) ->
         do
@@ -84,11 +88,11 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       ) <$> getReadFrom
 
     -- | The `--expr` option: read expression from the argument string
-    loadLiteralExpression :: Maybe StdIO
+    loadLiteralExpression :: Maybe (StdM m ())
     loadLiteralExpression = processExpr <$> getExpression
 
     -- | The `--file` argument: read expressions from the files listed in the argument file
-    loadExpressionFromFile :: Maybe StdIO
+    loadExpressionFromFile :: Maybe (StdM m ())
     loadExpressionFromFile =
       -- We can start use Text as in the base case, requires changing Path -> Text
       -- But that is a gradual process:
@@ -99,12 +103,14 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           _fp -> readFile _fp
         ) <$> getFromFile
 
-  processExpr :: Text -> StdIO
+  processExpr :: forall m. StdBase m => Text -> StdM m ()
   processExpr = handleResult mempty . parseNixTextLoc
 
+  withEmptyNixContext :: forall m a. StdBase m => StdM m a -> StdM m a
   withEmptyNixContext = withNixContext mempty
 
   --  2021-07-15: NOTE: @handleResult@ & @process@ - have atrocious size & compexity, they need to be decomposed & refactored.
+  handleResult :: forall m err. (StdBase m, Show err) => Maybe Path -> Either err NExprLoc -> StdM m ()
   handleResult mpath =
     either
       (\ err ->
@@ -135,8 +141,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               NixException frames ->
                 errorWithoutStackTrace . show =<<
                   renderFrames
-                    @StdVal
-                    @StdThun
+                    @(StdValM m)
+                    @(StdThunM m)
                     frames
 
           when isRepl $
@@ -148,7 +154,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
-  processCLIOptions :: Maybe Path -> NExprLoc -> StdIO
+  processCLIOptions :: forall m. StdBase m => Maybe Path -> NExprLoc -> StdM m ()
   processCLIOptions mpath expr
     | isEvaluate =
       if
@@ -173,10 +179,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     evaluateExprWith evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
-      :: StdVal
-      -> StdIO
+      :: StdValM m
+      -> StdM m ()
     printer
-      | isFinder    = findAttrs <=< fromValue @(AttrSet StdVal)
+      | isFinder    = findAttrs <=< fromValue @(AttrSet (StdValM m))
       | otherwise = printer'
      where
       -- 2021-05-27: NOTE: With naive fix of the #941
@@ -193,17 +199,17 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
        where
         out
           :: (b -> Text)
-          -> (a -> StandardIO b)
+          -> (a -> StdM m b)
           -> a
-          -> StdIO
+          -> StdM m ()
         out transform val = liftIO . Text.putStrLn . transform <=< val
 
       findAttrs
-        :: AttrSet StdVal
-        -> StdIO
+        :: AttrSet (StdValM m)
+        -> StdM m ()
       findAttrs = go mempty
        where
-        go :: Text -> AttrSet StdVal -> StdIO
+        go :: Text -> AttrSet (StdValM m) -> StdM m ()
         go prefix s =
           traverse_
             (\ (k, mv) ->
@@ -233,7 +239,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                           path         = prefix <> k
                           (_, descend) = filterEntry path k
 
-                        val <- readRef @StandardIO ref
+                        val <- readRef ref
                         bool
                           (pure Nothing)
                           (forceEntry path nv)
@@ -267,25 +273,25 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
             _                              -> (True , True )
 
           forceEntry
-            :: MonadValue a StandardIO
+            :: MonadValue a (StdM m)
             => Text
             -> a
-            -> StandardIO (Maybe a)
+            -> StdM m (Maybe a)
           forceEntry k v =
             catch
               (pure <$> demand v)
               fun
            where
-            fun :: NixException -> StandardIO (Maybe a)
+            fun :: NixException -> StdM m (Maybe a)
             fun (coerce -> frames) =
               do
                 liftIO
                   . Text.putStrLn
                   . (("Exception forcing " <> k <> ": ") <>)
                   . show =<<
-                    renderFrames
-                      @StdVal
-                      @StdThun
+                  renderFrames
+                      @(StdValM m)
+                      @(StdThunM m)
                       frames
                 pure Nothing
 

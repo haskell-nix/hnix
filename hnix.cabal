@@ -414,6 +414,7 @@ library
     Nix.Render
     Nix.Render.Frame
     Nix.Scope
+    Nix.Store.Overlay
     Nix.Standard
     Nix.String
     Nix.String.Coerce
