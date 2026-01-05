@@ -400,6 +400,7 @@ library
     Nix.Expr.Types
     Nix.Expr.Types.Annotated
     Nix.Frames
+    Nix.FileType
     Nix.Fresh
     Nix.Fresh.Basic
     Nix.Json
