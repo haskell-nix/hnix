@@ -228,6 +228,19 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       span  <- askSpan
       mkNVPathWithProvenance scope span p <$> toAbsolutePath @t @f @m p
 
+  evalPath =
+    maybe
+      (nverr $ ErrorCall "Failed to assemble path")
+      (\ ns -> do
+          scope <- askScopes
+          span  <- askSpan
+          let litText = ignoreContext ns
+          let litPath = fromString (toString litText)
+          real <- toAbsolutePath @t @f @m litPath
+          pure $ addProvenance (Provenance scope . NPathAnnF span $ DoubleQuoted $ one $ Plain litText) $ NVPath real
+      )
+      <=< assembleString
+
   evalEnvPath p =
     do
       scope <- askScopes

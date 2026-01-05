@@ -589,6 +589,10 @@ data NExprF r
   --
   -- > NLiteralPath "/x"                           ~  /x
   -- > NLiteralPath "x/y"                          ~  x/y
+  | NPath !(NString r)
+  -- ^ A path expression with interpolations.
+  --
+  -- > NPath (DoubleQuoted [Plain "./", Antiquoted x]) ~  ./${x}
   | NEnvPath !Path
   -- ^ A path which refers to something in the Nix search path (the NIX_PATH
   -- environment variable. For example, @<nixpkgs/pkgs>@.
@@ -810,6 +814,7 @@ getFreeVars e =
     (NSet   NonRecursive  bindings) -> bindFreeVars bindings
     (NSet   Recursive     bindings) -> diffBetween bindFreeVars bindDefs bindings
     (NLiteralPath _               ) -> mempty
+    (NPath        string          ) -> mapFreeVars string
     (NEnvPath     _               ) -> mempty
     (NUnary       _    expr       ) -> getFreeVars expr
     (NApp         left right      ) -> collectFreeVars left right

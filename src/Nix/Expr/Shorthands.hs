@@ -243,6 +243,10 @@ mkPathF :: Bool -> FilePath -> NExprF a
 mkPathF False = NLiteralPath . coerce
 mkPathF True  = NEnvPath . coerce
 
+-- | Unfixed @mkPath@ for interpolated paths.
+mkPathStrF :: NString a -> NExprF a
+mkPathStrF = NPath
+
 -- | Unfixed @mkEnvPath@.
 mkEnvPathF :: FilePath -> NExprF a
 mkEnvPathF = mkPathF True

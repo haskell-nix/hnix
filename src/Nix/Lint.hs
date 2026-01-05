@@ -359,6 +359,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
 
   evalString      = const $ mkSymbolic1 TStr
   evalLiteralPath = const $ mkSymbolic1 TPath
+  evalPath        = const $ mkSymbolic1 TPath
   evalEnvPath     = const $ mkSymbolic1 TPath
 
   evalUnary op arg =

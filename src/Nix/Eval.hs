@@ -33,6 +33,7 @@ class (Show v, Monad m) => MonadEval v m where
   evalConstant    :: NAtom -> m v
   evalString      :: NString (m v) -> m v
   evalLiteralPath :: Path -> m v
+  evalPath        :: NString (m v) -> m v
   evalEnvPath     :: Path -> m v
   evalUnary       :: NUnaryOp -> v -> m v
   evalBinary      :: NBinaryOp -> v -> m v -> m v
@@ -116,6 +117,7 @@ eval (NSym var       ) =
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
 eval (NLiteralPath p      ) = evalLiteralPath p
+eval (NPath        str    ) = evalPath str
 eval (NEnvPath     p      ) = evalEnvPath p
 eval (NUnary op arg       ) = evalUnary op =<< arg
 

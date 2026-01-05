@@ -486,6 +486,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
   evalString      = constInfer typeString
   evalLiteralPath = constInfer typePath
+  evalPath        = constInfer typePath
   evalEnvPath     = constInfer typePath
 
   evalUnary op (Judgment as1 cs1 t1) =

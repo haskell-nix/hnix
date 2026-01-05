@@ -209,6 +209,9 @@ pattern NSetAnnF         ann rec x  = AnnF ann (NSet rec x)
 pattern NLiteralPathAnnF :: SrcSpan -> Path -> NExprLocF r
 pattern NLiteralPathAnnF ann x      = AnnF ann (NLiteralPath x)
 
+pattern NPathAnnF        :: SrcSpan -> NString r -> NExprLocF r
+pattern NPathAnnF        ann x      = AnnF ann (NPath x)
+
 pattern NEnvPathAnnF     :: SrcSpan -> Path -> NExprLocF r
 pattern NEnvPathAnnF     ann x      = AnnF ann (NEnvPath x)
 
@@ -244,7 +247,7 @@ pattern NAssertAnnF      ann x y    = AnnF ann (NAssert x y)
 
 pattern NSynHoleAnnF     :: SrcSpan -> VarName -> NExprLocF r
 pattern NSynHoleAnnF     ann x      = AnnF ann (NSynHole x)
-{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHoleAnnF #-}
+{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHoleAnnF #-}
 
 
 -- *** Patterns to match on 'NExprLoc' constructions (for 'SrcSpan'-based annotations).
@@ -266,6 +269,9 @@ pattern NSetAnn         ann rec x  = Ann ann (NSet rec x)
 
 pattern NLiteralPathAnn :: SrcSpan -> Path -> NExprLoc
 pattern NLiteralPathAnn ann x      = Ann ann (NLiteralPath x)
+
+pattern NPathAnn        :: SrcSpan -> NString NExprLoc -> NExprLoc
+pattern NPathAnn        ann x      = Ann ann (NPath x)
 
 pattern NEnvPathAnn     :: SrcSpan -> Path -> NExprLoc
 pattern NEnvPathAnn     ann x      = Ann ann (NEnvPath x)
@@ -302,4 +308,4 @@ pattern NAssertAnn      ann x y    = Ann ann (NAssert x y)
 
 pattern NSynHoleAnn     :: SrcSpan -> VarName -> NExprLoc
 pattern NSynHoleAnn     ann x      = Ann ann (NSynHole x)
-{-# complete NConstantAnn, NStrAnn, NSymAnn, NListAnn, NSetAnn, NLiteralPathAnn, NEnvPathAnn, NUnaryAnn, NBinaryAnn, NSelectAnn, NHasAttrAnn, NAbsAnn, NLetAnn, NIfAnn, NWithAnn, NAssertAnn, NSynHoleAnn #-}
+{-# complete NConstantAnn, NStrAnn, NSymAnn, NListAnn, NSetAnn, NLiteralPathAnn, NPathAnn, NEnvPathAnn, NUnaryAnn, NBinaryAnn, NSelectAnn, NHasAttrAnn, NAbsAnn, NLetAnn, NIfAnn, NWithAnn, NAssertAnn, NSynHoleAnn #-}

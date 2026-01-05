@@ -431,23 +431,48 @@ slash =
     try $
       char '/' <* notFollowedBy (satisfy $ \x -> x == '/' || x == '*' || isSpace x)
 
-pathStr :: Parser Path
-pathStr =
-  lexeme $ coerce . toString <$>
-    liftA2 (<>)
-      (takeWhileP mempty pathChar)
-      (Text.concat <$>
-        some
-          (liftA2 Text.cons
-            slash
-            (takeWhile1P mempty pathChar)
-          )
-      )
+pathPieces :: Parser ([Antiquoted Text NExprLoc], Bool)
+pathPieces =
+  lexeme $
+    do
+      pieces <- some pathPiece
+      let hasSlash = or $ snd <$> pieces
+      let parts = removeEmptyPlains . mergePlain $ fst <$> pieces
+      pure (parts, hasSlash)
+ where
+  pathPiece :: Parser (Antiquoted Text NExprLoc, Bool)
+  pathPiece =
+    (,(False)) <$> antiquoted
+      <|> (,(True)) . Plain . one <$> slash
+      <|> (,(False)) . Plain . fromString <$> some (satisfy pathChar)
 
 nixPath :: Parser NExprLoc
 nixPath =
   annotateNamedLocation "path" $
-    try $ mkPathF False <$> coerce pathStr
+    try $
+      do
+        (parts, hasSlash) <- pathPieces
+        guard hasSlash
+        let hasAntiquote =
+              any
+                (\case
+                  Antiquoted{} -> True
+                  _ -> False
+                )
+                parts
+        if hasAntiquote
+          then
+            pure $ mkPathStrF $ DoubleQuoted parts
+          else
+            case traverse getPlain parts of
+              Just texts ->
+                pure $ mkPathF False $ toString $ Text.concat texts
+              Nothing -> empty
+  where
+    getPlain :: Antiquoted Text NExprLoc -> Maybe Text
+    getPlain = \case
+      Plain t -> Just t
+      _ -> Nothing
 
 
 -- ** <<x>> environment path

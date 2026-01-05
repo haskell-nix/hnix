@@ -150,6 +150,42 @@ prettyString (Indented _ parts) =
     prettyPart EscapedNewline = "\\n"
     prettyPart (Antiquoted r) = antiquote r
 
+prettyPathString :: NString (NixDoc ann) -> Doc ann
+prettyPathString (DoubleQuoted parts) =
+  foldMap prettyPart parts
+ where
+  prettyPart (Plain t)      = pretty t
+  prettyPart EscapedNewline = "\\n"
+  prettyPart (Antiquoted r) = antiquote r
+prettyPathString (Indented _ parts) =
+  -- Paths should never be indented strings, but render something sensible.
+  foldMap prettyPart parts
+ where
+  prettyPart (Plain t)      = pretty t
+  prettyPart EscapedNewline = "\\n"
+  prettyPart (Antiquoted r) = antiquote r
+
+normalizePathString :: NString r -> NString r
+normalizePathString (DoubleQuoted parts) = DoubleQuoted (normalizePathParts parts)
+normalizePathString other = other
+
+normalizePathParts :: [Antiquoted Text r] -> [Antiquoted Text r]
+normalizePathParts parts =
+  case parts of
+    (Plain t : rest) -> Plain (normalizePrefix t rest) : rest
+    _ -> parts
+ where
+  normalizePrefix :: Text -> [Antiquoted Text r] -> Text
+  normalizePrefix t rest =
+    case (t, rest) of
+      ("./", [])  -> "./."
+      ("../", []) -> "../."
+      ("..", [])  -> "../."
+      _ ->
+        if any (`Text.isPrefixOf` t) ["/", "~/", "./", "../"]
+          then t
+          else "./" <> t
+
 prettyVarName :: VarName -> Doc ann
 prettyVarName = pretty @Text . coerce
 
@@ -313,6 +349,8 @@ exprFNixDoc = \case
               ("./" <> path)
               path
               (any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"])
+  NPath p ->
+    pathExpr $ prettyPathString $ normalizePathString p
   NSym name -> simpleExpr $ prettyVarName name
   NLet binds body ->
     leastPrecedence $
@@ -371,7 +409,34 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
 
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
-prettyNValue = prettyNix . valueToExpr
+prettyNValue v =
+  fromMaybe
+    (prettyNix $ valueToExpr v)
+    (derivationDoc v)
+
+derivationDoc :: forall t f m ann . MonadDataContext f m => NValue t f m -> Maybe (Doc ann)
+derivationDoc =
+  \case
+    NVSet _ s -> do
+      let hasType =
+            case M.lookup "type" s of
+              Just (NVStr ty) -> ignoreContext ty == "derivation"
+              _ -> False
+      let hasDrv = M.member "drvPath" s
+      let hasOut = M.member "outPath" s
+      guard (hasType || (hasDrv && hasOut))
+      let mDrv = M.lookup "drvPath" s >>= valueToText
+      pure $
+        case mDrv of
+          Just drv -> "<derivation " <> pretty drv <> ">"
+          Nothing -> "<derivation>"
+    _ -> Nothing
+ where
+  valueToText :: NValue t f m -> Maybe Text
+  valueToText = \case
+    NVStr ns -> Just $ ignoreContext ns
+    NVPath p -> Just $ toText p
+    _ -> Nothing
 
 -- | During the output, which can print only representation of value,
 -- lazy thunks need to looked into & so - be evaluated (*sic)
