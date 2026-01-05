@@ -18,6 +18,7 @@ module Nix.Convert where
 import           Nix.Prelude
 import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
+import           Nix.Options                   ( Options )
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
@@ -211,6 +212,7 @@ instance Convertible e t f m
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
          , MonadEffects t f m
+         , Has e Options
          )
   => FromValue NixString m (NValue' t f m (NValue t f m)) where
 

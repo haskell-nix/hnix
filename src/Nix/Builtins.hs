@@ -37,6 +37,10 @@ import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Key                as AKM
 import qualified Data.Aeson.KeyMap             as AKM
 #endif
+import           Data.ByteArray.Encoding        ( Base(Base16, Base64)
+                                                , convertFromBase
+                                                , convertToBase
+                                                )
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
@@ -60,7 +64,15 @@ import           NeatInterpolation              ( text )
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
-import           Nix.Effects.Basic              ( fetchTarball )
+import           Nix.Effects.Basic              ( fetchTarball
+                                                , fetchGit
+                                                , fetchTree
+                                                )
+import qualified System.IO.Temp                as Temp
+import qualified System.Directory              as Directory
+import qualified System.FilePath               as FP
+import qualified System.PosixCompat.Files      as Posix
+import qualified Data.ByteString               as BS
 import           Nix.Exec
 import           Nix.Expr.Types
 import qualified Nix.Eval                      as Eval
@@ -70,6 +82,7 @@ import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Render
+import           Nix.FileType
 import           Nix.Scope
 import           Nix.String
 import           Nix.String.Coerce
@@ -77,11 +90,12 @@ import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
+import           Data.Dependent.Sum             ( DSum((:=>)) )
+import qualified System.Nix.Hash               as StoreHash
+import qualified System.Nix.Store.ReadOnly     as StoreRO
+import qualified System.Nix.Store.Types        as StoreTypes
+import qualified System.Nix.StorePath          as Store
 import           System.Nix.Base32             as Base32
-import           System.PosixCompat.Files       ( isRegularFile
-                                                , isDirectory
-                                                , isSymbolicLink
-                                                )
 import qualified Text.Show
 import           Text.Regex.TDFA                ( Regex
                                                 , makeRegex
@@ -364,13 +378,6 @@ absolutePathFromValue =
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
 
 
-data FileType
-  = FileTypeRegular
-  | FileTypeDirectory
-  | FileTypeSymlink
-  | FileTypeUnknown
-  deriving (Show, Read, Eq, Ord)
-
 instance Convertible e t f m => ToValue FileType m (NValue t f m) where
   toValue =
     toValue . mkNixStringWithoutContext .
@@ -482,6 +489,46 @@ unsafeDiscardOutputDependencyNix nv =
   discard :: StringContext -> StringContext
   discard (StringContext AllOutputs a) = StringContext DirectPath a
   discard x                            = x
+
+addDrvOutputDependenciesNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> m (NValue t f m)
+addDrvOutputDependenciesNix nv =
+  do
+    ns <- fromValue =<< demand nv
+    let
+      ctx = getStringContext ns
+      contents = ignoreContext ns
+      ctxSize = HS.size ctx
+
+    sc <-
+      case HS.toList ctx of
+        [single] -> pure single
+        _ ->
+          throwError $
+            ErrorCall $
+              "builtins.addDrvOutputDependencies: string context must have exactly one element, but has "
+              <> show ctxSize
+
+    let
+      path = getStringContextPath sc
+      pathText = coerce path :: Text
+      ensureDrv =
+        when (not (".drv" `Text.isSuffixOf` pathText)) $
+          throwError $ ErrorCall $ "builtins.addDrvOutputDependencies: path '" <> show pathText <> "' is not a derivation"
+
+    case getStringContextFlavor sc of
+      DirectPath -> do
+        ensureDrv
+        toValue $ mkNixString (one $ StringContext AllOutputs path) contents
+      AllOutputs ->
+        pure $ NVStr ns
+      DerivationOutput out ->
+        throwError $
+          ErrorCall $
+            "builtins.addDrvOutputDependencies: cannot act on derivation output '" <> show out <> "'"
 
 unsafeGetAttrPosNix
   :: forall e t f m
@@ -798,6 +845,49 @@ mapAttrsNix f xs =
 
     toValue $ M.fromList $ zip keys newVals
 
+zipAttrsWithNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+zipAttrsWithNix f nvSets =
+  do
+    sets <- fromValue @[NValue t f m] =<< demand nvSets
+
+    collected <-
+      foldM
+        (\ acc v -> do
+          v' <- demand v
+          case v' of
+            NVSet _ attrs ->
+              pure $
+                foldl'
+                  (\ m (k, val) -> M.insertWith (\new old -> old <> new) k [val] m)
+                  acc
+                  (M.toList attrs)
+            _ ->
+              throwError $ ErrorCall $ "builtins.zipAttrsWith: expected a list of attrsets, got " <> show v'
+        )
+        mempty
+        sets
+
+    let
+      keyVals = M.toList collected
+      keys = fst <$> keyVals
+
+      applyFunToKeyVals (key, vals) =
+        do
+          runFunForKey <- callFunc f $ mkNVStrWithoutContext (coerce key)
+          callFunc runFunForKey (NVList vals)
+
+    newVals <-
+      traverse
+        (defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in zipAttrsWith:\n") . applyFunToKeyVals)
+        keyVals
+
+    toValue $ M.fromList $ zip keys newVals
+
 filterNix
   :: forall e t f m
    . MonadNix e t f m
@@ -917,6 +1007,90 @@ pathNix arg =
     pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
  where
   coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
+
+-- | Implementation of builtins.filterSource
+-- Signature: filterSource :: (path -> type -> bool) -> path -> path
+-- The filter function is called for each file/directory with:
+--   path: the full path to the file (string)
+--   type: one of "regular", "directory", "symlink", "unknown"
+-- Returns true to include the file, false to exclude it.
+filterSourceNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+filterSourceNix filterFun nvpath = do
+  srcPath <- absolutePathFromValue =<< demand nvpath
+  let name = toText $ takeFileName srcPath
+
+  -- Create temp directory
+  tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
+  tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-filterSource"
+  let tmpDirPath = coerce tmpDir :: Path
+
+  -- Copy files that pass the filter to temp directory
+  copyFiltered srcPath tmpDirPath srcPath
+
+  -- Add temp directory to store
+  res <- addToStore name (NarFile tmpDirPath) True False
+  storePath <- either throwError pure res
+  let s = coerce . toText . coerce @StorePath @String $ storePath
+
+  -- Clean up temp directory
+  liftIO $ Directory.removeDirectoryRecursive tmpDir
+
+  pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
+ where
+  -- Convert FileType to the string that Nix uses
+  fileTypeToString :: FileType -> Text
+  fileTypeToString = \case
+    FileTypeRegular   -> "regular"
+    FileTypeDirectory -> "directory"
+    FileTypeSymlink   -> "symlink"
+    FileTypeUnknown   -> "unknown"
+
+  -- Call the user's filter function
+  applyFilter :: Path -> FileType -> m Bool
+  applyFilter path fileType = do
+    pathArg <- toValue $ mkNixStringWithoutContext $ toText path
+    typeArg <- toValue $ mkNixStringWithoutContext $ fileTypeToString fileType
+    result <- callFunc filterFun pathArg >>= (`callFunc` typeArg)
+    fromValue result
+
+  -- Recursively copy files that pass the filter
+  copyFiltered :: Path -> Path -> Path -> m ()
+  copyFiltered srcRoot destRoot currentPath = do
+    status <- getSymbolicLinkStatus currentPath
+    let fileType = fileTypeFromStatus status
+        relPath = FP.makeRelative (coerce srcRoot) (coerce currentPath)
+        destPath = coerce destRoot FP.</> relPath
+
+    -- Check if this path passes the filter
+    include <- applyFilter currentPath fileType
+
+    when include $ do
+      case fileType of
+        FileTypeDirectory -> do
+          liftIO $ Directory.createDirectoryIfMissing True destPath
+          items <- listDirectory currentPath
+          traverse_ (copyFiltered srcRoot destRoot . (currentPath </>)) items
+
+        FileTypeSymlink -> do
+          liftIO $ Directory.createDirectoryIfMissing True (FP.takeDirectory destPath)
+          target <- liftIO $ Posix.readSymbolicLink (coerce currentPath)
+          liftIO $ Posix.createSymbolicLink target destPath
+
+        FileTypeRegular -> do
+          liftIO $ Directory.createDirectoryIfMissing True (FP.takeDirectory destPath)
+          liftIO $ do
+            contents <- BS.readFile (coerce currentPath)
+            BS.writeFile destPath contents
+            Posix.setFileMode destPath (Posix.fileMode status)
+
+        FileTypeUnknown ->
+          -- Skip unknown file types (matches Nix behavior)
+          pass
 
 dirOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOfNix nvdir =
@@ -1193,19 +1367,53 @@ toFileNix name s =
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPathNix = inHask @Path id
 
+storeDirText :: Options -> Text
+storeDirText opts = Text.dropWhileEnd (== '/') $ toText $ getStoreDir opts
+
+storeDirPrefix :: Options -> Text
+storeDirPrefix opts = storeDirText opts <> "/"
+
+isStorePath :: Options -> Path -> Bool
+isStorePath opts path =
+  let
+    pathText = toText path
+    dirText = storeDirText opts
+  in pathText == dirText || storeDirPrefix opts `Text.isPrefixOf` pathText
+
+storePathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+storePathNix nvpath =
+  do
+    path <- absolutePathFromValue =<< demand nvpath
+    let
+      pathText = toText path
+      varPath = coerce pathText :: VarName
+    opts <- askOptions
+    when (not (storeDirPrefix opts `Text.isPrefixOf` pathText)) $
+      throwError $ ErrorCall $ "builtins.storePath: path '" <> show pathText <> "' is not in the Nix store (" <> show (storeDirText opts) <> ")"
+    toValue $ mkNixStringWithSingletonContext (StringContext DirectPath varPath) varPath
+
 pathExistsNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExistsNix nvpath =
   do
-    path <- demand nvpath
-    toValue =<<
-      case path of
-        NVPath p  -> doesPathExist p
-        NVStr  ns -> doesPathExist $ coerce $ toString $ ignoreContext ns
-        _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
+    v <- demand nvpath
+    opts <- askOptions
+    path <- case v of
+      NVPath p  -> pure p
+      NVStr  ns -> pure $ coerce $ toString $ ignoreContext ns
+      _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
+    exists <-
+      if isStorePath opts path
+        then storePathExists path
+        else doesPathExist path
+    toValue exists
 
 isPathNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isPathNix = hasKind @Path
+isPathNix nv = do
+  v <- demand nv
+  case v of
+    NVPath _ -> pure $ NVBool True
+    _ -> pure $ NVBool False
 
 isAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1482,6 +1690,197 @@ hashFileNix nsAlgo nvfilepath = Prim $ hash =<< fileContent
   fileContent :: m NixString
   fileContent = mkNixStringWithoutContext <$> Nix.Render.readFile nvfilepath
 
+data HashAlgoName
+  = HashAlgoMD5
+  | HashAlgoSHA1
+  | HashAlgoSHA256
+  | HashAlgoSHA512
+  deriving (Eq, Show)
+
+data HashFormatName
+  = HashFormatBase16
+  | HashFormatNix32
+  | HashFormatBase64
+  | HashFormatSRI
+  deriving (Eq, Show)
+
+hashAlgoFromText :: Text -> Maybe HashAlgoName
+hashAlgoFromText =
+  \case
+    "md5"    -> Just HashAlgoMD5
+    "sha1"   -> Just HashAlgoSHA1
+    "sha256" -> Just HashAlgoSHA256
+    "sha512" -> Just HashAlgoSHA512
+    _        -> Nothing
+
+hashAlgoToText :: HashAlgoName -> Text
+hashAlgoToText =
+  \case
+    HashAlgoMD5    -> "md5"
+    HashAlgoSHA1   -> "sha1"
+    HashAlgoSHA256 -> "sha256"
+    HashAlgoSHA512 -> "sha512"
+
+hashAlgoDigestLength :: HashAlgoName -> Int
+hashAlgoDigestLength =
+  \case
+    HashAlgoMD5    -> 16
+    HashAlgoSHA1   -> 20
+    HashAlgoSHA256 -> 32
+    HashAlgoSHA512 -> 64
+
+parseHashFormat :: Text -> Either ErrorCall HashFormatName
+parseHashFormat =
+  \case
+    "base16" -> Right HashFormatBase16
+    "nix32"  -> Right HashFormatNix32
+    "base32" -> Right HashFormatNix32
+    "base64" -> Right HashFormatBase64
+    "sri"    -> Right HashFormatSRI
+    x        -> Left $ ErrorCall $ "builtins.convertHash: unknown hash format " <> show x
+
+decodeBase16 :: Text -> Either String B.ByteString
+decodeBase16 t = convertFromBase Base16 (encodeUtf8 t :: B.ByteString)
+
+decodeBase64 :: Text -> Either String B.ByteString
+decodeBase64 t = convertFromBase Base64 (encodeUtf8 t :: B.ByteString)
+
+decodeNix32 :: Text -> Either String B.ByteString
+decodeNix32 = Base32.decode
+
+encodeBase16 :: B.ByteString -> Text
+encodeBase16 bs = decodeUtf8 (convertToBase Base16 bs :: B.ByteString)
+
+encodeBase64 :: B.ByteString -> Text
+encodeBase64 bs = decodeUtf8 (convertToBase Base64 bs :: B.ByteString)
+
+convertHashNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+convertHashNix nv =
+  do
+    attrs <- fromValue @(AttrSet (NValue t f m)) =<< demand nv
+
+    hashText <-
+      fromStringNoContext
+        =<< fromValue
+        =<< demand
+        =<< attrsetGet "hash" attrs
+
+    mAlgoText <-
+      traverse
+        (fromStringNoContext <=< fromValue <=< demand)
+        (M.lookup "hashAlgo" attrs)
+
+    mAlgo <-
+      case mAlgoText of
+        Nothing -> pure Nothing
+        Just t ->
+          case hashAlgoFromText t of
+            Just a  -> pure (Just a)
+            Nothing -> throwError $ ErrorCall $ "builtins.convertHash: unknown hash algorithm " <> show t
+
+    toHashFormatText <-
+      fromStringNoContext
+        =<< fromValue
+        =<< demand
+        =<< attrsetGet "toHashFormat" attrs
+
+    toFormat <- either throwError pure $ parseHashFormat toHashFormatText
+
+    (algo, bytes) <- parseInputHash mAlgo hashText
+
+    let
+      rendered =
+        case toFormat of
+          HashFormatBase16 -> encodeBase16 bytes
+          HashFormatNix32  -> Base32.encode bytes
+          HashFormatBase64 -> encodeBase64 bytes
+          HashFormatSRI    -> hashAlgoToText algo <> "-" <> encodeBase64 bytes
+
+    toValue $ mkNixStringWithoutContext rendered
+
+ where
+  parseInputHash
+    :: Maybe HashAlgoName
+    -> Text
+    -> m (HashAlgoName, B.ByteString)
+  parseInputHash mAlgo input =
+    do
+      let
+        (algoFromHash, body, mFormat) = parseHashPrefix input
+
+      algo <-
+        case (mAlgo, algoFromHash) of
+          (Just a, Just b) | a /= b ->
+            throwError $ ErrorCall $ "builtins.convertHash: hashAlgo " <> show (hashAlgoToText a)
+              <> " does not match hash prefix " <> show (hashAlgoToText b)
+          (Just a, _) -> pure a
+          (Nothing, Just b) -> pure b
+          (Nothing, Nothing) ->
+            throwError $ ErrorCall "builtins.convertHash: missing hashAlgo"
+
+      bytes <- decodeHash algo mFormat body
+      pure (algo, bytes)
+
+  parseHashPrefix :: Text -> (Maybe HashAlgoName, Text, Maybe HashFormatName)
+  parseHashPrefix t =
+    case Text.breakOn "-" t of
+      (algoTxt, rest)
+        | Just algo <- hashAlgoFromText algoTxt
+        , not (Text.null rest) ->
+            (Just algo, Text.drop 1 rest, Just HashFormatBase64)
+      _ ->
+        case Text.breakOn ":" t of
+          (algoTxt, rest)
+            | Just algo <- hashAlgoFromText algoTxt
+            , not (Text.null rest) ->
+                (Just algo, Text.drop 1 rest, Nothing)
+          _ -> (Nothing, t, Nothing)
+
+  decodeHash
+    :: HashAlgoName
+    -> Maybe HashFormatName
+    -> Text
+    -> m B.ByteString
+  decodeHash algo mFormat body =
+    do
+      let expectedLen = hashAlgoDigestLength algo
+
+          tryDecode fmt =
+            case fmt of
+              HashFormatBase16 -> decodeBase16 body
+              HashFormatNix32  -> decodeNix32 body
+              HashFormatBase64 -> decodeBase64 body
+              HashFormatSRI    -> decodeBase64 body
+
+          accept bs =
+            if B.length bs == expectedLen
+              then Just bs
+              else Nothing
+
+          formats =
+            case mFormat of
+              Just fmt -> [fmt]
+              Nothing  -> [HashFormatBase16, HashFormatNix32, HashFormatBase64]
+
+          tryFormats [] = Nothing
+          tryFormats (fmt:rest) =
+            case tryDecode fmt of
+              Right bs ->
+                case accept bs of
+                  Just ok -> Just ok
+                  Nothing ->
+                    case mFormat of
+                      Just _ ->
+                        Nothing
+                      Nothing ->
+                        tryFormats rest
+              Left _ -> tryFormats rest
+
+      case tryFormats formats of
+        Just bs -> pure bs
+        Nothing -> throwError $ ErrorCall $ "builtins.convertHash: could not decode hash " <> show body
+
 
 -- | groupByNix
 -- Groups elements of list together by the string returned from the function f called on 
@@ -1544,7 +1943,33 @@ placeHolderNix p =
       body = ignoreContext
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readFileNix = toValue <=< Nix.Render.readFile <=< absolutePathFromValue <=< demand
+readFileNix nvpath = do
+  path <- absolutePathFromValue =<< demand nvpath
+  opts <- askOptions
+  contents <-
+    if isStorePath opts path
+      then do
+        res <- readStoreFile path
+        bytes <- either throwError pure res
+        pure $ decodeUtf8 bytes
+      else
+        Nix.Render.readFile path
+  toValue contents
+
+readFileTypeNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+readFileTypeNix nvpath =
+  do
+    path <- absolutePathFromValue =<< demand nvpath
+    opts <- askOptions
+    t <-
+      if isStorePath opts path
+        then do
+          res <- readStoreFileType path
+          either throwError pure res
+        else fileTypeFromStatus <$> getSymbolicLinkStatus path
+
+    toValue t
 
 findFileNix
   :: forall e t f m
@@ -1573,7 +1998,7 @@ readDirNix
 readDirNix nvpath =
   do
     path           <- absolutePathFromValue =<< demand nvpath
-    items          <- listDirectory path
+    opts <- askOptions
 
     let
       -- | Function indeed binds filepaths as keys ('VarNames') in Nix attrset.
@@ -1581,22 +2006,63 @@ readDirNix nvpath =
       detectFileTypes item =
         do
           s <- getSymbolicLinkStatus $ path </> item
-          let
-            t =
-              if
-                | isRegularFile s  -> FileTypeRegular
-                | isDirectory s    -> FileTypeDirectory
-                | isSymbolicLink s -> FileTypeSymlink
-                | otherwise        -> FileTypeUnknown
+          let t = fileTypeFromStatus s
 
           pure (coerce @(String -> Text) fromString item, t)
 
     itemsWithTypes <-
-      traverse
-        detectFileTypes
-        items
+      if isStorePath opts path
+        then do
+          res <- readStoreDir path
+          entries <- either throwError pure res
+          pure $
+            (\(p, t) -> (fromString (coerce p), t)) <$> entries
+        else do
+          items <- listDirectory path
+          traverse detectFileTypes items
 
     (coerce :: CoerceDeeperToNValue t f m) <$> toValue (M.fromList itemsWithTypes)
+
+outputOfNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+outputOfNix nvDrvRef nvOutputName =
+  do
+    drvRef <- fromValue =<< demand nvDrvRef
+    outputName <- fromStringNoContext =<< fromValue =<< demand nvOutputName
+
+    let
+      contents = ignoreContext drvRef
+      ctx = getStringContext drvRef
+
+    drvPath <-
+      case HS.toList ctx of
+        [sc] -> do
+          let p = getStringContextPath sc
+          ensureDrvPath p
+          pure p
+        [] -> do
+          let p = coerce contents :: VarName
+          ensureDrvText contents
+          pure p
+        _ ->
+          throwError $
+            ErrorCall $
+              "builtins.outputOf: string context must have exactly one element, but has "
+              <> show (HS.size ctx)
+
+    toValue $ mkNixString (one $ StringContext (DerivationOutput outputName) drvPath) contents
+ where
+  ensureDrvText :: Text -> m ()
+  ensureDrvText p =
+    when (not (".drv" `Text.isSuffixOf` p)) $
+      throwError $ ErrorCall $ "builtins.outputOf: path '" <> show p <> "' is not a derivation"
+
+  ensureDrvPath :: VarName -> m ()
+  ensureDrvPath = ensureDrvText . coerce
 
 fromJSONNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1702,6 +2168,41 @@ traceNix msg action =
     traceEffect @t @f @m . toString . ignoreContext =<< fromValue msg
     pure action
 
+breakNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> m (NValue t f m)
+breakNix = pure
+
+warnNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+warnNix msg action =
+  do
+    msgNs <- fromValue =<< demand msg
+    traceEffect @t @f @m $ "evaluation warning: " <> toString (ignoreContext msgNs)
+    demand action
+
+traceVerboseNix
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+traceVerboseNix msg action =
+  do
+    opts <- askOptions
+    if isTrace opts
+      then do
+        traceEffect @t @f @m . toString . ignoreContext =<< fromValue msg
+        demand action
+      else
+        demand action
+
 -- Please, can function remember fail context
 addErrorContextNix
   :: forall e t f m
@@ -1723,27 +2224,156 @@ fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchurlNix =
   (\case
-    NVSet _ s -> fetch (M.lookup "sha256" s) =<< demand =<< attrsetGet "url" s
-    v@NVStr{} -> fetch Nothing v
+    NVSet _ s -> do
+      let mUrlsVal = M.lookup "urls" s <|> M.lookup "url" s
+      urlsVal <- maybe (throwError $ ErrorCall "builtins.fetchurl: missing url(s)") pure mUrlsVal
+      urls <- extractUrls =<< demand urlsVal
+      mHashVal <- traverse (fromValue <=< demand) (M.lookup "hash" s)
+      mShaVal <- traverse (fromValue <=< demand) (M.lookup "sha256" s)
+      mNameVal <- traverse (fromValue <=< demand) (M.lookup "name" s)
+      mExecVal <- traverse (fromValue <=< demand) (M.lookup "executable" s)
+      fetchUrls mHashVal mShaVal mNameVal (fromMaybe False mExecVal) urls
+    v@NVStr{} -> fetchUrls Nothing Nothing Nothing False =<< extractUrls v
+    v@NVList{} -> fetchUrls Nothing Nothing Nothing False =<< extractUrls v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
   ) <=< demand
 
  where
-  --  2022-01-21: NOTE: Needs to check the hash match.
-  fetch :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
-  fetch _msha =
-    \case
-      NVStr ns ->
-        either -- msha
-          throwError
-          toValue
-          =<< getURL
-            =<< maybe
-              (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
-              pure
-              (getStringNoContext ns)
+  fetchUrls :: Maybe Text -> Maybe Text -> Maybe Text -> Bool -> [Text] -> m (NValue t f m)
+  fetchUrls mHashRaw mShaRaw mNameRaw executable urls = do
+    opts <- askOptions
+    let skipDownload = isFetchurlNoDownload opts
+    let urlsExpanded = concatMap expandUrl urls
+    let mHash = nonEmptyText mHashRaw
+    let mSha = nonEmptyText mShaRaw
+    let mName = nonEmptyText mNameRaw
 
-      v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or string, got " <> show v
+    when (null urlsExpanded) $
+      throwError $ ErrorCall "builtins.fetchurl: empty URL list"
+
+    let defaultName = case urls of
+          (u:_) -> baseNameOf u
+          [] -> "source"
+    let name = fromMaybe defaultName mName
+
+    storeName <- case Store.mkStorePathName name of
+      Left err ->
+        throwError $ ErrorCall $ "builtins.fetchurl: invalid store path name '" <> show name <> "': " <> show err
+      Right n -> pure n
+
+    let storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
+
+    mDigest <- case (mHash, mSha) of
+      (Just h, _) ->
+        either
+          (throwError . ErrorCall . ("builtins.fetchurl: " <>))
+          (pure . Just)
+          (mkDigestFromHash h)
+      (Nothing, Just sha) ->
+        either
+          (throwError . ErrorCall . ("builtins.fetchurl: " <>))
+          (pure . Just)
+          (StoreHash.mkNamedDigest "sha256" sha)
+      _ -> pure Nothing
+
+    let ingestionMethod =
+          if executable
+            then StoreTypes.FileIngestionMethod_FileRecursive
+            else StoreTypes.FileIngestionMethod_Flat
+    let mExpected = case mDigest of
+          Just (StoreHash.HashAlgo_SHA256 :=> digest) ->
+            Just $ toStorePathWithDir storeDir $
+              StoreRO.makeFixedOutputPath
+                storeDir
+                ingestionMethod
+                digest
+                storeName
+          _ -> Nothing
+
+    case mExpected of
+      Just expectedPath -> do
+        exists <- storePathExists (coerce expectedPath)
+        if exists
+          then do
+            when (getVerbosity opts >= Talkative) $
+              traceEffect @t @f @m $ "fetchurl: using existing " <> show expectedPath
+            toValue expectedPath
+          else if skipDownload
+            then do
+              when (getVerbosity opts >= Talkative) $
+                traceEffect @t @f @m $
+                  "fetchurl: skipping download, returning expected " <> show expectedPath
+              toValue expectedPath
+            else go opts mExpected name executable urlsExpanded
+      Nothing ->
+        if skipDownload
+          then throwError $ ErrorCall "builtins.fetchurl: --fetchurl-no-download requires a hash (sha256/hash)"
+          else go opts mExpected name executable urlsExpanded
+    where
+      go _opts _mExpected _name _exec [] =
+        throwError $ ErrorCall "builtins.fetchurl: empty URL list"
+      go opts mExpected name exec (u:us) = do
+        when (getVerbosity opts >= Talkative) $
+          traceEffect @t @f @m $ "fetchurl: " <> toString u
+        res <- fetchURLWithNameAndExecutable u name exec
+        case res of
+          Right sp ->
+            case mExpected of
+              Just expected
+                | sp /= expected ->
+                    if null us
+                      then throwError $ ErrorCall $
+                        "builtins.fetchurl: hash mismatch for " <> show u
+                      else go opts mExpected name exec us
+              _ -> toValue sp
+          Left err ->
+            if null us
+              then throwError err
+              else go opts mExpected name exec us
+
+  -- Heuristic fallback for GNU FTP URLs that time out in some environments.
+  expandUrl :: Text -> [Text]
+  expandUrl u =
+    case () of
+      _
+        | Just rest <- Text.stripPrefix "https://git.savannah.gnu.org/cgit/" u
+        -> [u, "https://cgit.git.savannah.gnu.org/cgit/" <> rest]
+        | Just rest <- Text.stripPrefix "http://git.savannah.gnu.org/cgit/" u
+        -> [u, "https://cgit.git.savannah.gnu.org/cgit/" <> rest]
+        | Just rest <- Text.stripPrefix "https://ftp.gnu.org/gnu/" u <|> Text.stripPrefix "http://ftp.gnu.org/gnu/" u
+        -> [u, "https://ftpmirror.gnu.org/gnu/" <> rest]
+        | otherwise
+        -> [u]
+
+  extractUrls :: NValue t f m -> m [Text]
+  extractUrls = \case
+    NVStr ns ->
+      maybe
+        (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
+        (pure . pure)
+        (getStringNoContext ns)
+    NVList vs -> traverse extractUrl =<< traverse demand vs
+    v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or list of URIs, got " <> show v
+
+  extractUrl :: NValue t f m -> m Text
+  extractUrl = \case
+    NVStr ns ->
+      maybe
+        (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
+        pure
+        (getStringNoContext ns)
+    v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI string, got " <> show v
+
+  nonEmptyText :: Maybe Text -> Maybe Text
+  nonEmptyText = \case
+    Just t | Text.null t -> Nothing
+    other -> other
+
+  mkDigestFromHash h =
+    let (algo, rest) = Text.breakOn "-" h
+    in if Text.null algo || Text.null rest
+      then StoreHash.mkNamedDigest "sha256" h
+      else StoreHash.mkNamedDigest algo h
 
 partitionNix
   :: forall e t f m
@@ -1869,7 +2499,7 @@ appendContextNix tx ty =
 
 
 nixVersionNix :: MonadNix e t f m => m (NValue t f m)
-nixVersionNix = toValue $ mkNixStringWithoutContext "2.3"
+nixVersionNix = toValue $ mkNixStringWithoutContext "2.18"
 
 langVersionNix :: MonadNix e t f m => m (NValue t f m)
 langVersionNix = toValue (5 :: Int)
@@ -1898,6 +2528,7 @@ builtinsList =
     , add0 Normal   "langVersion"      langVersionNix
     , add2 Normal   "add"              addNix
     , add2 Normal   "addErrorContext"  addErrorContextNix
+    , add  Normal   "addDrvOutputDependencies" addDrvOutputDependenciesNix
     , add2 Normal   "all"              allNix
     , add2 Normal   "any"              anyNix
     , add2 Normal   "appendContext"    appendContextNix
@@ -1907,9 +2538,11 @@ builtinsList =
     , add2 Normal   "bitOr"            bitOrNix
     , add2 Normal   "bitXor"           bitXorNix
     , add0 Normal   "builtins"         builtinsBuiltinNix
+    , add  Normal   "break"            breakNix
     , add2 Normal   "catAttrs"         catAttrsNix
     , add' Normal   "ceil"             (arity1 (ceiling @Float @Integer))
     , add2 Normal   "compareVersions"  compareVersionsNix
+    , add  Normal   "convertHash"      convertHashNix
     , add  Normal   "concatLists"      concatListsNix
     , add2 Normal   "concatMap"        concatMapNix
     , add' Normal   "concatStringsSep" (arity2 intercalateNixString)
@@ -1921,12 +2554,13 @@ builtinsList =
     , add2 Normal   "elemAt"           elemAtNix
     , add  Normal   "exec"             execNix
     , add0 Normal   "false"            (pure $ NVBool False)
-    --, add  Normal   "fetchGit"         fetchGit
+    , add  Normal   "fetchGit"         fetchGit
+    , add  Normal   "fetchTree"        fetchTree
     --, add  Normal   "fetchMercurial"   fetchMercurial
     , add  Normal   "fetchTarball"     fetchTarball
     , add  Normal   "fetchurl"         fetchurlNix
     , add2 Normal   "filter"           filterNix
-    --, add  Normal   "filterSource"     filterSource
+    , add2 Normal   "filterSource"     filterSourceNix
     , add2 Normal   "findFile"         findFileNix
     , add' Normal   "floor"            (arity1 (floor @Float @Integer))
     , add3 Normal   "foldl'"           foldl'Nix
@@ -1960,19 +2594,21 @@ builtinsList =
     , add2 Normal   "mul"              mulNix
     , add0 Normal   "nixPath"          nixPathNix
     , add0 Normal   "null"             (pure NVNull)
+    , add2 Normal   "outputOf"         outputOfNix
     , add  Normal   "parseDrvName"     parseDrvNameNix
     , add2 Normal   "partition"        partitionNix
     , add  Normal   "path"             pathNix
     , add  Normal   "pathExists"       pathExistsNix
     , add  Normal   "readDir"          readDirNix
     , add  Normal   "readFile"         readFileNix
+    , add  Normal   "readFileType"     readFileTypeNix
     , add3 Normal   "replaceStrings"   replaceStringsNix
     , add2 Normal   "seq"              seqNix
     , add2 Normal   "sort"             sortNix
     , add2 Normal   "split"            splitNix
     , add  Normal   "splitVersion"     splitVersionNix
-    , add0 Normal   "storeDir"         (pure $ mkNVStrWithoutContext "/nix/store")
-    --, add  Normal   "storePath"        storePath
+    , add0 Normal   "storeDir"         (mkNVStrWithoutContext . toText . getStoreDir <$> askOptions)
+    , add  Normal   "storePath"        storePathNix
     , add' Normal   "stringLength"     (arity1 $ Text.length . ignoreContext)
     , add' Normal   "sub"              (arity2 ((-) @Integer))
     , add' Normal   "substring"        substringNix
@@ -1981,6 +2617,7 @@ builtinsList =
     , add  Normal   "toJSON"           toJSONNix
     , add  Normal   "toPath"           toPathNix -- Deprecated in Nix: https://github.com/NixOS/nix/pull/2524
     , add  Normal   "toXML"            toXMLNix
+    , add2 Normal   "traceVerbose"     traceVerboseNix
     , add0 Normal   "true"             (pure $ NVBool True)
     , add  Normal   "tryEval"          tryEvalNix
     , add  Normal   "typeOf"           typeOfNix
@@ -1988,6 +2625,8 @@ builtinsList =
     , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
     , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
     , add  Normal   "valueSize"        getRecursiveSizeNix
+    , add2 Normal   "warn"             warnNix
+    , add2 Normal   "zipAttrsWith"     zipAttrsWithNix
     ]
  where
 
@@ -2119,4 +2758,3 @@ builtins =
     nameBuiltins b@(Builtin TopLevel _) = b
     nameBuiltins (Builtin Normal nB) =
       Builtin TopLevel $ first (coerce @(Text -> Text) ("__" <>)) nB
-
