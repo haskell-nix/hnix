@@ -11,7 +11,6 @@ module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 import           Nix.Prelude             hiding ( readFile )
 import           Data.ByteArray                 ( convert )
 import           Data.ByteArray.Encoding        ( Base(Base16), convertToBase )
-import           Data.Default.Class             ( def )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
@@ -28,7 +27,6 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
 import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
-import qualified Data.ByteString
 import qualified System.Nix.Base32             as Base32
 
 import           Nix.Atoms
@@ -38,6 +36,7 @@ import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
                                                 , callFunc
                                                 )
+import           Nix.Options
 import           Nix.Frames
 import           Nix.Json                       ( toJSONNixString )
 import           Nix.Render
@@ -48,9 +47,7 @@ import           Nix.Value.Monad
 
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
-import qualified System.Nix.ContentAddress     as Store
 import qualified "crypton" Crypto.Hash         as CryptonHash
-import           Data.Some.Newtype              ( Some(..) )
 import           Data.Dependent.Sum             ( DSum(..) )
 import qualified Data.Dependent.Sum            as DSum
 
@@ -63,7 +60,7 @@ hashDigestAlgoText :: HashDigest -> Text
 hashDigestAlgoText (hashAlgo DSum.:=> _) = Store.algoToText hashAlgo
 
 hashDigestText :: HashDigest -> Text
-hashDigestText (_ DSum.:=> hashDigest) = Store.encodeDigestWith Store.NixBase32 hashDigest
+hashDigestText (_ DSum.:=> hashDigest) = Store.encodeDigestWith Store.Base16 hashDigest
 
 --  2021-07-17: NOTE: Derivation consists of @"keys"@ @"vals"@ (of text), so underlining type boundary currently stops here.
 data Derivation = Derivation
@@ -88,18 +85,24 @@ makeStorePathName name = case Store.mkStorePathName name of
   Left err -> throwError $ ErrorCall $ "Invalid name '" <> show name <> "' for use in a store path: " <> show err
   Right spname -> pure spname
 
-parsePath :: (Framed e m) => Text -> m Store.StorePath
-parsePath p = case Store.parsePath def (encodeUtf8 p) of
+storeDirFromOptions :: forall e m. (MonadReader e m, Has e Options) => m Store.StoreDir
+storeDirFromOptions = do
+  opts <- askOptions
+  pure $ Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
+
+parsePath :: (Framed e m) => Store.StoreDir -> Text -> m Store.StorePath
+parsePath storeDir p = case Store.parsePath storeDir (encodeUtf8 p) of
   Left err -> throwError $ ErrorCall $ "Cannot parse store path " <> show p <> ":\n" <> show err
   Right path -> pure path
 
-writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
+writeDerivation :: (Framed e m, MonadStore m, MonadReader e m, Has e Options) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
+  storeDir <- storeDirFromOptions
   let (inputSrcs, inputDrvs) = inputs
-  referencePaths <- traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (fst <$> Map.toList inputDrvs))
-  let references = S.fromList $ fmap (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath def) referencePaths
+  referencePaths <- traverse (parsePath storeDir) (Set.toList $ inputSrcs <> Set.fromList (fst <$> Map.toList inputDrvs))
+  let references = S.fromList $ fmap (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath storeDir) referencePaths
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) references False
-  parsePath $ fromString $ coerce path
+  parsePath storeDir $ fromString $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
@@ -138,9 +141,9 @@ hashDerivationModulo
               (do
                 drv' <- readDerivation $ coerce $ toString path
                 digestValue <- hashDerivationModulo drv'
-                -- Convert digest to base32 for Nix store paths (get raw bytes, not hex string)
+                -- Nix uses base16 when substituting derivation hashes in .drv serialization
                 let hashBytes = convert digestValue :: ByteString
-                let hash = Base32.encode hashBytes
+                let hash = decodeUtf8 (convertToBase Base16 hashBytes :: ByteString)
                 pure (hash, outs)
               )
               (\ hash -> pure (hash, outs))
@@ -274,23 +277,22 @@ defaultDerivationStrict val = do
     s <- M.mapKeys coerce <$> fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
+    storeDir <- storeDirFromOptions
     let
       inputs = toStorePaths ctx
-      ifNotJsonModEnv f =
-        bool f id (useJson drv)
-          (env drv)
+      modEnv f = f (env drv)
 
     -- Compute the output paths, and add them to the environment if needed.
     -- Also add the inputs, just computed from the strings contexts.
     drv' <- case mFixed drv of
       Just digest -> do
         -- Fixed-output derivation: output path is content-addressed
-        outputPath <- makeFixedOutputPath drvName digest (hashMode drv)
+        outputPath <- makeFixedOutputPath storeDir drvName digest (hashMode drv)
         let outputs' = one ("out", outputPath)
         pure $ drv
           { inputs
           , outputs = outputs'
-          , env = ifNotJsonModEnv (outputs' <>)
+          , env = modEnv (outputs' <>)
           }
 
       Nothing -> do
@@ -298,7 +300,7 @@ defaultDerivationStrict val = do
           { inputs
         --, outputs = Map.map (const "") (outputs drv)  -- not needed, this is already the case
           , env =
-              ifNotJsonModEnv
+              modEnv
                 (\ baseEnv ->
                   foldl'
                     (\m k -> Map.insert k mempty m)
@@ -306,20 +308,20 @@ defaultDerivationStrict val = do
                     (Map.keys $ outputs drv)
                 )
           }
-        outputs' <- sequenceA $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) $ outputs drv
+        outputs' <- sequenceA $ Map.mapWithKey (\o _ -> makeOutputPath storeDir o hash drvName) $ outputs drv
         pure $ drv
           { inputs
           , outputs = outputs'
-          , env = ifNotJsonModEnv (outputs' <>)
+          , env = modEnv (outputs' <>)
           }
 
-    (coerce @Text @VarName -> drvPath) <- pathToText <$> writeDerivation drv'
+    (coerce @Text @VarName -> drvPath) <- pathToText storeDir <$> writeDerivation drv'
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
     digestValue <- hashDerivationModulo drv'
-    -- Convert digest to base32 for Nix store paths (get raw bytes, not hex string)
+    -- Nix uses base16 for derivation hashes
     let drvHashBytes = convert digestValue :: ByteString
-    let drvHash = Base32.encode drvHashBytes
+    let drvHash = decodeUtf8 (convertToBase Base16 drvHashBytes :: ByteString)
     modify $ second $ MS.insert (coerce drvPath) drvHash
 
     let
@@ -335,40 +337,77 @@ defaultDerivationStrict val = do
 
   where
 
-    pathToText = decodeUtf8 . Store.storePathToRawFilePath def
+    pathToText storeDir' = decodeUtf8 . Store.storePathToRawFilePath storeDir'
 
-    makeFixedOutputPath :: (Framed e m) => Store.StorePathName -> HashDigest -> HashMode -> m Text
-    makeFixedOutputPath name digest mode = do
-      -- For fixed-output derivations, the output path is computed from the content hash
-      -- Format: "fixed:out:<hashMode>:<hashAlgo>:<hash>:/nix/store:<name>"
-      let algoText = hashDigestAlgoText digest
+    storeDirTextFrom :: Store.StoreDir -> Text
+    storeDirTextFrom = Text.dropWhileEnd (== '/') . decodeUtf8 . Store.unStoreDir
+
+    makeFixedOutputPath :: (Framed e m) => Store.StoreDir -> Store.StorePathName -> HashDigest -> HashMode -> m Text
+    makeFixedOutputPath storeDir' name digest@(hashAlgo DSum.:=> hashDigest) mode = do
+      -- Nix's makeFixedOutputPath has TWO cases:
+      --
+      -- Case 1: SHA256 + Recursive (NixArchive)
+      --   This is the common case for fetchurl, addToStore, etc.
+      --   Uses: makeStorePath("source", hash, name) directly
+      --   Format: "source:<hash_hex>:<storeDir>:<name>"
+      --
+      -- Case 2: Everything else (flat hash, or non-SHA256)
+      --   Uses a two-step process:
+      --   Step 1: digest1 = SHA256("fixed:out:<modePrefix><algo>:<hash>:")
+      --   Step 2: makeStorePath("output:out", digest1, name)
+      --
+      let storeDirText = storeDirTextFrom storeDir'
+      let storeDirPrefix = storeDirText <> "/"
       let hashText = hashDigestText digest
-      let modePrefix = case mode of
-            Recursive -> "r:"
-            Flat -> mempty
-      let toHash = "fixed:out:" <> modePrefix <> algoText <> ":" <> hashText <> ":/nix/store:" <> Store.unStorePathName name
-      -- Use SHA256 to compute the store path hash
-      let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
-      let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
-      pure $ "/nix/store/" <> hashBase32 <> "-" <> Store.unStorePathName name
 
-    makeOutputPath o h n = do
+      case (hashAlgo, mode) of
+        (Store.HashAlgo_SHA256, Recursive) -> do
+          -- Case 1: SHA256 + Recursive -> use "source" type directly
+          -- Format: "source:<hash_hex>:<storeDir>:<name>"
+          let toHash = "source:" <> hashText <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
+          let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
+          let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
+          pure $ storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
+
+        _ -> do
+          -- Case 2: Other cases -> two-step "fixed:out:" process
+          let algoText = hashDigestAlgoText digest
+          let modePrefix = case mode of
+                Recursive -> "r:"
+                Flat -> mempty
+          -- Step 1: Create the fixed-output content hash (no storeDir, no name, trailing colon)
+          -- Format: "fixed:out:<modePrefix><algo>:<hash>:"
+          let fixedPayload = "fixed:out:" <> modePrefix <> algoText <> ":" <> hashText <> ":"
+          let fixedDigest = CryptonHash.hash @ByteString @CryptonHash.SHA256 $ encodeUtf8 fixedPayload
+          let fixedDigestHex = decodeUtf8 (convertToBase Base16 (convert fixedDigest :: ByteString) :: ByteString)
+          -- Step 2: makeStorePath with the intermediate digest
+          -- Nix's makeStorePath(type, hash, name) uses hash.to_string(Base16, true) which includes "sha256:"
+          -- Format: "output:out:sha256:<digest1_hex>:<storeDir>:<name>"
+          let toHash = "output:out:sha256:" <> fixedDigestHex <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
+          let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
+          let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
+          let result = storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
+          pure result
+
+    makeOutputPath storeDir' o h n = do
       name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then mempty else "-" <> o
       -- Compute the output path hash according to Nix's algorithm:
-      -- For non-fixed outputs, hash = sha256("output:<outputName>:sha256:<drv_modulo_hex>:/nix/store:<outputPathName>")
+      -- For non-fixed outputs, hash = sha256("output:<outputName>:sha256:<drv_modulo_hex>:<storeDir>:<outputPathName>")
       -- where outputPathName is the base name for "out", or base name + "-" + output name for other outputs
       -- Convert the hash digest to hex string (lowercase)
+      let storeDirText = storeDirTextFrom storeDir'
+      let storeDirPrefix = storeDirText <> "/"
       let drvHashHex = decodeUtf8 (convertToBase Base16 h :: ByteString)
       -- The final name in the hash input must match the output-specific name (same as 'name')
       -- This is critical: Nix's makeOutputPath uses outputPathName(drvName, outputName) here
-      let toHash = "output:" <> o <> ":sha256:" <> drvHashHex <> ":/nix/store:" <> Store.unStorePathName name
+      let toHash = "output:" <> o <> ":sha256:" <> drvHashHex <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
       -- Use hnix-store-core's mkStorePathHashPart which handles truncation and returns raw bytes
       -- Use crypton's SHA256 (compatible with hnix-store-core)
       let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
       -- Extract raw bytes and base32-encode using Nix base32
       let hashText = Base32.encode $ Store.unStorePathHashPart hashPart
       -- Build the store path
-      pure $ "/nix/store/" <> hashText <> "-" <> Store.unStorePathName name
+      pure $ storeDirPrefix <> hashText <> "-" <> Store.unStorePathName name
 
     toStorePaths :: HashSet StringContext -> (Set Text, Map Text [Text])
     toStorePaths = foldl (flip addToInputs) mempty
@@ -389,6 +428,32 @@ defaultDerivationStrict val = do
 -- full computation without worrying too much about all the string's contexts.
 buildDerivationWithContext :: forall e t f m. (MonadNix e t f m) => KeyMap (NValue t f m) -> WithStringContextT m Derivation
 buildDerivationWithContext drvAttrs = do
+    -- Detect nulls for required string attributes early to improve diagnostics.
+    let requireNonNullAttr attr = do
+          raw <- getAttrRaw attr
+          case raw of
+            NVConstant NNull ->
+              lift $ throwError $ ErrorCall $
+                "Derivation attribute '" <> show attr <> "' is null"
+            _ -> pure ()
+
+        requireNonNullAttrIfPresent attr = case M.lookup attr drvAttrs of
+          Nothing -> pure ()
+          Just v  -> do
+            raw <- lift $ demand v
+            case raw of
+              NVConstant NNull ->
+                lift $ throwError $ ErrorCall $
+                  "Derivation attribute '" <> show attr <> "' is null"
+              _ -> pure ()
+
+    requireNonNullAttr "name"
+    requireNonNullAttr "system"
+    requireNonNullAttr "builder"
+    requireNonNullAttrIfPresent "outputHash"
+    requireNonNullAttrIfPresent "outputHashMode"
+    requireNonNullAttrIfPresent "outputs"
+
     -- Parse name first, so we can add an informative frame
     drvName     <- getAttr   "name"                      $ assertDrvStoreName <=< extractNixString
     withFrame' Info (ErrorCall $ "While evaluating derivation " <> show drvName) $ do
@@ -400,6 +465,7 @@ buildDerivationWithContext drvAttrs = do
       builder     <- getAttr   "builder"                     extractNixString
       platform    <- getAttr   "system"                    $ assertNonNull <=< extractNoCtx
       mHash       <- getAttrOr "outputHash"        mempty  $ (pure . pure) <=< extractNoCtx
+      mHashAlgo   <- getAttrMaybeNoCtx "outputHashAlgo"
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ parseHashMode <=< extractNoCtx
       outputs     <- getAttrOr "outputs"       (one "out") $ traverse (extractNoCtx <=< fromValue')
 
@@ -408,9 +474,9 @@ buildDerivationWithContext drvAttrs = do
           (pure Nothing)
           (\ hash -> do
             when (outputs /= one "out") $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
-            hashType <- getAttr "outputHashAlgo" extractNoCtx
             -- mkNamedDigest returns Either String (DSum HashAlgo Digest)
-            digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
+            digest <- lift $ either (throwError . ErrorCall) pure $
+              maybe (inferHashDigest hash) (`Store.mkNamedDigest` hash) mHashAlgo
             pure $ Just digest)
           mHash
 
@@ -471,6 +537,30 @@ buildDerivationWithContext drvAttrs = do
 
     getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found.")
 
+    getAttrRaw :: Text -> WithStringContextT m (NValue t f m)
+    getAttrRaw n = case M.lookup n drvAttrs of
+      Nothing -> lift $ throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found."
+      Just v  -> lift $ demand v
+
+    getAttrMaybeNoCtx :: Text -> WithStringContextT m (Maybe Text)
+    getAttrMaybeNoCtx n = case M.lookup n drvAttrs of
+      Nothing -> pure Nothing
+      Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $ do
+        raw <- lift $ demand v
+        case raw of
+          NVConstant NNull -> pure Nothing
+          _ -> Just <$> (extractNoCtx =<< fromValue' raw)
+
+    inferHashDigest :: Text -> Either String HashDigest
+    inferHashDigest hash
+      | Text.null hash = Left "empty outputHash requires explicit outputHashAlgo"
+      | otherwise = tryAlgos ["sha256", "sha512", "sha1", "md5"]
+      where
+        tryAlgos [] = Left $ "outputHashAlgo missing and outputHash is not a valid SRI/known hash: " <> Text.unpack hash
+        tryAlgos (a:as) = case Store.mkNamedDigest a hash of
+          Right d -> Right d
+          Left _  -> tryAlgos as
+
     -- Test validity for fields
 
     assertDrvStoreName :: MonadNix e t f m => Text -> WithStringContextT m Text
@@ -505,4 +595,3 @@ buildDerivationWithContext drvAttrs = do
 
     deleteKeys :: [Text] -> KeyMap a -> KeyMap a
     deleteKeys keys attrSet = foldl' (flip M.delete) attrSet keys
-
