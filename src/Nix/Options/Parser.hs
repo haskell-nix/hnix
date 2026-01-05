@@ -63,6 +63,17 @@ nixOptions current =
         <> help "Enable tracing code (even more can be seen if built with --flags=tracing)"
         )
     <*> switch
+        (  long "eval-timing"
+        <> help "Log evaluation timings for slow nodes"
+        )
+    <*> option auto
+        (  long "eval-timing-threshold"
+        <> metavar "MILLISECONDS"
+        <> value 1000
+        <> showDefault
+        <> help "Minimum time (ms) for eval timing logs"
+        )
+    <*> switch
         (  long "thunks"
         <> help "Enable reporting of thunk tracing as well as regular evaluation"
         )

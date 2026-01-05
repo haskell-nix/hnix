@@ -12,6 +12,8 @@ data Options =
   Options
     { getVerbosity   :: Verbosity
     , isTrace        :: Bool
+    , isEvalTiming   :: Bool
+    , getEvalTimingThresholdMs :: Int
     , isThunks       :: Bool
     , isValues       :: Bool
     , isShowScopes   :: Bool
@@ -48,6 +50,8 @@ defaultOptions currentTime =
   Options
     { getVerbosity   = ErrorsOnly
     , isTrace        = False
+    , isEvalTiming   = False
+    , getEvalTimingThresholdMs = 1000
     , isThunks       = False
     , isValues       = False
     , isShowScopes   = False

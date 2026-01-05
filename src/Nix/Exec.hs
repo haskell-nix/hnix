@@ -43,6 +43,8 @@ import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Prettyprinter
 import qualified Text.Show.Pretty              as PS
+import qualified GHC.Clock                     as Clock
+import           Data.Data                     ( toConstr )
 
 #ifdef MIN_VERSION_ghc_datasize 
 import           GHC.DataSize
@@ -566,6 +568,30 @@ addTracing k v = do
       print $ msg rendered <> " ...done"
       pure res
 
+addTiming
+  :: forall e t f m a
+   . MonadNix e t f m
+  => Int
+  -> Alg NExprLocF (m a)
+  -> Alg NExprLocF (m a)
+addTiming thresholdMs k v@(AnnF span x) = do
+  start <- liftIO Clock.getMonotonicTimeNSec
+  res <- k v
+  end <- liftIO Clock.getMonotonicTimeNSec
+  let elapsedMs :: Int
+      elapsedMs = fromIntegral ((end - start) `div` 1000000)
+  when (elapsedMs >= max 0 thresholdMs) $ do
+    let headTag = Text.pack (show (toConstr (void x)))
+    let msg =
+          Text.pack "timing "
+            <> Text.pack (show elapsedMs)
+            <> Text.pack "ms "
+            <> headTag
+            <> Text.pack "\n"
+    loc <- renderLocation span (pretty msg)
+    putStr $ show loc
+  pure res
+
 evalWithTracingAndMetaInfo
   :: forall e t f m
   . MonadNix e t f m
@@ -579,16 +605,49 @@ evalWithTracingAndMetaInfo =
   addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
   addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
 
+evalWithTimingAndMetaInfo
+  :: forall e t f m
+  . MonadNix e t f m
+  => Int
+  -> NExprLoc
+  -> m (NValue t f m)
+evalWithTimingAndMetaInfo thresholdMs =
+  adi
+    Eval.addMetaInfo
+    (addTiming thresholdMs Eval.evalContent)
+
+evalWithTracingTimingAndMetaInfo
+  :: forall e t f m
+  . MonadNix e t f m
+  => Int
+  -> NExprLoc
+  -> ReaderT Int m (m (NValue t f m))
+evalWithTracingTimingAndMetaInfo thresholdMs =
+  adi
+    addMetaInfo
+    (addTracing (addTiming thresholdMs Eval.evalContent))
+  where
+  addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
+  addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
+
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
     opts <- askOptions
+    let thresholdMs = getEvalTimingThresholdMs opts
     let
+      traced = isTrace opts
+      timed  = isEvalTiming opts
       pTracedAdi =
-        bool
-          Eval.evalWithMetaInfo
-          (join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo)
-          (isTrace opts)
+        case (traced, timed) of
+          (True, True) ->
+            join . (`runReaderT` (0 :: Int)) . evalWithTracingTimingAndMetaInfo thresholdMs
+          (True, False) ->
+            join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo
+          (False, True) ->
+            evalWithTimingAndMetaInfo thresholdMs
+          (False, False) ->
+            Eval.evalWithMetaInfo
     pTracedAdi expr
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
