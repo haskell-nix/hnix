@@ -40,10 +40,14 @@
                   ];
                   withHoogle = false;
                 };
-                # modules = [{
-                #   enableLibraryProfiling = true;
-                #   enableProfiling = true;
-                # }];
+                modules = [{
+                  enableLibraryProfiling = true;
+                  enableProfiling = true;
+                  profilingDetail = "late-toplevel";
+                  ghcOptions = [
+                    "-fprof-late-overloaded"
+                  ];
+                }];
               };
           })
         ];

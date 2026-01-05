@@ -1,2 +1,13 @@
+profiling: true
+profiling-detail: late-toplevel
+semaphore: true
+jobs: $ncpus
+optimization: 2
+
+-- cabal run --enable-profiling hnix -- --eval --expr '...' +RTS -p -RTS
+
 packages:
   ./hnix.cabal
+
+program-options
+  ghc-options: -fprof-late-overloaded
