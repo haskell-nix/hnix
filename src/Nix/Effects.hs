@@ -17,28 +17,45 @@ import           Nix.Prelude             hiding ( putStrLn
                                                 , print
                                                 )
 import qualified Nix.Prelude                   as Prelude
+import qualified Prelude                       as HPrelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
+import qualified Data.ByteString.Char8         as BS8
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
-import qualified "cryptonite" Crypto.Hash      as Hash
+import qualified Network.Connection          as NC
+import qualified Network.TLS                 as TLS
 import           Nix.Utils.Fix1
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
 import           Nix.Render
+import           Nix.Options                   ( Options
+                                                , askOptions
+                                                , getStoreDir
+                                                )
 import           Nix.Value
+import           Nix.FileType
 import qualified Paths_hnix
 import           System.Exit
 import qualified System.Info
 import           System.Process
+import qualified Control.Exception            as Exception
+import qualified Control.Concurrent           as Concurrent
+import           System.IO.Unsafe             ( unsafePerformIO )
+import qualified System.Directory             as Directory
+import qualified System.PosixCompat.Files     as Posix
+import qualified Data.ByteString              as B
+import qualified System.FilePath              as FP
+import qualified System.IO.Temp               as Temp
 
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Nar                as Store.Nar
 import qualified System.Nix.Hash               as Store.Hash
+import qualified System.Nix.Store.Types        as Store.Types
 import           Data.Some.Newtype              ( Some(..) )
 import           Data.Default.Class             ( def )
 
@@ -54,6 +71,7 @@ newtype StorePath = StorePath Path
 class
   ( MonadFile m
   , MonadStore m
+  , MonadStoreRead m
   , MonadPutStr m
   , MonadHttp m
   , MonadEnv m
@@ -295,34 +313,145 @@ class
 baseNameOf :: Text -> Text
 baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
 
+{-# NOINLINE nixUserAgent #-}
+nixUserAgent :: ByteString
+nixUserAgent = unsafePerformIO $ do
+  let nixVer = "2.18"
+  verResult <- Exception.try (readProcess "curl" ["--version"] "")
+  let curlVer = case verResult of
+        Left (_ :: Exception.SomeException) -> "unknown"
+        Right out -> case HPrelude.words out of
+          (_:ver:_) -> ver
+          _ -> "unknown"
+  pure $ BS8.pack $ "curl/" <> curlVer <> " Nix/" <> nixVer
+
+fetchURLWithNameAndExecutable :: (MonadIO m, MonadStore m) => Text -> Text -> Bool -> m (Either ErrorCall StorePath)
+fetchURLWithNameAndExecutable url name executable =
+  do
+    let urlstr = toString url
+    traceM $ "fetching HTTP URL: " <> urlstr
+    req     <- liftIO $ parseRequest urlstr
+    -- Use TLS manager that tolerates servers without Extended Master Secret.
+    let supported = (def :: TLS.Supported)
+          { TLS.supportedExtendedMainSecret = TLS.AllowEMS
+          }
+    let tlsSettings = NC.TLSSettingsSimple
+          { NC.settingDisableCertificateValidation = False
+          , NC.settingDisableSession = False
+          , NC.settingUseServerName = False
+          , NC.settingClientSupported = supported
+          }
+    manager <- liftIO $ newTlsManagerWith (mkManagerSettings tlsSettings Nothing)
+    let req' = req
+          { method = "GET"
+          , requestHeaders = ("User-Agent", nixUserAgent) : requestHeaders req
+          }
+    let maxAttempts = 5 :: Int
+    let baseDelayUs = 500000 :: Int
+    let maxDelayUs = 8000000 :: Int
+
+    let retryDelay attempt multiplier =
+          let raw = baseDelayUs * multiplier * (2 ^ (attempt - 1))
+          in min maxDelayUs raw
+
+    let isRetryableStatus s =
+          s == 408
+            || s == 429
+            || (s >= 500 && s < 600 && s /= 501 && s /= 505 && s /= 511)
+
+    let isRetryableHttpException = \case
+          HttpExceptionRequest _ (StatusCodeException response _) ->
+            isRetryableStatus (statusCode $ responseStatus response)
+          HttpExceptionRequest _ ResponseTimeout -> True
+          HttpExceptionRequest _ ConnectionTimeout -> True
+          HttpExceptionRequest _ (ConnectionFailure _) -> True
+          HttpExceptionRequest _ ConnectionClosed -> True
+          HttpExceptionRequest _ (ProxyConnectException _ _ _) -> True
+          HttpExceptionRequest _ NoResponseDataReceived -> True
+          _ -> False
+
+    let fetchOnce =
+          liftIO $ Exception.try (httpLbs req' manager)
+
+    let handleSuccess response = do
+          let body = toStrict (responseBody response)
+          if executable
+            then do
+              tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
+              tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-fetchurl"
+              let file = tmpDir FP.</> "content"
+              liftIO $ B.writeFile file body
+              liftIO $ setExecutableFile file
+              -- executable output hashes are recursive (NAR) in nix/fetchurl.nix
+              res <- addToStore name (NarFile $ coerce file) True False
+              liftIO $ Directory.removeDirectoryRecursive tmpDir
+              pure res
+            else
+              -- using addTextToStore' result in different hash from the addToStore.
+              -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
+              addToStore name (NarText body) False False
+
+    let go attempt = do
+          respOrErr <- fetchOnce
+          case respOrErr of
+            Right response -> do
+              let status = statusCode $ responseStatus response
+              if status == 200
+                then handleSuccess response
+                else if attempt < maxAttempts && isRetryableStatus status
+                  then do
+                    let delayUs =
+                          retryDelay
+                            attempt
+                            (if status == 429 then 4 else 1)
+                    traceM $ "fetchurl: got " <> show status <> ", retrying in " <> show (delayUs `div` 1000) <> "ms"
+                    liftIO $ Concurrent.threadDelay delayUs
+                    go (attempt + 1)
+                  else
+                    pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr
+            Left (e :: HttpException) ->
+              if attempt < maxAttempts && isRetryableHttpException e
+                then do
+                  let delayUs = retryDelay attempt 1
+                  traceM $ "fetchurl: " <> show e <> ", retrying in " <> show (delayUs `div` 1000) <> "ms"
+                  liftIO $ Concurrent.threadDelay delayUs
+                  go (attempt + 1)
+                else
+                  pure $ Left $ ErrorCall $ "fetchurl: " <> show e
+
+    go 1
+
+fetchURLWithName :: (MonadIO m, MonadStore m) => Text -> Text -> m (Either ErrorCall StorePath)
+fetchURLWithName url name = fetchURLWithNameAndExecutable url name False
+
+fetchURLWith :: (MonadIO m, MonadStore m) => Text -> m (Either ErrorCall StorePath)
+fetchURLWith url = fetchURLWithName url (baseNameOf url)
+
+setExecutableFile :: FilePath -> IO ()
+setExecutableFile f = do
+  st <- Posix.getSymbolicLinkStatus f
+  let p =
+        Posix.fileMode st
+          `Posix.unionFileModes` Posix.ownerExecuteMode
+          `Posix.unionFileModes` Posix.groupExecuteMode
+          `Posix.unionFileModes` Posix.otherExecuteMode
+  Posix.setFileMode f p
+
 -- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
+toStorePathWithDir :: Store.StoreDir -> Store.StorePath -> StorePath
+toStorePathWithDir storeDir =
+  StorePath
+    . coerce
+    . decodeUtf8 @FilePath @ByteString
+    . Store.storePathToRawFilePath storeDir
+
 toStorePath :: Store.StorePath -> StorePath
-toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath def
+toStorePath = toStorePathWithDir def
 
 -- ** Instances
 
 instance MonadHttp IO where
-  getURL url =
-    do
-      let urlstr = toString url
-      traceM $ "fetching HTTP URL: " <> urlstr
-      req     <- parseRequest urlstr
-      manager <-
-        bool
-          (newManager defaultManagerSettings)
-          newTlsManager
-          (secure req)
-      response <- httpLbs (req { method = "GET" }) manager
-      let status = statusCode $ responseStatus response
-      let body = responseBody response
-      -- let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
-      let name = baseNameOf url
-      bool
-        (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr)
-        -- using addTextToStore' result in different hash from the addToStore.
-        -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
-        (addToStore name (NarText $ toStrict body) False False)
-        (status == 200)
+  getURL = fetchURLWith
 
 
 deriving
@@ -384,6 +513,65 @@ type StorePathName = Text
 type PathFilter m = Path -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
+-- ** @class MonadStoreRead m@
+
+class
+  Monad m
+  => MonadStoreRead m where
+
+  storePathExists :: Path -> m Bool
+  default storePathExists :: (MonadTrans t, MonadStoreRead m', m ~ t m') => Path -> m Bool
+  storePathExists = lift . storePathExists
+
+  readStoreFile :: Path -> m (Either ErrorCall ByteString)
+  default readStoreFile :: (MonadTrans t, MonadStoreRead m', m ~ t m') => Path -> m (Either ErrorCall ByteString)
+  readStoreFile = lift . readStoreFile
+
+  readStoreDir :: Path -> m (Either ErrorCall [(Path, FileType)])
+  default readStoreDir :: (MonadTrans t, MonadStoreRead m', m ~ t m') => Path -> m (Either ErrorCall [(Path, FileType)])
+  readStoreDir = lift . readStoreDir
+
+  readStoreFileType :: Path -> m (Either ErrorCall FileType)
+  default readStoreFileType :: (MonadTrans t, MonadStoreRead m', m ~ t m') => Path -> m (Either ErrorCall FileType)
+  readStoreFileType = lift . readStoreFileType
+
+instance (MonadFix1T t m, MonadStoreRead m) => MonadStoreRead (Fix1T t m) where
+  storePathExists = lift . storePathExists
+  readStoreFile = lift . readStoreFile
+  readStoreDir = lift . readStoreDir
+  readStoreFileType = lift . readStoreFileType
+
+instance MonadStoreRead IO where
+  storePathExists path = do
+    res <- (Exception.try (Directory.doesPathExist (coerce path)) :: IO (Either Exception.SomeException Bool))
+    pure $ either (const False) id res
+
+  readStoreFile path = do
+    res <- Exception.try (B.readFile (coerce path))
+    pure $ case res of
+      Left (e :: Exception.SomeException) ->
+        Left $ ErrorCall $ "readStoreFile failed for " <> show path <> ": " <> show e
+      Right bytes -> Right bytes
+
+  readStoreDir path = do
+    let base = coerce path :: FilePath
+    res <- Exception.try (Directory.listDirectory base)
+    case res of
+      Left (e :: Exception.SomeException) ->
+        pure $ Left $ ErrorCall $ "readStoreDir failed for " <> show path <> ": " <> show e
+      Right items -> do
+        entries <- forM items $ \item -> do
+          status <- Posix.getSymbolicLinkStatus (base FP.</> item)
+          pure (coerce item, fileTypeFromStatus status)
+        pure $ Right entries
+
+  readStoreFileType path = do
+    res <- Exception.try (Posix.getSymbolicLinkStatus (coerce path))
+    pure $ case res of
+      Left (e :: Exception.SomeException) ->
+        Left $ ErrorCall $ "readStoreFileType failed for " <> show path <> ": " <> show e
+      Right status -> Right $ fileTypeFromStatus status
+
 
 -- ** @class MonadStore m@
 
@@ -420,8 +608,8 @@ instance MonadStore IO where
       Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
       Right pathName -> do
         let ingestionMethod = if recursive
-                              then Store.Remote.FileIngestionMethod_FileRecursive
-                              else Store.Remote.FileIngestionMethod_Flat
+                              then Store.Types.FileIngestionMethod_FileRecursive
+                              else Store.Types.FileIngestionMethod_Flat
             repairMode = if repair
                          then Store.Remote.RepairMode_DoRepair
                          else Store.Remote.RepairMode_DontRepair
@@ -478,12 +666,19 @@ addTextToStore a b c d =
 
 --  2021-10-30: NOTE: Misleading name, please rename.
 -- | Add @Path@ into the Nix Store
-addPath :: (Framed e m, MonadStore m) => Path -> m StorePath
-addPath p =
-  either
-    throwError
-    pure
-    =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
+addPath :: (Framed e m, MonadStore m, Has e Options) => Path -> m StorePath
+addPath p = do
+  opts <- askOptions
+  let
+    storeDir = Store.StoreDir (encodeUtf8 (toText (getStoreDir opts)))
+    parsed = Store.parsePath storeDir (encodeUtf8 (toText p))
+  case parsed of
+    Right sp -> pure $ toStorePathWithDir storeDir sp
+    Left _ ->
+      either
+        throwError
+        pure
+        =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
 toFile_ p contents = addTextToStore (fromString $ coerce p) contents mempty False
