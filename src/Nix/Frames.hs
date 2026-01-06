@@ -7,13 +7,15 @@
 -- exception would also gather, keep and bring with it the tracing information.
 --
 -- == Performance Note
--- callFunc uses 'exceedsDepth' for O(min(2001, depth)) stack overflow detection
--- instead of O(n) 'length' check. For shallow stacks (typical case), this is
--- much faster. For deep stacks approaching the 2000 limit, it's bounded.
+-- The 'Frames' type tracks depth with an unboxed counter for O(1) depth checks.
+-- This is critical for 'callFunc' which checks stack depth on every function call.
+-- The list of frames is only traversed on errors or when debugging options are enabled.
 module Nix.Frames
   ( NixLevel(..)
   , Frames
   , emptyFrames
+  , pushFrame
+  , framesToList
   , exceedsDepth
   , askFrames
   , Framed
@@ -43,22 +45,42 @@ instance Show NixFrame where
   show (NixFrame level f) =
     "Nix frame at level " <> show level <> ": " <> show f
 
--- | Stack frames - simple list for minimal allocation overhead.
-type Frames = [NixFrame]
+-- | Stack frames with O(1) depth tracking.
+-- The depth counter is kept in sync with the list length via 'pushFrame'.
+-- Use 'framesToList' to access the underlying list for traversal.
+data Frames = Frames
+  { framesDepth :: {-# UNPACK #-} !Int  -- ^ Current stack depth (inline, no boxing)
+  , framesList  :: [NixFrame]           -- ^ The actual frame stack
+  }
 
--- | Empty frames (no stack)
+instance Show Frames where
+  show (Frames depth frames) =
+    "Frames (depth=" <> show depth <> "): " <> show frames
+
+instance Semigroup Frames where
+  Frames d1 l1 <> Frames d2 l2 = Frames (d1 + d2) (l1 <> l2)
+
+instance Monoid Frames where
+  mempty = emptyFrames
+
+-- | Empty frames (no stack). O(1).
 emptyFrames :: Frames
-emptyFrames = []
+emptyFrames = Frames 0 []
 
--- | O(min(limit+1, n)) depth check - faster than 'length' for shallow stacks.
--- Returns True if the list has more than @limit@ elements.
+-- | Push a frame onto the stack. O(1).
+pushFrame :: NixFrame -> Frames -> Frames
+pushFrame f (Frames depth frames) = Frames (depth + 1) (f : frames)
+{-# INLINE pushFrame #-}
+
+-- | Convert to list for traversal operations. O(1).
+framesToList :: Frames -> [NixFrame]
+framesToList = framesList
+{-# INLINE framesToList #-}
+
+-- | O(1) depth check. Returns True if frames exceed the limit.
 -- Used in callFunc for stack overflow detection.
-exceedsDepth :: Int -> [a] -> Bool
-exceedsDepth limit = go limit
-  where
-    go 0 _      = True
-    go _ []     = False
-    go n (_:xs) = go (n - 1) xs
+exceedsDepth :: Int -> Frames -> Bool
+exceedsDepth limit (Frames depth _) = depth > limit
 {-# INLINE exceedsDepth #-}
 
 askFrames :: forall e m . (MonadReader e m, Has e Frames) => m Frames
@@ -73,11 +95,11 @@ instance Exception NixException
 
 withFrame
   :: forall s e m a . (Framed e m, Exception s) => NixLevel -> s -> m a -> m a
-withFrame level f = local $ over hasLens (NixFrame level (toException f) :)
+withFrame level f = local $ over hasLens (pushFrame (NixFrame level (toException f)))
 
 throwError
   :: forall s e m a . (Framed e m, Exception s, MonadThrow m) => s -> m a
 throwError err =
   do
     frames <- askLocal
-    throwM $ NixException $ NixFrame Error (toException err) : frames
+    throwM $ NixException $ pushFrame (NixFrame Error (toException err)) frames

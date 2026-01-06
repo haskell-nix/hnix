@@ -480,4 +480,5 @@ instance Monad m => Scoped NExprLoc (Reducer m) where
   askScopes   = askScopesReader
   clearScopes = clearScopesReader @(Reducer m) @NExprLoc
   pushScopes  = pushScopesReader
+  setScopes   = setScopesReader
   lookupVar   = lookupVarReader

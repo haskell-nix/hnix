@@ -493,29 +493,29 @@ assembleString = fromParts . stringParts
 buildArgument
   :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
 buildArgument params arg =
-  do
-    scope <- askScopes
-    let
-      argThunk = defer $ withScopes scope arg
-    case params of
-      Param name -> one . (name,) <$> argThunk
-      ParamSet mname variadic pset ->
-        do
-          (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
-          let
-            inject =
-              maybe
-                id
-                (`HM.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
-                mname
-          loebM $
-            inject $
-              HM.mapMaybe
-                id
-                $ ialignWith
-                    (assemble scope variadic)
-                    args
-                    pset
+  case params of
+    -- For simple parameter binding, arg is already thunked from evalApp.
+    -- No need for additional defer - just bind the name to the existing thunk.
+    Param name -> one . (name,) <$> arg
+    ParamSet mname variadic pset -> do
+      -- ParamSet needs scope for default value evaluation
+      scope <- askScopes
+      let argThunk = defer $ withScopes scope arg
+      (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
+      let
+        inject =
+          maybe
+            id
+            (`HM.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
+            mname
+      loebM $
+        inject $
+          HM.mapMaybe
+            id
+            $ ialignWith
+                (assemble scope variadic)
+                args
+                pset
  where
   assemble
     :: Scopes m v

@@ -104,7 +104,7 @@ instance
               fun _ = mempty
 
               ps :: [Provenance m (NValue u f m)]
-              ps = foldMap (fun . frame) frames
+              ps = foldMap (fun . frame) (framesToList frames)
 
             cite ps mt
         )

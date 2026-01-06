@@ -94,6 +94,10 @@ class Scoped a m | m -> a where
   askScopes :: m (Scopes m a)
   clearScopes   :: m r -> m r
   pushScopes    :: Scopes m a -> m r -> m r
+  -- | Set scopes directly. More efficient than clearScopes . pushScopes
+  -- Default implementation uses clearScopes + pushScopes for compatibility.
+  setScopes     :: Scopes m a -> m r -> m r
+  setScopes scopes = clearScopes . pushScopes scopes
   lookupVar     :: VarName -> m (Maybe a)
 
 askScopesReader
@@ -112,6 +116,17 @@ clearScopesReader
   => m r
   -> m r
 clearScopesReader = local $ set hasLens $ emptyScopes @m @a
+
+-- | Set scopes directly (single operation, more efficient than clear+push)
+setScopesReader
+  :: forall m a e r
+  . ( MonadReader e m
+    , Has e (Scopes m a)
+    )
+  => Scopes m a
+  -> m r
+  -> m r
+setScopesReader scopes = local $ set hasLens scopes
 
 pushScope
   :: Scoped a m
@@ -174,7 +189,7 @@ withScopes
   => Scopes m a
   -> m r
   -> m r
-withScopes scopes = clearScopes . pushScopes scopes
+withScopes = setScopes
 
 -- | Scope lookup result for profiling
 data ScopeLookupInfo

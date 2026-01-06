@@ -132,6 +132,7 @@ instance (MonadReader (Context m (StdValue m)) m, MonadIO m) => Scoped (StdValue
   askScopes   = askScopesReader
   clearScopes = clearScopesReader @m @(StdValue m)
   pushScopes  = pushScopesReader
+  setScopes   = setScopesReader   -- Single operation, more efficient than clear+push
   lookupVar   = lookupVarWithStats
 
 -- | Instrumented lookupVar that records scope stats when enabled

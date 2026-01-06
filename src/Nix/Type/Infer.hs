@@ -384,6 +384,7 @@ instance
   askScopes   = askScopesReader
   clearScopes = clearScopesReader @(InferT s m) @(Judgment s)
   pushScopes  = pushScopesReader
+  setScopes   = setScopesReader
   lookupVar   = lookupVarReader
 
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))

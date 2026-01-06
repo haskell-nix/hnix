@@ -534,4 +534,5 @@ instance
   askScopes = askScopesReader
   clearScopes   = clearScopesReader @(Lint s) @(Symbolic (Lint s))
   pushScopes    = pushScopesReader
+  setScopes     = setScopesReader
   lookupVar     = lookupVarReader

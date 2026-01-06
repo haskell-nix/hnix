@@ -37,9 +37,9 @@ renderFrames
      )
   => Frames
   -> m (Doc ann)
-renderFrames []       = stub
-renderFrames xss@(x : xs) =
-  do
+renderFrames frames = case framesToList frames of
+  []         -> stub
+  xss@(x:xs) -> do
     opts <- askOptions
     let
       verbosity :: Verbosity

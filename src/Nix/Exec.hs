@@ -301,11 +301,17 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         )
         b
 
-  evalApp f x =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      mkNVAppOpWithProvenance scope span (pure f) Nothing <$> (callFunc f =<< defer x)
+  evalApp f x = do
+    result <- callFunc f =<< defer x
+    opts <- askOptions
+    -- Only allocate provenance when --values flag is set (for debugging)
+    -- This eliminates ~213k Provenance allocations in production
+    if isValues opts
+      then do
+        scope <- askScopes
+        span <- askSpan
+        pure $ mkNVAppOpWithProvenance scope span (pure f) Nothing result
+      else pure result
 
   evalAbs
     :: Params (m (NValue t f m))
