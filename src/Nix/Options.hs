@@ -14,6 +14,7 @@ data Options =
     , isTrace        :: Bool
     , isEvalTiming   :: Bool
     , getEvalTimingThresholdMs :: Int
+    , isEvalStats    :: Bool
     , isThunks       :: Bool
     , isValues       :: Bool
     , isShowScopes   :: Bool
@@ -60,6 +61,7 @@ defaultOptions currentTime =
     , isTrace        = False
     , isEvalTiming   = False
     , getEvalTimingThresholdMs = 1000
+    , isEvalStats    = False
     , isThunks       = False
     , isValues       = False
     , isShowScopes   = False

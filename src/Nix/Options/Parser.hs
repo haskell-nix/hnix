@@ -80,6 +80,10 @@ nixOptions current =
         <> help "Minimum time (ms) for eval timing logs"
         )
     <*> switch
+        (  long "eval-stats"
+        <> help "Collect and print evaluation statistics (expression counts, thunk stats, builtin timing)"
+        )
+    <*> switch
         (  long "thunks"
         <> help "Enable reporting of thunk tracing as well as regular evaluation"
         )

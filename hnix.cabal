@@ -394,6 +394,7 @@ library
     Nix.Effects.Basic
     Nix.Effects.Derivation
     Nix.Eval
+    Nix.EvalStats
     Nix.Exec
     Nix.Expr
     Nix.Expr.Shorthands
