@@ -4,8 +4,14 @@
   inputs = {
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     nix.url = "github:NixOS/nix";
-    haskellNix.url = "github:input-output-hk/haskell.nix";
+    haskellNix.url = "github:input-output-hk/haskell.nix/pull/2434/merge";
     flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  # Binary Cache for haskell.nix
+  nixConfig = {
+    extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
+    extra-substituters = [ "https://cache.iog.io" ];
   };
 
   outputs = { self, nixpkgs, nix, flake-utils, haskellNix }:
@@ -52,6 +58,7 @@
           })
         ];
       in flake // {
+        legacyPackages = pkgs;
         packages.default = flake.packages."hnix:exe:hnix";
       });
 }
