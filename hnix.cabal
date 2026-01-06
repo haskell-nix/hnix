@@ -406,6 +406,7 @@ library
     Nix.Fresh.Basic
     Nix.Json
     Nix.Lint
+    Nix.List
     Nix.Normal
     Nix.Options
     Nix.Options.Parser
