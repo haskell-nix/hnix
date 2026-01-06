@@ -5,6 +5,7 @@
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
 {-# language ConstraintKinds #-}
+{-# language PatternSynonyms #-}
 
 {-# options_ghc -Wno-orphans #-}
 
@@ -38,6 +39,15 @@ import qualified Text.Show
 import           Nix.Cited
 import           Nix.Cited.Basic
 import           Nix.Context
+import           Nix.EvalStats                  ( EvalStats
+                                                , newEvalStats
+                                                , printEvalStats
+                                                , recordThunkCreate
+                                                , recordThunkForce
+                                                , recordScopeLookup
+                                                , ScopeLookupResult(..)
+                                                )
+import qualified GHC.Clock                     as Clock
 import           Nix.Effects
 import           Nix.Effects.Basic
 import           Nix.Effects.Derivation
@@ -47,9 +57,12 @@ import           Nix.Fresh.Basic
 import           Nix.Options
 import           Nix.Render
 import           Nix.Scope
+import           Nix.Expr.Types                 ( VarName )
 import           Nix.Store.Overlay
 import           Nix.Thunk
-import           Nix.Thunk.Basic
+import           Nix.Thunk.Basic                ( NThunkF(..)
+                                                , isComputed
+                                                )
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
@@ -114,11 +127,32 @@ instance HasCitations m (StdValue m) (StdThunk m) where
   citations (StdThunk c) = citations1 c
   addProvenance x (StdThunk c) = StdThunk $ addProvenance1 x c
 
-instance MonadReader (Context m (StdValue m)) m => Scoped (StdValue m) m where
+instance (MonadReader (Context m (StdValue m)) m, MonadIO m) => Scoped (StdValue m) m where
   askScopes   = askScopesReader
   clearScopes = clearScopesReader @m @(StdValue m)
   pushScopes  = pushScopesReader
-  lookupVar   = lookupVarReader
+  lookupVar   = lookupVarWithStats
+
+-- | Instrumented lookupVar that records scope stats when enabled
+lookupVarWithStats
+  :: forall m
+  . ( MonadReader (Context m (StdValue m)) m
+    , MonadIO m
+    )
+  => VarName
+  -> m (Maybe (StdValue m))
+lookupVarWithStats k = do
+  mstats <- askEvalStats
+  case mstats of
+    Nothing -> lookupVarReader k
+    Just stats -> do
+      (result, info, elapsed) <- lookupVarReaderWithInfo @m @(StdValue m) k
+      let scopeResult = case info of
+            LexicalHit depth searched -> ScopeLexicalHit depth searched
+            DynamicHit depth searched -> ScopeDynamicHit depth searched
+            LookupMiss depth -> ScopeMiss depth
+      recordScopeLookup stats scopeResult elapsed
+      pure result
 
 instance
   ( MonadFix m
@@ -161,6 +195,7 @@ instance
   , MonadThunkId   m
   , MonadAtomicRef m
   , MonadCatch     m
+  , MonadIO        m
   , MonadReader (Context m (StdValue m)) m
   )
   => MonadThunk (StdThunk m) m (StdValue m) where
@@ -174,7 +209,10 @@ instance
   thunk
     :: m (StdValue m)
     -> m (StdThunk m)
-  thunk = fmap coerce . thunk @(CitedStdThunk m)
+  thunk action = do
+    mstats <- askEvalStats
+    traverse_ recordThunkCreate mstats
+    coerce <$> thunk @(CitedStdThunk m) action
   {-# inline thunk #-}
 
   query
@@ -187,7 +225,19 @@ instance
   force
     ::    StdThunk m
     -> m (StdValue m)
-  force = force @(CitedStdThunk m) . coerce
+  force t = do
+    mstats <- askEvalStats
+    case mstats of
+      Nothing -> force @(CitedStdThunk m) (coerce t)
+      Just stats -> do
+        -- Only check computed state when profiling (for accurate stats)
+        let CitedP _ innerThunk = coerce t :: CitedStdThunk m
+        wasComputed <- isComputed innerThunk
+        start <- liftIO Clock.getMonotonicTimeNSec
+        result <- force @(CitedStdThunk m) (coerce t)
+        end <- liftIO Clock.getMonotonicTimeNSec
+        recordThunkForce stats wasComputed (end - start)
+        pure result
   {-# inline force #-}
 
   forceEff
@@ -256,6 +306,7 @@ instance
 instance
   ( MonadAtomicRef m
   , MonadCatch m
+  , MonadIO m
   , Typeable m
   , MonadReader (Context m (StdValue m)) m
   , MonadThunkId m
@@ -265,7 +316,8 @@ instance
   defer
     :: m (StdValue m)
     -> m (StdValue m)
-  defer = fmap (pure . coerce) . thunk @(CitedStdThunk m)
+  defer action = pure . coerce <$> thunk @(StdThunk m) action
+  {-# INLINE defer #-}
 
   demand
     :: StdValue m
@@ -275,8 +327,9 @@ instance
     go :: StdValue m -> m (StdValue m)
     go =
       free
-        (go <=< force @(CitedStdThunk m) . coerce)
+        (go <=< force @(StdThunk m) . coerce)
         (pure . Free)
+  {-# INLINE demand #-}
 
   inform
     :: StdValue m
@@ -288,6 +341,7 @@ instance
       free
         ((pure . coerce <$>) . (further @(CitedStdThunk m) . coerce))
         ((Free <$>) . bindNValue' id go)
+  {-# INLINE inform #-}
 
 
 -- * @instance MonadValueF (StdValue m) m@
@@ -295,6 +349,7 @@ instance
 instance
   ( MonadAtomicRef m
   , MonadCatch m
+  , MonadIO m
   , Typeable m
   , MonadReader (Context m (StdValue m)) m
   , MonadThunkId m
@@ -308,6 +363,7 @@ instance
     -> StdValue m
     -> m r
   demandF f = f <=< demand
+  {-# INLINE demandF #-}
 
   informF
     :: ( m (StdValue m)
@@ -316,6 +372,7 @@ instance
     -> StdValue m
     -> m (StdValue m)
   informF f = f . inform
+  {-# INLINE informF #-}
 
 
 {------------------------------------------------------------------------}
@@ -388,6 +445,7 @@ mkStandardT
       a
   -> StandardT m a
 mkStandardT = coerce
+{-# INLINE mkStandardT #-}
 
 runStandardT
   :: StandardT m a
@@ -396,17 +454,26 @@ runStandardT
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
 runStandardT = coerce
+{-# INLINE runStandardT #-}
+
+runWithBasicEffectsAndStats
+  :: (MonadIO m, MonadAtomicRef m)
+  => Options
+  -> Maybe EvalStats
+  -> StandardT (StdIdT m) a
+  -> m a
+runWithBasicEffectsAndStats opts mstats =
+  fun . (`evalStateT` mempty) . (`runReaderT` newContextWithStats opts mstats) . runStandardT
+ where
+  fun action =
+    runFreshIdT action =<< newRef (1 :: Int)
 
 runWithBasicEffects
   :: (MonadIO m, MonadAtomicRef m)
   => Options
   -> StandardT (StdIdT m) a
   -> m a
-runWithBasicEffects opts =
-  fun . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
- where
-  fun action =
-    runFreshIdT action =<< newRef (1 :: Int)
+runWithBasicEffects opts = runWithBasicEffectsAndStats opts Nothing
 
 runWithBasicEffectsIO :: Options -> StandardIO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
@@ -416,10 +483,14 @@ runWithStoreEffectsIO
    . Options
   -> (forall m. StdBase m => StdM m a)
   -> IO a
-runWithStoreEffectsIO opts action =
-  case getStoreMode opts of
+runWithStoreEffectsIO opts action = do
+  -- Create stats collector if enabled
+  mstats <- if isEvalStats opts then Just <$> newEvalStats else pure Nothing
+
+  -- Run the action
+  result <- case getStoreMode opts of
     StoreRemote ->
-      runWithBasicEffects opts (action :: StdM IO a)
+      runWithBasicEffectsAndStats opts mstats (action :: StdM IO a)
     StoreOverlay ->
       let
         storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
@@ -429,4 +500,9 @@ runWithStoreEffectsIO opts action =
           }
       in
         evalOverlayStoreT cfg defaultOverlayStoreState $
-          runWithBasicEffects opts (action :: StdM (OverlayStoreT IO) a)
+          runWithBasicEffectsAndStats opts mstats (action :: StdM (OverlayStoreT IO) a)
+
+  -- Print stats if enabled
+  traverse_ printEvalStats mstats
+
+  pure result
