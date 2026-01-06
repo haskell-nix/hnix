@@ -15,9 +15,8 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
                                                 )
-import qualified Data.HashMap.Lazy             as M
-import qualified Data.HashMap.Strict           as MS ( insert )
-import qualified Data.HashSet                  as S
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
 import           Data.Foldable                  ( foldl )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
@@ -99,8 +98,8 @@ writeDerivation :: (Framed e m, MonadStore m, MonadReader e m, Has e Options) =>
 writeDerivation drv@Derivation{inputs, name} = do
   storeDir <- storeDirFromOptions
   let (inputSrcs, inputDrvs) = inputs
-  referencePaths <- traverse (parsePath storeDir) (Set.toList $ inputSrcs <> Set.fromList (fst <$> Map.toList inputDrvs))
-  let references = S.fromList $ fmap (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath storeDir) referencePaths
+  referencePaths <- traverse (parsePath storeDir) (Set.toList $ inputSrcs <> Map.keysSet inputDrvs)
+  let references = HS.fromList $ fmap (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath storeDir) referencePaths
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) references False
   parsePath storeDir $ fromString $ coerce path
 
@@ -147,7 +146,7 @@ hashDerivationModulo
                 pure (hash, outs)
               )
               (\ hash -> pure (hash, outs))
-              (M.lookup path cache)
+              (HM.lookup path cache)
           )
           (Map.toList inputDrvs)
     pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 $ unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
@@ -274,7 +273,7 @@ derivationParser = do
 
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
-    s <- M.mapKeys varNameText <$> fromValue @(AttrSet (NValue t f m)) val
+    s <- HM.mapKeys varNameText <$> fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
     storeDir <- storeDirFromOptions
@@ -322,7 +321,7 @@ defaultDerivationStrict val = do
     -- Nix uses base16 for derivation hashes
     let drvHashBytes = convert digestValue :: ByteString
     let drvHash = decodeUtf8 (convertToBase Base16 drvHashBytes :: ByteString)
-    modify $ second $ MS.insert (varNameText drvPath) drvHash
+    modify $ second $ HM.insert (varNameText drvPath) drvHash
 
     let
       outputsWithContext =
@@ -330,10 +329,10 @@ defaultDerivationStrict val = do
           (\out (mkVarName -> path) -> mkNixStringWithSingletonContext (StringContext (DerivationOutput out) drvPath) path)
           (outputs drv')
       drvPathWithContext = mkNixStringWithSingletonContext (StringContext AllOutputs drvPath) drvPath
-      attrSet = NVStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
+      attrSet = NVStr <$> HM.insert "drvPath" drvPathWithContext (Map.foldrWithKey HM.insert HM.empty outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ NVSet mempty $ M.mapKeys mkVarName attrSet
+    pure $ NVSet mempty $ HM.mapKeys mkVarName attrSet
 
   where
 
@@ -437,7 +436,7 @@ buildDerivationWithContext drvAttrs = do
                 "Derivation attribute '" <> show attr <> "' is null"
             _ -> pure ()
 
-        requireNonNullAttrIfPresent attr = case M.lookup attr drvAttrs of
+        requireNonNullAttrIfPresent attr = case HM.lookup attr drvAttrs of
           Nothing -> pure ()
           Just v  -> do
             raw <- lift $ demand v
@@ -485,7 +484,7 @@ buildDerivationWithContext drvAttrs = do
         lift $
           bool
             (pure drvAttrs)
-            (M.mapMaybe id <$>
+            (HM.mapMaybe id <$>
               traverse
                 (fmap
                   (\case
@@ -500,13 +499,13 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ toJSONNixString $ NVSet mempty $ M.mapKeys mkVarName $
+          jsonString :: NixString <- lift $ toJSONNixString $ NVSet mempty $ HM.mapKeys mkVarName $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)
         else
           traverse (extractNixString <=< lift . coerceAnyToNixString callFunc CopyToStore) $
-            Map.fromList $ M.toList $ deleteKeys [ "args", "__ignoreNulls" ] attrs
+            HM.foldrWithKey Map.insert Map.empty $ deleteKeys [ "args", "__ignoreNulls" ] attrs
 
       pure $ Derivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
@@ -528,7 +527,7 @@ buildDerivationWithContext drvAttrs = do
 
     getAttrOr' :: forall v a. (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m)))
       => Text -> m a -> (v -> WithStringContextT m a) -> WithStringContextT m a
-    getAttrOr' n d f = case M.lookup n drvAttrs of
+    getAttrOr' n d f = case HM.lookup n drvAttrs of
       Nothing -> lift d
       Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $
                    f =<< fromValue' v
@@ -538,12 +537,12 @@ buildDerivationWithContext drvAttrs = do
     getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found.")
 
     getAttrRaw :: Text -> WithStringContextT m (NValue t f m)
-    getAttrRaw n = case M.lookup n drvAttrs of
+    getAttrRaw n = case HM.lookup n drvAttrs of
       Nothing -> lift $ throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found."
       Just v  -> lift $ demand v
 
     getAttrMaybeNoCtx :: Text -> WithStringContextT m (Maybe Text)
-    getAttrMaybeNoCtx n = case M.lookup n drvAttrs of
+    getAttrMaybeNoCtx n = case HM.lookup n drvAttrs of
       Nothing -> pure Nothing
       Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $ do
         raw <- lift $ demand v
@@ -594,4 +593,4 @@ buildDerivationWithContext drvAttrs = do
     -- Other helpers
 
     deleteKeys :: [Text] -> KeyMap a -> KeyMap a
-    deleteKeys keys attrSet = foldl' (flip M.delete) attrSet keys
+    deleteKeys keys attrSet = foldl' (flip HM.delete) attrSet keys

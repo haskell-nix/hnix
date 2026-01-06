@@ -245,7 +245,7 @@ parseReferences :: Store.StoreDir -> StorePathSet -> HS.HashSet Store.StorePath
 parseReferences storeDir refs =
   let
     parseOne (StorePath p) = Store.parsePath storeDir (TextEncoding.encodeUtf8 $ toText p)
-  in HS.fromList $ rights $ map parseOne $ HS.toList refs
+  in HS.foldl' (\acc r -> either (const acc) (`HS.insert` acc) (parseOne r)) HS.empty refs
 
 storedObjectFileType :: StoredObject -> FileType
 storedObjectFileType = \case
