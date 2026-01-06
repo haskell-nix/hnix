@@ -219,7 +219,7 @@ exec update source =
           either
             (\ (NixException frames) ->
               do
-                lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
+                lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t @f frames
                 pure Nothing
             )
             (\ val ->

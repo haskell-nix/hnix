@@ -25,10 +25,10 @@ module Nix
 where
 
 import           Nix.Prelude
-import           Relude.Unsafe                  ( (!!) )
+import qualified Data.Vector                   as V
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Fix                       ( Fix )
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import qualified Data.Text                     as Text
 import qualified Data.Text.Read                as Text
 import           Nix.Builtins
@@ -74,14 +74,11 @@ nixEvalExpr = nixEval id Eval.eval
 -- | Evaluate a nix expression in the default context
 nixEvalExprLoc
   :: forall e t f m
-   . (MonadNix e t f m, Has e Options)
+   . (MonadNix e t f m, Has e Options, MonadIO m)
   => Maybe Path
   -> NExprLoc
   -> m (NValue t f m)
-nixEvalExprLoc =
-  nixEval
-    Eval.addMetaInfo
-    Eval.evalContent
+nixEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
 --   this function doesn't do any tracing itself, but 'evalExprLoc' will be
@@ -115,7 +112,7 @@ evaluateExpression mpath evaluator handler expr =
     f' <- demand f
     val <-
       case f' of
-        NVClosure _ g -> g $ NVSet mempty $ M.fromList args
+        NVClosure _ g -> g $ NVSet mempty $ HM.fromList args
         _             -> pure f
     processResult handler val
  where
@@ -149,12 +146,12 @@ processResult h val =
         do
           v' <- demand v
           case (k, v') of
-            (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ xs !! n
+            (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ xs V.! n
             (_,         NVSet _ xs) ->
               maybe
                 (errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''.")
                 (processKeys ks)
-                (M.lookup k xs)
+                (HM.lookup k xs)
             (_, _) -> errorWithoutStackTrace $ "Expected a set or list for selector '" <> show k <> "', but got: " <> show v
       )
       kys

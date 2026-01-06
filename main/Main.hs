@@ -15,8 +15,7 @@ import           Control.Monad.Free
 import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
 import           System.IO                      ( hPutStrLn )
-import qualified Data.HashMap.Lazy             as M
-import qualified Data.Map                      as Map
+import qualified Data.HashMap.Strict           as HM
 import           Data.Time
 import qualified Data.Text.IO                  as Text
 import           Text.Show.Pretty               ( ppShow )
@@ -28,7 +27,7 @@ import           Nix.Standard
 import           Nix.Thunk.Basic
 import           Nix.Type.Env                   ( Env(..) )
 import           Nix.Type.Type                  ( Scheme )
-import qualified Nix.Type.Infer                as HM
+import qualified Nix.Type.Infer                as TI
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
@@ -129,9 +128,9 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
                 (liftIO . putStrLn . (<>) "Type of expression: " .
-                  ppShow . maybeToMonoid . Map.lookup @VarName @[Scheme] "it" . coerce
+                  ppShow . maybeToMonoid . HM.lookup @VarName @[Scheme] "it" . coerce
                 )
-                $ HM.inferTop mempty $ curry one "it" $ stripAnnotation expr'
+                $ TI.inferTop mempty $ curry one "it" $ stripAnnotation expr'
 
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
@@ -233,7 +232,7 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
                 (\ (k, nv) ->
                   (k, ) <$>
                   free
-                    (\ (StdThunk (extract -> Thunk _ _ ref)) ->
+                    (\ (StdThunk (extract -> Thunk _ ref)) ->
                       do
                         let
                           path         = prefix <> k
@@ -244,16 +243,17 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
                           (pure Nothing)
                           (forceEntry path nv)
                           (descend &&
-                            deferred
-                              (const False)
-                              (const True)
+                            thunkState
+                              (const False)  -- computed: don't descend
+                              (const True)   -- deferred: descend
+                              (const True)   -- computing: descend
                               val
                           )
                     )
                     (pure . pure . Free)
                     nv
                 )
-                (sortWith fst $ M.toList $ M.mapKeys varNameText s)
+                (sortWith fst $ HM.toList $ HM.mapKeys varNameText s)
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True , True )
