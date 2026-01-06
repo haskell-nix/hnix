@@ -1,4 +1,5 @@
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language Strict #-}
 
 module Nix.String
   ( NixString
@@ -50,8 +51,8 @@ import           Nix.Expr.Types                 ( VarName
 -- | A Nix 'StringContext' ...
 data StringContext =
   StringContext
-    { getStringContextFlavor :: !ContextFlavor
-    , getStringContextPath   :: !VarName
+    { getStringContextFlavor :: ContextFlavor
+    , getStringContextPath   :: VarName
     }
   deriving (Eq, Ord, Show, Generic)
 
@@ -61,7 +62,7 @@ instance Hashable StringContext
 data ContextFlavor
   = DirectPath
   | AllOutputs
-  | DerivationOutput !Text
+  | DerivationOutput Text
   deriving (Show, Eq, Ord, Generic)
 
 instance Hashable ContextFlavor
@@ -74,9 +75,9 @@ newtype NixLikeContext =
 
 data NixLikeContextValue =
   NixLikeContextValue
-    { nlcvPath :: !Bool
-    , nlcvAllOutputs :: !Bool
-    , nlcvOutputs :: ![Text]
+    { nlcvPath :: Bool
+    , nlcvAllOutputs :: Bool
+    , nlcvOutputs :: [Text]
     }
   deriving (Show, Eq, Ord, Generic)
 
@@ -107,8 +108,8 @@ type WithStringContext = WithStringContextT Identity
 
 data NixString =
   NixString
-    { getStringContext :: !(HS.HashSet StringContext)
-    , getStringContent :: !Text
+    { getStringContext :: HS.HashSet StringContext
+    , getStringContent :: Text
     }
   deriving (Eq, Ord, Show, Generic)
 

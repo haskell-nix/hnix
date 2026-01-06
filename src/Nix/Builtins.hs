@@ -1,16 +1,18 @@
-{-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
+{-# language CPP #-}
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language KindSignatures #-}
 {-# language MonoLocalBinds #-}
 {-# language MultiWayIf #-}
+{-# language PackageImports #-}
 {-# language PartialTypeSignatures #-}
-{-# language QuasiQuotes #-}
 {-# language PatternSynonyms #-}
+{-# language QuasiQuotes #-}
+{-# language Strict #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
-{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+-- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 

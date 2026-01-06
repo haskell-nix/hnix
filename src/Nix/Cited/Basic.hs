@@ -1,6 +1,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language PatternSynonyms #-}
+{-# language Strict #-}
 {-# language UndecidableInstances #-}
-{-# language PatternSynonyms    #-}
 
 module Nix.Cited.Basic
   ( Cited(..)

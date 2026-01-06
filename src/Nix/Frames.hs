@@ -1,6 +1,6 @@
 {-# language ConstraintKinds #-}
 {-# language ExistentialQuantification #-}
-{-# language BangPatterns #-}
+{-# language Strict #-}
 
 -- | Definitions of Frames. Frames are messages that gather and ship themself
 -- with a context related to the message. For example - the message about some
@@ -35,8 +35,8 @@ data NixLevel = Fatal | Error | Warning | Info | Debug
 
 data NixFrame =
   NixFrame
-    { frameLevel :: !NixLevel
-    , frame      :: !SomeException
+    { frameLevel :: NixLevel
+    , frame      :: SomeException
     }
 
 instance Show NixFrame where
@@ -54,11 +54,11 @@ emptyFrames = []
 -- Returns True if the list has more than @limit@ elements.
 -- Used in callFunc for stack overflow detection.
 exceedsDepth :: Int -> [a] -> Bool
-exceedsDepth !limit = go limit
+exceedsDepth limit = go limit
   where
     go 0 _      = True
     go _ []     = False
-    go !n (_:xs) = go (n - 1) xs
+    go n (_:xs) = go (n - 1) xs
 {-# INLINE exceedsDepth #-}
 
 askFrames :: forall e m . (MonadReader e m, Has e Frames) => m Frames
@@ -73,11 +73,11 @@ instance Exception NixException
 
 withFrame
   :: forall s e m a . (Framed e m, Exception s) => NixLevel -> s -> m a -> m a
-withFrame !level !f = local $ over hasLens (NixFrame level (toException f) :)
+withFrame level f = local $ over hasLens (NixFrame level (toException f) :)
 
 throwError
   :: forall s e m a . (Framed e m, Exception s, MonadThrow m) => s -> m a
 throwError err =
   do
-    !frames <- askLocal
+    frames <- askLocal
     throwM $ NixException $ NixFrame Error (toException err) : frames

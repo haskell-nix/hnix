@@ -3,6 +3,7 @@
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language Strict #-}
 
 module Nix.Scope where
 
@@ -64,16 +65,16 @@ scopeLookupWithDepth :: VarName -> [Scope a] -> (Maybe a, Int, Int)
 scopeLookupWithDepth key scopes = go 0 scopes
  where
   totalDepth = length scopes
-  go !searched [] = (Nothing, totalDepth, searched)
-  go !searched (Scope m : rest) =
+  go searched [] = (Nothing, totalDepth, searched)
+  go searched (Scope m : rest) =
     case HM.lookup key m of
       Just v  -> (Just v, totalDepth, searched + 1)
       Nothing -> go (searched + 1) rest
 
 data Scopes m a =
   Scopes
-    { lexicalScopes :: ![Scope a]
-    , dynamicScopes :: ![m (Scope a)]
+    { lexicalScopes :: [Scope a]
+    , dynamicScopes :: [m (Scope a)]
     }
 
 instance Show (Scopes m a) where
@@ -117,7 +118,7 @@ pushScope
   => Scope a
   -> m r
   -> m r
-pushScope scope = pushScopes $ Scopes (one scope) mempty
+pushScope ~scope = pushScopes $ Scopes (one scope) mempty  -- ~scope: lazy for loebM knot-tying
 
 pushWeakScope
   :: ( Functor m
@@ -206,9 +207,9 @@ lookupVarReaderWithInfo k = do
   let (val, info) = result
   pure (val, info, end - start)
  where
-  searchDynamic !lexCount !dynSearched !totalDepth [] =
+  searchDynamic lexCount dynSearched totalDepth [] =
     pure (Nothing, LookupMiss totalDepth)
-  searchDynamic !lexCount !dynSearched !totalDepth (weakscope : rest) = do
+  searchDynamic lexCount dynSearched totalDepth (weakscope : rest) = do
     mres' <- HM.lookup k . coerce @(Scope a) <$> weakscope
     case mres' of
       Just v  -> pure (Just v, DynamicHit totalDepth (lexCount + dynSearched + 1))

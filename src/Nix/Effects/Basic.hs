@@ -1,5 +1,6 @@
 {-# language CPP #-}
 {-# language PackageImports #-}
+{-# language Strict #-}
 
 module Nix.Effects.Basic where
 

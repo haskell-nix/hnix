@@ -5,6 +5,7 @@
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language RankNTypes #-}
+{-# language Strict #-}
 {-# language TemplateHaskell #-}
 {-# language TemplateHaskellQuotes #-}
 {-# language TypeFamilies #-}
@@ -96,9 +97,9 @@ data NSourcePos =
   { -- | Name of source file
     getSourceName :: Path,
     -- | Line number
-    getSourceLine :: !NPos,
+    getSourceLine :: NPos,
     -- | Column number
-    getSourceColumn :: !NPos
+    getSourceColumn :: NPos
   }
  deriving
    ( Eq, Ord
@@ -289,11 +290,11 @@ instance Monoid Variadic where
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Params r
-  = Param !VarName
+  = Param VarName
   -- ^ For functions with a single named argument, such as @x: x + 1@.
   --
   -- > Param "x"                                  ~  x
-  | ParamSet !(Maybe VarName) !Variadic !(ParamSet r)
+  | ParamSet (Maybe VarName) Variadic (ParamSet r)
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
@@ -327,7 +328,7 @@ $(makeTraversals ''Params)
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted (v :: Type) (r :: Type)
-  = Plain !v
+  = Plain v
   | EscapedNewline
   -- ^ 'EscapedNewline' corresponds to the special newline form
   --
@@ -336,7 +337,7 @@ data Antiquoted (v :: Type) (r :: Type)
   -- in an indented string. It is equivalent to a single newline character:
   --
   -- > ''''\n''  ≡  "\n"
-  | Antiquoted !r
+  | Antiquoted r
   deriving
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary
@@ -373,12 +374,12 @@ $(makeTraversals ''Antiquoted)
 -- or an antiquoted expression. After the antiquotes have been evaluated,
 -- the final string is constructed by concatenating all the parts.
 data NString r
-  = DoubleQuoted ![Antiquoted Text r]
+  = DoubleQuoted [Antiquoted Text r]
   -- ^ Strings wrapped with double-quotes (__@"@__) can contain literal newline
   -- characters, but the newlines are preserved and no indentation is stripped.
   --
   -- > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
-  | Indented !Int ![Antiquoted Text r]
+  | Indented Int [Antiquoted Text r]
   -- ^ Strings wrapped with two single quotes (__@''@__) can contain newlines, and
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
@@ -436,12 +437,12 @@ $(makeTraversals ''NString)
 -- allowed even if the context requires a static keyname, but the
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
-  = DynamicKey !(Antiquoted (NString r) r)
+  = DynamicKey (Antiquoted (NString r) r)
   -- ^
   -- > DynamicKey (Plain (DoubleQuoted [Plain "x"]))     ~  "x"
   -- > DynamicKey (Antiquoted x)                         ~  ${x}
   -- > DynamicKey (Plain (DoubleQuoted [Antiquoted x]))  ~  "${x}"
-  | StaticKey !VarName
+  | StaticKey VarName
   -- ^
   -- > StaticKey "x"                                     ~  x
   deriving
@@ -451,8 +452,8 @@ data NKeyName r
     )
 
 instance NFData1 NKeyName where
-  liftRnf _ (StaticKey  !_            ) = mempty
-  liftRnf _ (DynamicKey (Plain !_)    ) = mempty
+  liftRnf _ (StaticKey  _             ) = mempty
+  liftRnf _ (DynamicKey (Plain _)     ) = mempty
   liftRnf _ (DynamicKey EscapedNewline) = mempty
   liftRnf k (DynamicKey (Antiquoted r)) = k r
 
@@ -532,11 +533,11 @@ instance Hashable1 NonEmpty
 
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
-  = NamedVar !(NAttrPath r) !r !NSourcePos
+  = NamedVar (NAttrPath r) r NSourcePos
   -- ^ An explicit naming.
   --
   -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z NSourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![VarName] !NSourcePos
+  | Inherit (Maybe r) [VarName] NSourcePos
   -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
   --
   -- +----------------------------------------------------------------+--------------------+-----------------------+
@@ -644,88 +645,88 @@ $(makeTraversals ''NBinaryOp)
 -- The actual 'NExpr' type is a fixed point of this functor, defined
 -- below.
 data NExprF r
-  = NConstant !NAtom
+  = NConstant NAtom
   -- ^ Constants: ints, floats, bools, URIs, and null.
-  | NStr !(NString r)
+  | NStr (NString r)
   -- ^ A string, with interpolated expressions.
-  | NSym !VarName
+  | NSym VarName
   -- ^ A variable. For example, in the expression @f a@, @f@ is represented
   -- as @NSym "f"@ and @a@ as @NSym "a"@.
   --
   -- > NSym "x"                                    ~  x
-  | NList ![r]
+  | NList [r]
   -- ^ A list literal.
   --
   -- > NList [x,y]                                 ~  [ x y ]
-  | NSet !Recursivity ![Binding r]
+  | NSet Recursivity [Binding r]
   -- ^ An attribute set literal
   --
   -- > NSet Recursive    [NamedVar x y _]         ~  rec { x = y; }
   -- > NSet NonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
-  | NLiteralPath !Path
+  | NLiteralPath Path
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
   -- which it appears.
   --
   -- > NLiteralPath "/x"                           ~  /x
   -- > NLiteralPath "x/y"                          ~  x/y
-  | NPath !(NString r)
+  | NPath (NString r)
   -- ^ A path expression with interpolations.
   --
   -- > NPath (DoubleQuoted [Plain "./", Antiquoted x]) ~  ./${x}
-  | NEnvPath !Path
+  | NEnvPath Path
   -- ^ A path which refers to something in the Nix search path (the NIX_PATH
   -- environment variable. For example, @<nixpkgs/pkgs>@.
   --
   -- > NEnvPath "x"                                ~  <x>
-  | NApp !r !r
+  | NApp r r
   -- ^ Functional application (aka F.A., apply a function to an argument).
   --
   -- > NApp f x  ~  f x
-  | NUnary !NUnaryOp !r
+  | NUnary NUnaryOp r
   -- ^ Application of a unary operator to an expression.
   --
   -- > NUnary NNeg x                               ~  - x
   -- > NUnary NNot x                               ~  ! x
-  | NBinary !NBinaryOp !r !r
+  | NBinary NBinaryOp r r
   -- ^ Application of a binary operator to two expressions.
   --
   -- > NBinary NPlus x y                           ~  x + y
   -- > NBinary NApp  f x                           ~  f x
-  | NSelect !(Maybe r) !r !(NAttrPath r)
+  | NSelect (Maybe r) r (NAttrPath r)
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
   --
   -- > NSelect Nothing  s (x :| [])                ~  s.x
   -- > NSelect (pure y) s (x :| [])                ~  s.x or y
-  | NHasAttr !r !(NAttrPath r)
+  | NHasAttr r (NAttrPath r)
   -- ^ Ask if a set contains a given attribute path.
   --
   -- > NHasAttr s (x :| [])                        ~  s ? x
-  | NAbs !(Params r) !r
+  | NAbs (Params r) r
   -- ^ A function literal (lambda abstraction).
   --
   -- > NAbs (Param "x") y                          ~  x: y
-  | NLet ![Binding r] !r
+  | NLet [Binding r] r
   -- ^ Evaluate the second argument after introducing the bindings.
   --
   -- > NLet []                    x                ~  let in x
   -- > NLet [NamedVar x y _]      z                ~  let x = y; in z
   -- > NLet [Inherit Nothing x _] y                ~  let inherit x; in y
-  | NIf !r !r !r
+  | NIf r r r
   -- ^ If-then-else statement.
   --
   -- > NIf x y z                                   ~  if x then y else z
-  | NWith !r !r
+  | NWith r r
   -- ^ Evaluate an attribute set, bring its bindings into scope, and
   -- evaluate the second argument.
   --
   -- > NWith x y                                   ~  with x; y
-  | NAssert !r !r
+  | NAssert r r
   -- ^ Checks that the first argument is a predicate that is @true@ before evaluating the second argument.
   --
   -- > NAssert x y                                 ~  assert x; y
-  | NSynHole !VarName
+  | NSynHole VarName
   -- ^ Syntactic hole.
   --
   -- See <https://github.com/haskell-nix/hnix/issues/197> for context.

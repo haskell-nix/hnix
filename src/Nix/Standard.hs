@@ -4,6 +4,7 @@
 {-# language UndecidableInstances #-}
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
+{-# language Strict #-}
 {-# language ConstraintKinds #-}
 {-# language PatternSynonyms #-}
 

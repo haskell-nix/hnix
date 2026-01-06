@@ -1,6 +1,7 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language RankNTypes #-}
+{-# language Strict #-}
 
 
 module Nix.Eval where
@@ -342,7 +343,7 @@ evalBinds isRecursive binds =
 
     mkThunk = defer . withScopes scopes
 
-    encapsulate f attrs = mkThunk $ pushScope attrs f
+    encapsulate f ~attrs = mkThunk $ pushScope attrs f  -- ~attrs: lazy for loebM knot-tying
 
   applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([VarName], NSourcePos, m v)]
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =

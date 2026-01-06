@@ -4,6 +4,7 @@
 {-# language ConstraintKinds #-}
 {-# language PatternSynonyms #-}
 {-# language RankNTypes #-}
+{-# language Strict #-}
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-signatures #-}
@@ -110,15 +111,15 @@ import           Nix.Thunk
 --   evaluated yet, as opposed to an NValue'.
 
 data NValueF p m r
-    = NVConstantF !NAtom
+    = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStrF !NixString
-    | NVPathF !Path
-    | NVListF !(Vector r)
+    | NVStrF NixString
+    | NVPathF Path
+    | NVListF (Vector r)
       -- ^ Nix lists use Vector for O(1) length and indexing.
       -- Elements remain lazy (not strict Vector) to preserve Nix semantics.
-    | NVSetF !PositionSet !(AttrSet r)
+    | NVSetF PositionSet (AttrSet r)
       -- ^
       --   Quite frequently actions/processing happens with values
       --   (for example - forcing of values & recreation of the monad),

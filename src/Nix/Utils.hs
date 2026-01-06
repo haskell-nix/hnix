@@ -1,5 +1,6 @@
 {-# language CPP #-}
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language Strict #-}
 
 -- | This is a module of custom "Prelude" code.
 -- It is for import for projects other then @HNix@.
@@ -330,7 +331,7 @@ type Transform f a = TransformF (Fix f) a
 type TransformF f a = (f -> a) -> f -> a
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
-loebM f = mfix $ \a -> (`traverse` f) ($ a)
+loebM f = mfix $ \ ~a -> (`traverse` f) ($ a)  -- ~a required: mfix passes result before computed
 {-# inline loebM #-}
 
 -- | adi is Abstracting Definitional Interpreters:

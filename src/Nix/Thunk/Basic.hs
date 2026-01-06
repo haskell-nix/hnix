@@ -1,7 +1,6 @@
 {-# language ConstraintKinds #-}
 {-# language UndecidableInstances #-}
-{-# language StrictData #-}
-{-# language BangPatterns #-}
+{-# language Strict #-}
 {-# options_ghc -Wno-unused-do-bind #-}
 
 -- | Basic thunk implementation for lazy evaluation with memoization.
@@ -15,9 +14,10 @@
 --   * Runtime: 140s → 121s (-13.6%)
 --   * IORef operations per force: 4 → 2
 --
--- === StrictData is Critical
--- Without strict fields, thunks accumulate inside the IORef, causing
--- space leaks. All 'ThunkState' fields must be strict.
+-- === Strict Extension is Critical
+-- Without strict evaluation, thunks accumulate inside the IORef, causing
+-- space leaks. This module uses @{-# language Strict #-}@ to ensure all
+-- bindings and data fields are strict by default.
 --
 -- === atomicModifyRef vs readRef for Cache Hits
 -- Attempted optimization: use 'readRef' for cache hits (64.7% of forces),
@@ -72,11 +72,11 @@ import           Nix.Thunk
 --                                            +--[force again = LOOP ERROR]
 -- @
 --
--- All fields MUST be strict to avoid space leaks from thunks inside the IORef.
+-- All fields are strict (via Strict pragma) to avoid space leaks.
 data ThunkState m v
-  = ThunkComputed !v         -- ^ Fully evaluated value (strict)
-  | ThunkDeferred !(m v)     -- ^ Not yet evaluated, stores the computation (strict)
-  | ThunkComputing !(m v)    -- ^ Currently being evaluated, for loop detection (strict)
+  = ThunkComputed v       -- ^ Fully evaluated value
+  | ThunkDeferred (m v)   -- ^ Not yet evaluated, stores the computation
+  | ThunkComputing (m v)  -- ^ Currently being evaluated, for loop detection
   deriving (Functor, Foldable, Traversable)
 
 -- | Pattern match on thunk state (analog of 'either' for ThunkState)
@@ -86,10 +86,10 @@ thunkState
   -> (m v -> b)    -- ^ Handler for computing (in-progress)
   -> ThunkState m v
   -> b
-thunkState !onComputed !onDeferred !onComputing = \case
-  ThunkComputed !v   -> onComputed v
-  ThunkDeferred !mv  -> onDeferred mv
-  ThunkComputing !mv -> onComputing mv
+thunkState onComputed onDeferred onComputing = \case
+  ThunkComputed v   -> onComputed v
+  ThunkDeferred mv  -> onDeferred mv
+  ThunkComputing mv -> onComputing mv
 {-# inline thunkState #-}
 
 
@@ -101,7 +101,7 @@ type ThunkStateRef m v = Ref m (ThunkState m v)
 -- | The type of very basic thunks.
 -- Uses a single IORef for both lock state and value (flattened from 2 IORefs).
 data NThunkF m v =
-  Thunk !(ThunkId m) !(ThunkStateRef m v)
+  Thunk (ThunkId m) (ThunkStateRef m v)
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ == Thunk y _ = x == y
@@ -111,9 +111,9 @@ instance Show (NThunkF m v) where
 
 -- | Check if a thunk value is already computed (cache hit detection)
 isComputed :: MonadRef m => NThunkF m v -> m Bool
-isComputed (Thunk _ !stateRef) = do
-  !s <- readRef stateRef
-  pure $! case s of
+isComputed (Thunk _ stateRef) = do
+  s <- readRef stateRef
+  pure $ case s of
     ThunkComputed _ -> True
     _               -> False
 {-# inline isComputed #-}
@@ -130,18 +130,18 @@ instance (MonadBasicThunk m, MonadCatch m)
   thunkId (Thunk n _) = n
 
   thunk :: m v -> m (NThunkF m v)
-  thunk !action = do
-    !freshThunkId <- freshId
-    !stateRef <- newRef $! ThunkDeferred action
-    pure $! Thunk freshThunkId stateRef
+  thunk action = do
+    freshThunkId <- freshId
+    stateRef <- newRef $ ThunkDeferred action
+    pure $ Thunk freshThunkId stateRef
   {-# inline thunk #-}
 
   query :: m v -> NThunkF m v -> m v
-  query !vStub (Thunk _ !stateRef) = do
-    !s <- readRef stateRef
+  query vStub (Thunk _ stateRef) = do
+    s <- readRef stateRef
     case s of
-      ThunkComputed !v -> pure v
-      _                -> vStub
+      ThunkComputed v -> pure v
+      _               -> vStub
   {-# inline query #-}
 
   force :: NThunkF m v -> m v
@@ -153,8 +153,8 @@ instance (MonadBasicThunk m, MonadCatch m)
   {-# inline forceEff #-}
 
   further :: NThunkF m v -> m (NThunkF m v)
-  further t@(Thunk _ !ref) = do
-    _ <- atomicModifyRef ref $! \s -> (s, ())
+  further t@(Thunk _ ref) = do
+    _ <- atomicModifyRef ref $ \s -> (s, ())
     pure t
   {-# inline further #-}
 
@@ -188,29 +188,29 @@ forceMain
     )
   => NThunkF m v
   -> m v
-forceMain (Thunk !tIdV !stateRef) = do
+forceMain (Thunk tIdV stateRef) = do
   -- Single atomic operation handles both cache hits and state transitions.
   -- For cache hits, this is effectively just a read (state unchanged).
   -- For cache misses, atomically transitions Deferred -> Computing.
-  !result <- atomicModifyRef stateRef $! \case
-    ThunkComputed !v ->
+  result <- atomicModifyRef stateRef $ \case
+    ThunkComputed v ->
       -- Cache hit: return value, state unchanged
       (ThunkComputed v, Right v)
-    ThunkDeferred !action ->
+    ThunkDeferred action ->
       -- Cache miss: transition to Computing, return action to execute
       (ThunkComputing action, Left action)
-    ThunkComputing !_ ->
+    ThunkComputing _ ->
       -- Loop detection: already computing this thunk = infinite recursion
-      let !err = throwM $ ThunkLoop $ show tIdV
+      let err = throwM $ ThunkLoop $ show tIdV
       in (ThunkComputing err, Left err)
 
   case result of
-    Right !v -> pure v  -- Cache hit - done
-    Left !action -> do
+    Right v -> pure v  -- Cache hit - done
+    Left action -> do
       -- Cache miss - execute the deferred computation
-      !v <- action `catch` \(e :: SomeException) -> throwM e
+      v <- action `catch` \(e :: SomeException) -> throwM e
       -- Store result for future cache hits
-      writeRef stateRef $! ThunkComputed v
+      writeRef stateRef $ ThunkComputed v
       pure v
 {-# inline forceMain #-}
 
@@ -225,11 +225,11 @@ instance (MonadBasicThunk m, MonadCatch m)
     -> m r
     -> NThunkF m v
     -> m r
-  queryF !k !n (Thunk _ !stateRef) = do
-    !s <- readRef stateRef
+  queryF k n (Thunk _ stateRef) = do
+    s <- readRef stateRef
     case s of
-      ThunkComputed !v -> k v
-      _                -> n
+      ThunkComputed v -> k v
+      _               -> n
   {-# inline queryF #-}
 
   forceF
@@ -250,9 +250,9 @@ instance (MonadBasicThunk m, MonadCatch m)
     :: (m v -> m v)
     -> NThunkF m v
     -> m (NThunkF m v)
-  furtherF !k t@(Thunk _ !ref) = do
-    _ <- atomicModifyRef ref $! \case
-      ThunkDeferred !d -> let !d' = k d in (ThunkDeferred d', ())
-      !s               -> (s, ())
+  furtherF k t@(Thunk _ ref) = do
+    _ <- atomicModifyRef ref $ \case
+      ThunkDeferred d -> let d' = k d in (ThunkDeferred d', ())
+      s               -> (s, ())
     pure t
   {-# inline furtherF #-}
