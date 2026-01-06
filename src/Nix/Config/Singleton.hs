@@ -101,7 +101,7 @@ whenStats :: forall s m. (HasStats s, Applicative m) => m () -> m ()
 whenStats action = case sbool @s of
   STrue  -> action
   SFalse -> pure ()
-{-# INLINE whenStats #-}
+{-# INLINABLE whenStats #-}
 
 -- | Execute action only when provenance tracking is enabled at the type level.
 --
@@ -110,7 +110,7 @@ whenProvenance :: forall p m. (HasProvenance p, Applicative m) => m () -> m ()
 whenProvenance action = case sbool @p of
   STrue  -> action
   SFalse -> pure ()
-{-# INLINE whenProvenance #-}
+{-# INLINABLE whenProvenance #-}
 
 -- | Execute action only when tracing is enabled at the type level.
 --
@@ -119,7 +119,7 @@ whenTracing :: forall t m. (HasTracing t, Applicative m) => m () -> m ()
 whenTracing action = case sbool @t of
   STrue  -> action
   SFalse -> pure ()
-{-# INLINE whenTracing #-}
+{-# INLINABLE whenTracing #-}
 
 -- | Choose between two values based on whether stats collection is enabled.
 --
@@ -134,21 +134,21 @@ ifStats :: forall s a. HasStats s => a -> a -> a
 ifStats whenTrue whenFalse = case sbool @s of
   STrue  -> whenTrue
   SFalse -> whenFalse
-{-# INLINE ifStats #-}
+{-# INLINABLE ifStats #-}
 
 -- | Choose between two values based on whether provenance tracking is enabled.
 ifProvenance :: forall p a. HasProvenance p => a -> a -> a
 ifProvenance whenTrue whenFalse = case sbool @p of
   STrue  -> whenTrue
   SFalse -> whenFalse
-{-# INLINE ifProvenance #-}
+{-# INLINABLE ifProvenance #-}
 
 -- | Choose between two values based on whether tracing is enabled.
 ifTracing :: forall t a. HasTracing t => a -> a -> a
 ifTracing whenTrue whenFalse = case sbool @t of
   STrue  -> whenTrue
   SFalse -> whenFalse
-{-# INLINE ifTracing #-}
+{-# INLINABLE ifTracing #-}
 
 -- | Monadic version of 'ifStats' - choose between two actions.
 --
@@ -157,21 +157,21 @@ ifStatsM :: forall s m a. (HasStats s, Monad m) => m a -> m a -> m a
 ifStatsM whenTrue whenFalse = case sbool @s of
   STrue  -> whenTrue
   SFalse -> whenFalse
-{-# INLINE ifStatsM #-}
+{-# INLINABLE ifStatsM #-}
 
 -- | Monadic version of 'ifProvenance' - choose between two actions.
 ifProvenanceM :: forall p m a. (HasProvenance p, Monad m) => m a -> m a -> m a
 ifProvenanceM whenTrue whenFalse = case sbool @p of
   STrue  -> whenTrue
   SFalse -> whenFalse
-{-# INLINE ifProvenanceM #-}
+{-# INLINABLE ifProvenanceM #-}
 
 -- | Monadic version of 'ifTracing' - choose between two actions.
 ifTracingM :: forall t m a. (HasTracing t, Monad m) => m a -> m a -> m a
 ifTracingM whenTrue whenFalse = case sbool @t of
   STrue  -> whenTrue
   SFalse -> whenFalse
-{-# INLINE ifTracingM #-}
+{-# INLINABLE ifTracingM #-}
 
 -- | Existentially wrapped configuration for runtime dispatch.
 --
@@ -213,4 +213,4 @@ withEvalConfig stats prov tracing k =
     reifyBool prov $ \(_ :: Proxy p) ->
       reifyBool tracing $ \(_ :: Proxy t) ->
         k (Proxy @'(s, p, t))
-{-# INLINE withEvalConfig #-}
+{-# INLINABLE withEvalConfig #-}

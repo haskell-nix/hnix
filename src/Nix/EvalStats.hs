@@ -108,7 +108,7 @@ recordExprExclusive :: MonadIO m => EvalStats -> Text -> Word64 -> Word64 -> m (
 recordExprExclusive stats name totalNs exclNs = liftIO $
   modifyIORef' (statsExprs stats) $
     HM.insertWith (<>) name (ExprStats 1 totalNs exclNs)
-{-# INLINE recordExprExclusive #-}
+{-# INLINABLE recordExprExclusive #-}
 
 -- | Execute an action with timing, tracking exclusive time
 --   Returns the result and adds the total time to parent's child time
@@ -136,14 +136,14 @@ withExprTiming stats name action = do
   liftIO $ writeIORef (statsChildTime stats) (parentChildTime + totalTime)
 
   pure result
-{-# INLINE withExprTiming #-}
+{-# INLINABLE withExprTiming #-}
 
 -- | Record a thunk creation
 recordThunkCreate :: MonadIO m => EvalStats -> m ()
 recordThunkCreate stats = liftIO $
   modifyIORef' (statsThunks stats) $ \s ->
     s { thunkCreated = thunkCreated s + 1 }
-{-# INLINE recordThunkCreate #-}
+{-# INLINABLE recordThunkCreate #-}
 
 -- | Record a thunk force operation
 --   hit = True means the value was already computed
@@ -158,14 +158,14 @@ recordThunkForce stats hit elapsedNs = liftIO $
       else s { thunkForced = thunkForced s + 1
              , thunkMiss = thunkMiss s + 1
              , thunkTimeNs = thunkTimeNs s + elapsedNs }
-{-# INLINE recordThunkForce #-}
+{-# INLINABLE recordThunkForce #-}
 
 -- | Record a builtin function call with timing
 recordBuiltin :: MonadIO m => EvalStats -> Text -> Word64 -> m ()
 recordBuiltin stats name elapsedNs = liftIO $
   modifyIORef' (statsBuiltins stats) $
     HM.insertWith (<>) name (BuiltinStats 1 elapsedNs)
-{-# INLINE recordBuiltin #-}
+{-# INLINABLE recordBuiltin #-}
 
 -- | Result of a scope lookup for profiling
 data ScopeLookupResult
@@ -202,7 +202,7 @@ recordScopeLookup stats result elapsedNs = liftIO $
         , scopeMaxDepth = max (scopeMaxDepth s) (fromIntegral depth)
         , scopeTimeNs = scopeTimeNs s + elapsedNs
         }
-{-# INLINE recordScopeLookup #-}
+{-# INLINABLE recordScopeLookup #-}
 
 -- | Print statistics summary to stdout
 printEvalStats :: MonadIO m => EvalStats -> m ()

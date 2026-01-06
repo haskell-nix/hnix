@@ -187,13 +187,13 @@ newtype VarName = VarName { getVarNameSymbol :: Symbol }
 -- O(log n) where n is the number of unique symbols.
 mkVarName :: Text -> VarName
 mkVarName = VarName . Symbolize.intern
-{-# INLINE mkVarName #-}
+{-# INLINABLE mkVarName #-}
 
 -- | Extract the Text from a VarName.
 -- O(1) operation.
 varNameText :: VarName -> Text
 varNameText = Symbolize.unintern . getVarNameSymbol
-{-# INLINE varNameText #-}
+{-# INLINABLE varNameText #-}
 
 instance IsString VarName where
   fromString = mkVarName . fromString

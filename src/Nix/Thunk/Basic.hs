@@ -90,7 +90,7 @@ thunkState onComputed onDeferred onComputing = \case
   ThunkComputed v   -> onComputed v
   ThunkDeferred mv  -> onDeferred mv
   ThunkComputing mv -> onComputing mv
-{-# inline thunkState #-}
+{-# INLINABLE thunkState #-}
 
 
 -- * Data type for thunks: @NThunkF@ (flattened)
@@ -116,7 +116,7 @@ isComputed (Thunk _ stateRef) = do
   pure $ case s of
     ThunkComputed _ -> True
     _               -> False
-{-# inline isComputed #-}
+{-# INLINABLE isComputed #-}
 
 type MonadBasicThunk m = (MonadThunkId m, MonadAtomicRef m)
 
@@ -134,7 +134,7 @@ instance (MonadBasicThunk m, MonadCatch m)
     freshThunkId <- freshId
     stateRef <- newRef $ ThunkDeferred action
     pure $ Thunk freshThunkId stateRef
-  {-# inline thunk #-}
+  {-# INLINABLE thunk #-}
 
   query :: m v -> NThunkF m v -> m v
   query vStub (Thunk _ stateRef) = do
@@ -142,21 +142,21 @@ instance (MonadBasicThunk m, MonadCatch m)
     case s of
       ThunkComputed v -> pure v
       _               -> vStub
-  {-# inline query #-}
+  {-# INLINABLE query #-}
 
   force :: NThunkF m v -> m v
   force = forceMain
-  {-# inline force #-}
+  {-# INLINABLE force #-}
 
   forceEff :: NThunkF m v -> m v
   forceEff = forceMain
-  {-# inline forceEff #-}
+  {-# INLINABLE forceEff #-}
 
   further :: NThunkF m v -> m (NThunkF m v)
   further t@(Thunk _ ref) = do
     _ <- atomicModifyRef ref $ \s -> (s, ())
     pure t
-  {-# inline further #-}
+  {-# INLINABLE further #-}
 
 
 -- *** Flattened force implementation
@@ -212,7 +212,7 @@ forceMain (Thunk tIdV stateRef) = do
       -- Store result for future cache hits
       writeRef stateRef $ ThunkComputed v
       pure v
-{-# inline forceMain #-}
+{-# INLINABLE forceMain #-}
 
 
 -- ** Kleisli functor HOFs: @instance MonadThunkF NThunkF@
@@ -230,21 +230,21 @@ instance (MonadBasicThunk m, MonadCatch m)
     case s of
       ThunkComputed v -> k v
       _               -> n
-  {-# inline queryF #-}
+  {-# INLINABLE queryF #-}
 
   forceF
     :: (v -> m a)
     -> NThunkF m v
     -> m a
   forceF k = k <=< force
-  {-# inline forceF #-}
+  {-# INLINABLE forceF #-}
 
   forceEffF
     :: (v -> m r)
     -> NThunkF m v
     -> m r
   forceEffF k = k <=< forceEff
-  {-# inline forceEffF #-}
+  {-# INLINABLE forceEffF #-}
 
   furtherF
     :: (m v -> m v)
@@ -255,4 +255,4 @@ instance (MonadBasicThunk m, MonadCatch m)
       ThunkDeferred d -> let d' = k d in (ThunkDeferred d', ())
       s               -> (s, ())
     pure t
-  {-# inline furtherF #-}
+  {-# INLINABLE furtherF #-}

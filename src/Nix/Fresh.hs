@@ -40,11 +40,11 @@ newtype FreshIdT i m a = FreshIdT (ReaderT (Ref m i) m a)
 
 instance MonadTrans (FreshIdT i) where
   lift = FreshIdT . lift
-  {-# INLINE lift #-}
+  {-# INLINABLE lift #-}
 
 instance MonadBase b m => MonadBase b (FreshIdT i m) where
   liftBase = FreshIdT . liftBase
-  {-# INLINE liftBase #-}
+  {-# INLINABLE liftBase #-}
 
 instance
   ( MonadAtomicRef m
@@ -60,8 +60,8 @@ instance
   freshId = FreshIdT $ do
     v <- ask
     atomicModifyRef v (\i -> (succ i, i))
-  {-# INLINE freshId #-}
+  {-# INLINABLE freshId #-}
 
 runFreshIdT :: Functor m => FreshIdT i m a -> Ref m i -> m a
 runFreshIdT = runReaderT . coerce
-{-# INLINE runFreshIdT #-}
+{-# INLINABLE runFreshIdT #-}

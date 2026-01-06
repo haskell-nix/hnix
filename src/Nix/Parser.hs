@@ -98,7 +98,7 @@ type Parser = ParsecT Void Text (State SourcePos)
 -- | Different to @isAlphaNum@
 isAlphanumeric :: Char -> Bool
 isAlphanumeric x = isAlpha x || isDigit x
-{-# inline isAlphanumeric #-}
+{-# INLINABLE isAlphanumeric #-}
 
 -- | Alternative "<|>" with additional preservation of 'MonadPlus' constraint.
 infixl 3 <|>
@@ -133,7 +133,7 @@ reservedNames =
 reservedEnd :: Char -> Bool
 reservedEnd x =
   isSpace x || (`elem` ("{([})];:.\"'," :: String)) x
-{-# inline reservedEnd #-}
+{-# INLINABLE reservedEnd #-}
 
 reserved :: Text -> Parser ()
 reserved n =

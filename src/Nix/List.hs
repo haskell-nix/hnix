@@ -104,156 +104,156 @@ class NixList f where
   -- Complexity: O(1) for all
   nlHead :: f a -> Maybe a
   nlHead = fmap fst . nlUncons
-  {-# INLINE nlHead #-}
+  {-# INLINABLE nlHead #-}
 
   -- | Get the tail, if non-empty.
   --
   -- Complexity: O(1) for Vector (slice), O(1) for Seq, O(1) for []
   nlTail :: f a -> Maybe (f a)
   nlTail = fmap snd . nlUncons
-  {-# INLINE nlTail #-}
+  {-# INLINABLE nlTail #-}
 
 -- | Vector instance - optimal for O(1) length and random access.
 instance NixList Vector where
   nlLength = V.length
-  {-# INLINE nlLength #-}
+  {-# INLINABLE nlLength #-}
 
   nlIndex = (V.!?)  -- Vector's safe indexing
-  {-# INLINE nlIndex #-}
+  {-# INLINABLE nlIndex #-}
 
   nlNull = V.null
-  {-# INLINE nlNull #-}
+  {-# INLINABLE nlNull #-}
 
   nlUncons = V.uncons  -- Vector provides this directly
-  {-# INLINE nlUncons #-}
+  {-# INLINABLE nlUncons #-}
 
   nlCons = V.cons
-  {-# INLINE nlCons #-}
+  {-# INLINABLE nlCons #-}
 
   nlSnoc = V.snoc
-  {-# INLINE nlSnoc #-}
+  {-# INLINABLE nlSnoc #-}
 
   nlAppend = (V.++)
-  {-# INLINE nlAppend #-}
+  {-# INLINABLE nlAppend #-}
 
   nlFromList = V.fromList
-  {-# INLINE nlFromList #-}
+  {-# INLINABLE nlFromList #-}
 
   nlToList = V.toList
-  {-# INLINE nlToList #-}
+  {-# INLINABLE nlToList #-}
 
   nlMap = V.map
-  {-# INLINE nlMap #-}
+  {-# INLINABLE nlMap #-}
 
   nlFilter = V.filter
-  {-# INLINE nlFilter #-}
+  {-# INLINABLE nlFilter #-}
 
   nlTraverse = traverse
-  {-# INLINE nlTraverse #-}
+  {-# INLINABLE nlTraverse #-}
 
   nlReverse = V.reverse
-  {-# INLINE nlReverse #-}
+  {-# INLINABLE nlReverse #-}
 
   nlEmpty = V.empty
-  {-# INLINE nlEmpty #-}
+  {-# INLINABLE nlEmpty #-}
 
   nlFoldl' = V.foldl'
-  {-# INLINE nlFoldl' #-}
+  {-# INLINABLE nlFoldl' #-}
 
   -- nlHead and nlTail use default implementations via nlUncons
 
 -- | Seq instance - optimal for O(1) cons/snoc and O(log n) indexing.
 instance NixList Seq where
   nlLength = Seq.length
-  {-# INLINE nlLength #-}
+  {-# INLINABLE nlLength #-}
 
   nlIndex s i = Seq.lookup i s
-  {-# INLINE nlIndex #-}
+  {-# INLINABLE nlIndex #-}
 
   nlNull = Seq.null
-  {-# INLINE nlNull #-}
+  {-# INLINABLE nlNull #-}
 
   nlUncons s = case Seq.viewl s of
     Seq.EmptyL  -> Nothing
     x Seq.:< xs -> Just (x, xs)
-  {-# INLINE nlUncons #-}
+  {-# INLINABLE nlUncons #-}
 
   nlCons = (Seq.<|)
-  {-# INLINE nlCons #-}
+  {-# INLINABLE nlCons #-}
 
   nlSnoc = (Seq.|>)
-  {-# INLINE nlSnoc #-}
+  {-# INLINABLE nlSnoc #-}
 
   nlAppend = (Seq.><)
-  {-# INLINE nlAppend #-}
+  {-# INLINABLE nlAppend #-}
 
   nlFromList = Seq.fromList
-  {-# INLINE nlFromList #-}
+  {-# INLINABLE nlFromList #-}
 
   nlToList = toList
-  {-# INLINE nlToList #-}
+  {-# INLINABLE nlToList #-}
 
   nlMap = fmap
-  {-# INLINE nlMap #-}
+  {-# INLINABLE nlMap #-}
 
   nlFilter = Seq.filter
-  {-# INLINE nlFilter #-}
+  {-# INLINABLE nlFilter #-}
 
   nlTraverse = traverse
-  {-# INLINE nlTraverse #-}
+  {-# INLINABLE nlTraverse #-}
 
   nlReverse = Seq.reverse
-  {-# INLINE nlReverse #-}
+  {-# INLINABLE nlReverse #-}
 
   nlEmpty = Seq.empty
-  {-# INLINE nlEmpty #-}
+  {-# INLINABLE nlEmpty #-}
 
   nlFoldl' = foldl'
-  {-# INLINE nlFoldl' #-}
+  {-# INLINABLE nlFoldl' #-}
 
 -- | List instance - baseline, useful for comparison and compatibility.
 instance NixList [] where
   nlLength = length
-  {-# INLINE nlLength #-}
+  {-# INLINABLE nlLength #-}
 
   nlIndex = (!?)  -- Safe indexing from Data.List
-  {-# INLINE nlIndex #-}
+  {-# INLINABLE nlIndex #-}
 
   nlNull = null
-  {-# INLINE nlNull #-}
+  {-# INLINABLE nlNull #-}
 
   nlUncons = uncons  -- From Data.List
-  {-# INLINE nlUncons #-}
+  {-# INLINABLE nlUncons #-}
 
   nlCons = (:)
-  {-# INLINE nlCons #-}
+  {-# INLINABLE nlCons #-}
 
   nlSnoc xs x = xs <> [x]
-  {-# INLINE nlSnoc #-}
+  {-# INLINABLE nlSnoc #-}
 
   nlAppend = (<>)
-  {-# INLINE nlAppend #-}
+  {-# INLINABLE nlAppend #-}
 
   nlFromList = id
-  {-# INLINE nlFromList #-}
+  {-# INLINABLE nlFromList #-}
 
   nlToList = id
-  {-# INLINE nlToList #-}
+  {-# INLINABLE nlToList #-}
 
   nlMap = fmap
-  {-# INLINE nlMap #-}
+  {-# INLINABLE nlMap #-}
 
   nlFilter = filter
-  {-# INLINE nlFilter #-}
+  {-# INLINABLE nlFilter #-}
 
   nlTraverse = traverse
-  {-# INLINE nlTraverse #-}
+  {-# INLINABLE nlTraverse #-}
 
   nlReverse = reverse
-  {-# INLINE nlReverse #-}
+  {-# INLINABLE nlReverse #-}
 
   nlEmpty = []
-  {-# INLINE nlEmpty #-}
+  {-# INLINABLE nlEmpty #-}
 
   nlFoldl' = foldl'
-  {-# INLINE nlFoldl' #-}
+  {-# INLINABLE nlFoldl' #-}

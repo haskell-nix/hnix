@@ -23,7 +23,7 @@ whenFree :: (Monoid b)
 whenFree =
   free
     mempty
-{-# inline whenFree #-}
+{-# INLINABLE whenFree #-}
 
 whenPure :: (Monoid b)
   => (a -> b) -> Free f a -> b
@@ -31,7 +31,7 @@ whenPure f =
   free
     f
     mempty
-{-# inline whenPure #-}
+{-# INLINABLE whenPure #-}
 
 -- | Replace:
 --  @Pure a -> a@

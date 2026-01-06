@@ -93,10 +93,10 @@ import qualified Relude.Debug                 as X
 -- Well, since it is currently CPP intermingled with Debug.Trace, required to use String here.
 trace :: String -> a -> a
 trace = const id
-{-# inline trace #-}
+{-# INLINABLE trace #-}
 traceM :: Monad m => String -> m ()
 traceM = const stub
-{-# inline traceM #-}
+{-# INLINABLE traceM #-}
 #endif
 
 -- * Helpers
@@ -105,17 +105,17 @@ traceM = const stub
 -- | @pure mempty@: Short-curcuit, stub.
 stub :: (Applicative f, Monoid a) => f a
 stub = pure mempty
-{-# inline stub #-}
+{-# INLINABLE stub #-}
 
 -- | Alias for 'stub', since "Relude" has more specialized @pure ()@.
 pass :: (Applicative f) => f ()
 pass = stub
-{-# inline pass #-}
+{-# INLINABLE pass #-}
 
 -- | Duplicates object into a tuple.
 dup :: a -> (a, a)
 dup x = (x, x)
-{-# inline dup #-}
+{-# INLINABLE dup #-}
 
 -- | Apply a single function to both components of a pair.
 --
@@ -124,14 +124,14 @@ dup x = (x, x)
 -- Taken From package @extra@
 both :: (a -> b) -> (a, a) -> (b, b)
 both f (x,y) = (f x, f y)
-{-# inline both #-}
+{-# INLINABLE both #-}
 
 -- | Gives tuple laziness.
 --
 -- Takem from @utility-ht@.
 mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
 mapPair ~(f,g) ~(a,b) = (f a, g b)
-{-# inline mapPair #-}
+{-# INLINABLE mapPair #-}
 
 iterateN
   :: forall a
@@ -152,7 +152,7 @@ nestM
 nestM 0 _ x = pure x
 nestM n f x =
   foldM (const . f) x $ replicate @() n mempty -- fuses. But also, can it be fix join?
-{-# inline nestM #-}
+{-# INLINABLE nestM #-}
 
 -- | In `foldr` order apply functions.
 applyAll :: Foldable t => t (a -> a) -> a -> a
@@ -188,7 +188,7 @@ whenTrue :: (Monoid a)
 whenTrue =
   bool
     mempty
-{-# inline whenTrue #-}
+{-# INLINABLE whenTrue #-}
 
 whenFalse :: (Monoid a)
   => a  -> Bool  -> a
@@ -196,7 +196,7 @@ whenFalse f =
   bool
     f
     mempty
-{-# inline whenFalse #-}
+{-# INLINABLE whenFalse #-}
 
 whenJust
   :: Monoid b
@@ -206,11 +206,11 @@ whenJust
 whenJust =
   maybe
     mempty
-{-# inline whenJust #-}
+{-# INLINABLE whenJust #-}
 
 isPresent :: Foldable t => t a -> Bool
 isPresent = not . null
-{-# inline isPresent #-}
+{-# INLINABLE isPresent #-}
 
 
 -- | 'maybe'-like eliminator, for foldable empty/inhabited structures.
@@ -220,7 +220,7 @@ handlePresence d f t =
     d
     (f t)
     (isPresent t)
-{-# inline handlePresence #-}
+{-# INLINABLE handlePresence #-}
 
 whenText
   :: a -> (Text -> a) -> Text -> a
@@ -236,7 +236,7 @@ free fP fF fr =
   case fr of
     Pure a -> fP a
     Free fa -> fF fa
-{-# inline free #-}
+{-# INLINABLE free #-}
 
 
 -- * Path
@@ -332,7 +332,7 @@ type TransformF f a = (f -> a) -> f -> a
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
 loebM f = mfix $ \ ~a -> (`traverse` f) ($ a)  -- ~a required: mfix passes result before computed
-{-# inline loebM #-}
+{-# INLINABLE loebM #-}
 
 -- | adi is Abstracting Definitional Interpreters:
 --

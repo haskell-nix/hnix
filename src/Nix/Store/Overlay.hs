@@ -72,7 +72,7 @@ newtype OverlayStoreT m a =
 
 instance MonadTrans OverlayStoreT where
   lift = OverlayStoreT . lift . lift
-  {-# inline lift #-}
+  {-# INLINABLE lift #-}
 
 instance MonadRef m => MonadRef (OverlayStoreT m) where
   type Ref (OverlayStoreT m) = Ref m

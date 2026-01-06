@@ -46,14 +46,15 @@
                   ];
                   withHoogle = false;
                 };
-                modules = [{
-                  enableLibraryProfiling = true;
-                  enableProfiling = true;
-                  profilingDetail = "late-toplevel";
-                  ghcOptions = [
-                    "-fprof-late-overloaded"
-                  ];
-                }];
+                # modules = [{
+                #   # enableLibraryProfiling = true;
+                #   # enableProfiling = true;
+                #   # profilingDetail = "late-toplevel";
+                #   # TODO(@connorbaker): Can't build XML with overloaded-calls.
+                #   # ghcOptions = [
+                #   #   "-fprof-late-overloaded"
+                #   # ];
+                # }];
               };
           })
         ];

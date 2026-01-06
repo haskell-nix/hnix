@@ -70,18 +70,18 @@ emptyFrames = Frames 0 []
 -- | Push a frame onto the stack. O(1).
 pushFrame :: NixFrame -> Frames -> Frames
 pushFrame f (Frames depth frames) = Frames (depth + 1) (f : frames)
-{-# INLINE pushFrame #-}
+{-# INLINABLE pushFrame #-}
 
 -- | Convert to list for traversal operations. O(1).
 framesToList :: Frames -> [NixFrame]
 framesToList = framesList
-{-# INLINE framesToList #-}
+{-# INLINABLE framesToList #-}
 
 -- | O(1) depth check. Returns True if frames exceed the limit.
 -- Used in callFunc for stack overflow detection.
 exceedsDepth :: Int -> Frames -> Bool
 exceedsDepth limit (Frames depth _) = depth > limit
-{-# INLINE exceedsDepth #-}
+{-# INLINABLE exceedsDepth #-}
 
 askFrames :: forall e m . (MonadReader e m, Has e Frames) => m Frames
 askFrames = askLocal

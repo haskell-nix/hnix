@@ -208,7 +208,7 @@ instance
     :: StdThunk m
     -> ThunkId  m
   thunkId = thunkId @(CitedStdThunk m) . coerce
-  {-# inline thunkId #-}
+  {-# INLINABLE thunkId #-}
 
   thunk
     :: m (StdValue m)
@@ -217,14 +217,14 @@ instance
     mstats <- askEvalStats
     traverse_ recordThunkCreate mstats
     coerce <$> thunk @(CitedStdThunk m) action
-  {-# inline thunk #-}
+  {-# INLINABLE thunk #-}
 
   query
     :: m (StdValue m)
     ->    StdThunk m
     -> m (StdValue m)
   query b = query @(CitedStdThunk m) b . coerce
-  {-# inline query #-}
+  {-# INLINABLE query #-}
 
   force
     ::    StdThunk m
@@ -242,19 +242,19 @@ instance
         end <- liftIO Clock.getMonotonicTimeNSec
         recordThunkForce stats wasComputed (end - start)
         pure result
-  {-# inline force #-}
+  {-# INLINABLE force #-}
 
   forceEff
     ::    StdThunk m
     -> m (StdValue m)
   forceEff = forceEff @(CitedStdThunk m) . coerce
-  {-# inline forceEff #-}
+  {-# INLINABLE forceEff #-}
 
   further
     ::    StdThunk m
     -> m (StdThunk m)
   further = fmap coerce . further @(CitedStdThunk m) . coerce
-  {-# inline further #-}
+  {-# INLINABLE further #-}
 
 
 -- * @instance MonadThunkF@ (Kleisli functor HOFs)
@@ -321,7 +321,7 @@ instance
     :: m (StdValue m)
     -> m (StdValue m)
   defer action = pure . coerce <$> thunk @(StdThunk m) action
-  {-# INLINE defer #-}
+  {-# INLINABLE defer #-}
 
   demand
     :: StdValue m
@@ -333,7 +333,7 @@ instance
       free
         (go <=< force @(StdThunk m) . coerce)
         (pure . Free)
-  {-# INLINE demand #-}
+  {-# INLINABLE demand #-}
 
   inform
     :: StdValue m
@@ -345,7 +345,7 @@ instance
       free
         ((pure . coerce <$>) . (further @(CitedStdThunk m) . coerce))
         ((Free <$>) . bindNValue' id go)
-  {-# INLINE inform #-}
+  {-# INLINABLE inform #-}
 
 
 -- * @instance MonadValueF (StdValue m) m@
@@ -367,7 +367,7 @@ instance
     -> StdValue m
     -> m r
   demandF f = f <=< demand
-  {-# INLINE demandF #-}
+  {-# INLINABLE demandF #-}
 
   informF
     :: ( m (StdValue m)
@@ -376,7 +376,7 @@ instance
     -> StdValue m
     -> m (StdValue m)
   informF f = f . inform
-  {-# INLINE informF #-}
+  {-# INLINABLE informF #-}
 
 
 {------------------------------------------------------------------------}
@@ -412,7 +412,7 @@ newtype StandardTF r m a
 
 instance MonadTrans (StandardTF r) where
   lift = StandardTF . lift . lift
-  {-# inline lift #-}
+  {-# INLINABLE lift #-}
 
 instance (MonadPutStr r, MonadPutStr m)
   => MonadPutStr (StandardTF r m)
@@ -435,7 +435,7 @@ type StandardT m = Fix1T StandardTF m
 
 instance MonadTrans (Fix1T StandardTF) where
   lift = Fix1T . lift
-  {-# inline lift #-}
+  {-# INLINABLE lift #-}
 
 instance MonadThunkId m
   => MonadThunkId (StandardT m) where
@@ -449,7 +449,7 @@ mkStandardT
       a
   -> StandardT m a
 mkStandardT = coerce
-{-# INLINE mkStandardT #-}
+{-# INLINABLE mkStandardT #-}
 
 runStandardT
   :: StandardT m a
@@ -458,7 +458,7 @@ runStandardT
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
 runStandardT = coerce
-{-# INLINE runStandardT #-}
+{-# INLINABLE runStandardT #-}
 
 runWithBasicEffectsAndStats
   :: (MonadIO m, MonadAtomicRef m)

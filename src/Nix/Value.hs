@@ -275,7 +275,7 @@ hoistNValueF lft =
     NVSetF     p s -> NVSetF p s
     NVBuiltinF s g -> NVBuiltinF s (lft . g)
     NVClosureF p g -> NVClosureF p (lft . g)
-{-# inline hoistNValueF #-}
+{-# INLINABLE hoistNValueF #-}
 
 -- * @__NValue'__@: forming the (F(A))
 
@@ -362,7 +362,7 @@ hoistNValue'
   -> NValue' t f n a
 hoistNValue' run lft (NValue' v) =
   NValue' $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
-{-# inline hoistNValue' #-}
+{-# INLINABLE hoistNValue' #-}
 
 -- ** Monad
 
@@ -532,7 +532,7 @@ hoistNValue
   -> NValue t f m
   -> NValue t f n
 hoistNValue run lft = hoistFree $ hoistNValue' run lft
-{-# inline hoistNValue #-}
+{-# INLINABLE hoistNValue #-}
 
 -- ** MonadTrans
 

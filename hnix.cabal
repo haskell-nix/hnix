@@ -370,13 +370,6 @@ common shared
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options:
-      -O2
-      -fexpose-all-unfoldings
-      -fspecialise-aggressively
-  -- if !flag(profiling)
-  --   build-depends:
-  --       ghc-datasize
 
 library
   import: shared

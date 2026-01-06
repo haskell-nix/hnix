@@ -96,11 +96,11 @@ instance
   type Ref (Fix1T t m) = Ref m
 
   newRef  = lift . newRef
-  {-# inline newRef #-}
+  {-# INLINABLE newRef #-}
   readRef = lift . readRef
-  {-# inline readRef #-}
+  {-# INLINABLE readRef #-}
   writeRef r = lift . writeRef r
-  {-# inline writeRef #-}
+  {-# INLINABLE writeRef #-}
 
 instance
   ( MonadFix1T t m
@@ -109,7 +109,7 @@ instance
   => MonadAtomicRef (Fix1T t m)
  where
   atomicModifyRef r = lift . atomicModifyRef r
-  {-# inline atomicModifyRef #-}
+  {-# INLINABLE atomicModifyRef #-}
 
 {-
 

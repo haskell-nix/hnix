@@ -186,7 +186,7 @@ stripAnnotation = unfoldFix (stripAnnF . unFix)
 
 annNUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 annNUnary (AnnUnit s1 u) e1@(Ann s2 _) = NUnaryAnn (s1 <> s2) u e1
-{-# inline annNUnary #-}
+{-# INLINABLE annNUnary #-}
 
 annNBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 annNBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) = NBinaryAnn (s1 <> s2 <> s3) b e1 e2
@@ -213,11 +213,11 @@ deltaInfo (NSourcePos fp l c) = (fromString $ coerce fp, unPos $ coerce l, unPos
 
 annNNull :: NExprLoc
 annNNull = NConstantAnn nullSpan NNull
-{-# inline annNNull #-}
+{-# INLINABLE annNNull #-}
 
 nullSpan :: SrcSpan
 nullSpan = SrcSpan nullPos nullPos
-{-# inline nullSpan #-}
+{-# INLINABLE nullSpan #-}
 
 -- ** Patterns
 
