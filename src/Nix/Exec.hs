@@ -20,7 +20,7 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
 import           Data.Fix
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Text                     as Text
 import           Nix.Atoms
@@ -32,6 +32,8 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
+import           Nix.Context                    ( askEvalStats )
+import           Nix.EvalStats                  ( EvalStats, withExprTiming )
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
@@ -40,6 +42,7 @@ import           Nix.String.Coerce
 import           Nix.Thunk
 import           Nix.Value
 import           Nix.Value.Equal
+import           Data.Vector                    ( Vector )
 import           Nix.Value.Monad
 import           Prettyprinter
 import qualified Text.Show.Pretty              as PS
@@ -138,6 +141,7 @@ type MonadCitedThunks t f m =
 type MonadNix e t f m =
   ( Has e SrcSpan
   , Has e Options
+  , Has e (Maybe EvalStats)
   , Scoped (NValue t f m) m
   , Framed e m
   , MonadFix m
@@ -330,8 +334,10 @@ callFunc
   -> m (NValue t f m)
 callFunc fun arg =
   do
+    -- O(min(2001, depth)) depth check - faster than O(n) for shallow stacks
+    -- See Nix.Frames for performance notes
     frames <- askFrames
-    when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
+    when (exceedsDepth 2000 frames) $ throwError $ ErrorCall "Function call stack exhausted"
 
     fun' <- demand fun
     case fun' of
@@ -340,7 +346,7 @@ callFunc fun arg =
           span <- askSpan
           withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
       NVClosure _params f -> f arg
-      (NVSet _ m) | Just f <- M.lookup "__functor" m ->
+      (NVSet _ m) | Just f <- HM.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
@@ -486,7 +492,7 @@ execBinaryOpForced scope span op lval rval =
   mkFloatP :: Float -> m (NValue t f m)
   mkFloatP = pure . addProv . NVConstant . NFloat
 
-  mkListP :: [NValue t f m] -> NValue t f m
+  mkListP :: Vector (NValue t f m) -> NValue t f m
   mkListP = addProv . NVList
 
   mkStrP :: NixString -> NValue t f m
@@ -592,6 +598,16 @@ addTiming thresholdMs k v@(AnnF span x) = do
     putStr $ show loc
   pure res
 
+addStats
+  :: forall e t f m a
+   . MonadNix e t f m
+  => EvalStats
+  -> Alg NExprLocF (m a)
+  -> Alg NExprLocF (m a)
+addStats stats k v@(AnnF _ x) =
+  let exprType = Text.pack (show (toConstr (void x)))
+  in withExprTiming stats exprType (k v)
+
 evalWithTracingAndMetaInfo
   :: forall e t f m
   . MonadNix e t f m
@@ -630,27 +646,41 @@ evalWithTracingTimingAndMetaInfo thresholdMs =
   addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
   addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
 
+evalWithStatsAndMetaInfo
+  :: forall e t f m
+  . MonadNix e t f m
+  => EvalStats
+  -> NExprLoc
+  -> m (NValue t f m)
+evalWithStatsAndMetaInfo stats =
+  adi
+    Eval.addMetaInfo
+    (addStats stats Eval.evalContent)
+
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
     opts <- askOptions
+    mstats <- askEvalStats
     let thresholdMs = getEvalTimingThresholdMs opts
     let
       traced = isTrace opts
       timed  = isEvalTiming opts
       pTracedAdi =
-        case (traced, timed) of
-          (True, True) ->
+        case (traced, timed, mstats) of
+          (True, True, _) ->
             join . (`runReaderT` (0 :: Int)) . evalWithTracingTimingAndMetaInfo thresholdMs
-          (True, False) ->
+          (True, False, _) ->
             join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo
-          (False, True) ->
+          (False, True, _) ->
             evalWithTimingAndMetaInfo thresholdMs
-          (False, False) ->
+          (False, False, Just stats) ->
+            evalWithStatsAndMetaInfo stats
+          (False, False, Nothing) ->
             Eval.evalWithMetaInfo
     pTracedAdi expr
 
-exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
+exec :: (MonadNix e t f m, MonadInstantiate m) => Vector Text -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
 
 -- Please, delete `nix` from the name

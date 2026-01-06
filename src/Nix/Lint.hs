@@ -19,7 +19,7 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.Ref
 import           Control.Monad.ST
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 -- Plese, use NonEmpty
 import           Data.List                      ( intersect )
 import qualified Data.List.NonEmpty            as NE
@@ -211,7 +211,7 @@ merge context = go
     (TSet (Just l), TSet (Just r)) -> do
       hm <-
         sequenceA $
-          M.intersectionWith
+          HM.intersectionWith
             (\ i j ->
               do
                 i'' <- i
@@ -239,7 +239,7 @@ merge context = go
 
 {-
     mergeFunctions pl nl fl pr fr xs ys = do
-        m <- sequenceA $ M.intersectionWith
+        m <- sequenceA $ HM.intersectionWith
             (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
                     (Nothing, Nothing) -> stub
                     (_, Nothing) -> stub
@@ -247,8 +247,8 @@ merge context = go
                     (Just i'', Just j'') ->
                         pure . pure <$> unify context i'' j'')
             (pure <$> pl) (pure <$> pr)
-        let Just m' = sequenceA $ M.filter isJust m
-        if M.null m'
+        let Just m' = sequenceA $ HM.filter isJust m
+        if HM.null m'
             then go xs ys
             else do
                 g <- unify context fl fr
@@ -345,7 +345,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       f <- mkSymbolic1 TPath
       l <- mkSymbolic1 $ TConstant $ one TInt
       c <- mkSymbolic1 $ TConstant $ one TInt
-      mkSymbolic1 $ TSet . pure $ M.fromList [("file", f), ("line", l), ("col", c)]
+      mkSymbolic1 $ TSet . pure $ HM.fromList [("file", f), ("line", l), ("col", c)]
 
   evalConstant c = mkSymbolic1 $ fun c
    where

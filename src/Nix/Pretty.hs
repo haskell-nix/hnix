@@ -9,9 +9,9 @@ import           Nix.Prelude             hiding ( toList, group )
 import           Control.Monad.Free             ( Free(Free) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
-import           Data.HashMap.Lazy              ( toList )
-import qualified Data.HashMap.Lazy             as M
-import qualified Data.HashSet                  as HashSet
+import           Data.HashMap.Strict            ( toList )
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
 import qualified Data.List.NonEmpty            as NE
 import           Data.Text                      ( replace
                                                 , strip
@@ -28,6 +28,7 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
+import qualified Data.Vector                   as V
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -206,7 +207,7 @@ prettyParamSet variadic args =
     "{ "
     (align " }")
     (align ", ")
-    (fmap prettySetArg args <> one "..." `whenTrue` (variadic == Variadic))
+    (fmap prettySetArg (paramSetToSortedList args) <> one "..." `whenTrue` (variadic == Variadic))
  where
   prettySetArg :: (VarName, Maybe (NixDoc ann)) -> Doc ann
   prettySetArg (n, maybeDef) =
@@ -228,7 +229,7 @@ prettyKeyName (StaticKey key) =
     (bool
       id
       dquotes
-      (HashSet.member key reservedNames)
+      (HS.member key reservedNames)
       (prettyVarName key)
     )
     (not $ Text.null $ varNameText key)
@@ -399,9 +400,9 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
   phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ ignoreContext ns
-  phi (NVList'     l     ) = NList l
+  phi (NVList'     l     ) = NList (V.toList l)
   phi (NVSet'      p    s) = NSet mempty
-    [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`M.lookup` p) k)
+    [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`HM.lookup` p) k)
     | (k, v) <- toList s
     ]
   phi (NVClosure'  _    _) = NSym "<closure>"
@@ -420,13 +421,13 @@ derivationDoc =
   \case
     NVSet _ s -> do
       let hasType =
-            case M.lookup "type" s of
+            case HM.lookup "type" s of
               Just (NVStr ty) -> ignoreContext ty == "derivation"
               _ -> False
-      let hasDrv = M.member "drvPath" s
-      let hasOut = M.member "outPath" s
+      let hasDrv = HM.member "drvPath" s
+      let hasOut = HM.member "outPath" s
       guard (hasType || (hasDrv && hasOut))
-      let mDrv = M.lookup "drvPath" s >>= valueToText
+      let mDrv = HM.lookup "drvPath" s >>= valueToText
       pure $
         case mDrv of
           Just drv -> "<derivation " <> pretty drv <> ">"
@@ -500,7 +501,7 @@ printNix =
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
   phi (NVStr'      ns) = "\"" <> escapeString (ignoreContext ns) <> "\""
-  phi (NVList'     l ) = "[ " <> unwords l <> " ]"
+  phi (NVList'     l ) = "[ " <> unwords (V.toList l) <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
       fold

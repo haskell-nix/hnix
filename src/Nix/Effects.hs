@@ -21,6 +21,8 @@ import qualified Prelude                       as HPrelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
+import           Data.Vector                    ( Vector )
+import qualified Data.Vector                   as V
 import qualified Data.ByteString.Char8         as BS8
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
@@ -87,7 +89,7 @@ class
   findEnvPath :: String -> m Path
 
   -- | Having an explicit list of sets corresponding to the @NIX_PATH@ and a file path try to find an existing path.
-  findPath :: [NValue t f m] -> Path -> m Path
+  findPath :: Vector (NValue t f m) -> Path -> m Path
 
   importPath :: Path -> m (NValue t f m)
   pathToDefaultNix :: Path -> m Path
@@ -147,18 +149,19 @@ class
   Monad m
   => MonadExec m where
 
-    exec' :: [Text] -> m (Either ErrorCall NExprLoc)
+    exec' :: Vector Text -> m (Either ErrorCall NExprLoc)
     default exec' :: (MonadTrans t, MonadExec m', m ~ t m')
-                  => [Text] -> m (Either ErrorCall NExprLoc)
+                  => Vector Text -> m (Either ErrorCall NExprLoc)
     exec' = lift . exec'
 
 
 -- ** Instances
 
 instance MonadExec IO where
-  exec' = \case
-    []            -> pure $ Left $ ErrorCall "exec: missing program"
-    (prog : args) -> do
+  exec' v = case V.uncons v of
+    Nothing            -> pure $ Left $ ErrorCall "exec: missing program"
+    Just (prog, argsV) -> do
+      let args = V.toList argsV
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) mempty
       let
         t    = Text.strip $ fromString out
@@ -638,7 +641,7 @@ instance MonadStore IO where
             storeDir = Store.StoreDir "/nix/store"
             storeRefs = HS.map (\(StorePath p) -> Store.parsePath storeDir (encodeUtf8 $ toText p)) references
             -- Filter out any parse failures and extract successful paths
-            validRefs = HS.fromList $ rights $ HS.toList storeRefs
+            validRefs = HS.foldl' (\acc -> either (const acc) (`HS.insert` acc)) HS.empty storeRefs
         res <- Store.Remote.runStore $ Store.Remote.addTextToStore storeText validRefs repairMode
         either
           Left -- err

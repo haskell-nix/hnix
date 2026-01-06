@@ -3,11 +3,12 @@ module Nix.XML
 where
 
 import           Nix.Prelude
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.String
 import           Nix.Value
+import qualified Data.Vector                   as V
 import           Text.XML.Light                 ( Element(Element)
                                                 , Attr(Attr)
                                                 , Content(Elem)
@@ -47,14 +48,14 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
     NVStr' str ->
       mkEVal "string" <$> extractNixString str
     NVList' l ->
-      mkE "list" . fmap Elem <$> sequenceA l
+      mkE "list" . fmap Elem <$> sequenceA (V.toList l)
 
     NVSet' _ s ->
       mkE
         "attrs"
         . fmap
             mkElem'
-            . sortWith fst . M.toList
+            . sortWith fst . HM.toList
         <$> sequenceA s
      where
       mkElem' :: (VarName, Element) -> Content
@@ -107,4 +108,4 @@ paramsXML (ParamSet mname variadic pset) =
     (one . Attr (unqual "name") . toString) `whenJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML = fmap (Elem . mkEName "attr" . fst)
+paramSetXML = fmap (Elem . mkEName "attr" . fst) . paramSetToSortedList

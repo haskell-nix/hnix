@@ -24,12 +24,12 @@ import           Nix.Prelude             hiding ( empty
 import           Nix.Expr.Types
 import           Nix.Type.Type
 
-import qualified Data.Map                      as Map
+import qualified Data.HashMap.Strict           as HM
 
 
 -- * Typing Environment
 
-newtype Env = TypeEnv (Map VarName [Scheme])
+newtype Env = TypeEnv (HM.HashMap VarName [Scheme])
   deriving (Eq, Show)
 
 instance Semigroup Env where
@@ -48,16 +48,16 @@ empty :: Env
 empty = TypeEnv mempty
 
 extend :: Env -> (VarName, [Scheme]) -> Env
-extend env (x, s) = coerce (Map.insert x s) env
+extend env (x, s) = coerce (HM.insert x s) env
 
 remove :: Env -> VarName -> Env
-remove env var = TypeEnv $ Map.delete var $ coerce env
+remove env var = TypeEnv $ HM.delete var $ coerce env
 
 extends :: Env -> [(VarName, [Scheme])] -> Env
 extends env xs = fromList xs <> coerce env
 
 lookup :: VarName -> Env -> Maybe [Scheme]
-lookup key tys = Map.lookup key $ coerce tys
+lookup key tys = HM.lookup key $ coerce tys
 
 merge :: Env -> Env -> Env
 merge a b = TypeEnv $ coerce a <> coerce b
@@ -72,11 +72,11 @@ singleton :: VarName -> Scheme -> Env
 singleton = curry one
 
 keys :: Env -> [VarName]
-keys (TypeEnv env) = Map.keys env
+keys (TypeEnv env) = HM.keys env
 
 fromList :: [(VarName, [Scheme])] -> Env
-fromList xs = coerce $ Map.fromList xs
+fromList xs = coerce $ HM.fromList xs
 
 toList :: Env -> [(VarName, [Scheme])]
-toList (TypeEnv env) = Map.toList env
+toList (TypeEnv env) = HM.toList env
 

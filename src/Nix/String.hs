@@ -34,8 +34,8 @@ where
 
 import           Nix.Prelude             hiding ( Type, TVar )
 import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell))
-import qualified Data.HashMap.Lazy             as M
-import qualified Data.HashSet                  as S
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Nix.Expr.Types                 ( VarName
                                                 , AttrSet
@@ -97,8 +97,8 @@ instance Monoid NixLikeContextValue where
 -- | A monad for accumulating string context while producing a result string.
 newtype WithStringContextT m a =
   WithStringContextT
-    (WriterT (S.HashSet StringContext) m a )
-  deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (S.HashSet StringContext))
+    (WriterT (HS.HashSet StringContext) m a )
+  deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (HS.HashSet StringContext))
 
 type WithStringContext = WithStringContextT Identity
 
@@ -107,7 +107,7 @@ type WithStringContext = WithStringContextT Identity
 
 data NixString =
   NixString
-    { getStringContext :: !(S.HashSet StringContext)
+    { getStringContext :: !(HS.HashSet StringContext)
     , getStringContent :: !Text
     }
   deriving (Eq, Ord, Show, Generic)
@@ -136,7 +136,7 @@ mkNixStringWithSingletonContext c s = NixString (one c) (varNameText s)
 
 -- | Create NixString from a Text and context
 mkNixString
-  :: S.HashSet StringContext -> Text -> NixString
+  :: HS.HashSet StringContext -> Text -> NixString
 mkNixString = NixString
 
 
@@ -149,9 +149,9 @@ hasContext (NixString c _) = isPresent c
 
 -- ** Getters
 
-fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
+fromNixLikeContext :: NixLikeContext -> HS.HashSet StringContext
 fromNixLikeContext =
-  S.fromList . (uncurry toStringContexts <=< M.toList . getNixLikeContext)
+  HS.fromList . (uncurry toStringContexts <=< HM.toList . getNixLikeContext)
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
@@ -203,21 +203,21 @@ toNixLikeContextValue sc =
   , getStringContextPath sc
   )
 
-toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
+toNixLikeContext :: HS.HashSet StringContext -> NixLikeContext
 toNixLikeContext stringContext =
   NixLikeContext $
-    S.foldr
+    HS.foldr
       fun
       mempty
       stringContext
  where
   fun :: (StringContext -> AttrSet NixLikeContextValue -> AttrSet NixLikeContextValue)
   fun sc =
-    uncurry (M.insertWith (<>)) (swap $ toNixLikeContextValue sc)
+    uncurry (HM.insertWith (<>)) (swap $ toNixLikeContextValue sc)
 
 -- | Add 'StringContext's into the resulting set.
 addStringContext
-  :: Monad m => S.HashSet StringContext -> WithStringContextT m ()
+  :: Monad m => HS.HashSet StringContext -> WithStringContextT m ()
 addStringContext = WithStringContextT . tell
 
 -- | Add a 'StringContext' into the resulting set.
@@ -242,12 +242,12 @@ modifyNixContents f (NixString c s) = NixString c (f s)
 
 -- | Run an action that manipulates nix strings, and collect the contexts encountered.
 -- Warning: this may be unsafe, depending on how you handle the resulting context list.
-runWithStringContextT' :: Monad m => WithStringContextT m a -> m (a, S.HashSet StringContext)
+runWithStringContextT' :: Monad m => WithStringContextT m a -> m (a, HS.HashSet StringContext)
 runWithStringContextT' (WithStringContextT m) = runWriterT m
 
 -- | Run an action that manipulates nix strings, and collect the contexts encountered.
 -- Warning: this may be unsafe, depending on how you handle the resulting context list.
-runWithStringContext' :: WithStringContextT Identity a -> (a, S.HashSet StringContext)
+runWithStringContext' :: WithStringContextT Identity a -> (a, HS.HashSet StringContext)
 runWithStringContext' = runIdentity . runWithStringContextT'
 
 -- | Combine NixStrings with a separator
@@ -257,7 +257,7 @@ intercalateNixString _   [ns] = ns
 intercalateNixString sep nss  =
   uncurry NixString $
     mapPair
-      (S.unions . (one (getStringContext  sep) <>) . (getStringContext <$>)
+      (HS.unions . (one (getStringContext  sep) <>) . (getStringContext <$>)
       , Text.intercalate (getStringContent sep) . (getStringContent <$>)
       )
       $ dup nss

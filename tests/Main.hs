@@ -8,7 +8,8 @@ import           Relude.Unsafe (read)
 import qualified Control.Exception as Exc
 import           GHC.Err (errorWithoutStackTrace)
 import           Data.Fix
-import           Data.List (isSuffixOf, lookup)
+import           Data.List (isSuffixOf)
+import qualified Data.HashMap.Strict as HM
 import qualified Data.String as String
 import           Data.Time
 import qualified EvalTests
@@ -76,7 +77,7 @@ ensureNixpkgsCanParse =
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
   getExpr   k m =
-    let Just r = join $ lookup k m in
+    let Just r = join $ HM.lookup (mkVarName k) m in
     r
   getString k m =
     let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in

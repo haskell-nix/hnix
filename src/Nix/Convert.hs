@@ -17,7 +17,7 @@ module Nix.Convert where
 
 import           Nix.Prelude
 import           Control.Monad.Free
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import           Nix.Options                   ( Options )
 import           Nix.Atoms
 import           Nix.Effects
@@ -27,6 +27,7 @@ import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Thunk                      ( MonadThunk(force) )
+import qualified Data.Vector                   as V
 
 newtype Deeper a = Deeper a
   deriving (Typeable, Functor, Foldable, Traversable)
@@ -226,7 +227,7 @@ instance ( Convertible e t f m
         maybe
           stub
           fromValueMay
-          (M.lookup "outPath" s)
+          (HM.lookup "outPath" s)
       _ -> stub
 
   --  2021-07-18: NOTE: There may be cases where conversion wrongly marks the content to have a context.
@@ -268,7 +269,7 @@ instance ( Convertible e t f m
         maybe
           stub
           (fromValueMay @Path)
-          (M.lookup "outPath" s)
+          (HM.lookup "outPath" s)
       _ -> stub
 
   fromValue = fromMayToValue TPath
@@ -279,7 +280,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVList' l -> pure l
+        NVList' l -> pure (V.toList l)
         _         -> mempty
 
   fromValue = fromMayToValue TList
@@ -290,11 +291,23 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> traverseFromValue l
+      Deeper (NVList' l) -> traverseFromValue (V.toList l)
       _                  -> stub
 
 
   fromValue = fromMayToDeeperValue TList
+
+-- | Vector instance - O(1) extraction, no list conversion!
+instance Convertible e t f m
+  => FromValue (V.Vector (NValue t f m)) m (NValue' t f m (NValue t f m)) where
+
+  fromValueMay =
+    pure .
+      \case
+        NVList' l -> pure l
+        _         -> mempty
+
+  fromValue = fromMayToValue TList
 
 instance Convertible e t f m
   => FromValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
@@ -416,19 +429,24 @@ instance Convertible e t f m
     f' <- toValue $ mkNixStringWithoutContext $ fromString $ coerce f
     l' <- toValue $ unPos $ coerce l
     c' <- toValue $ unPos $ coerce c
-    let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
+    let pos = HM.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
     pure $ NVSet' mempty pos
 
 -- | With 'ToValue', we can always act recursively
 instance Convertible e t f m
   => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
-  toValue = pure . NVList'
+  toValue = pure . NVList' . V.fromList
 
 instance (Convertible e t f m
   , ToValue a m (NValue t f m)
   )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue l = Deeper . NVList' <$> traverseToValue l
+  toValue l = Deeper . NVList' . V.fromList <$> traverseToValue l
+
+-- | Vector instance - O(1) construction, no list conversion!
+instance Convertible e t f m
+  => ToValue (V.Vector (NValue t f m)) m (NValue' t f m (NValue t f m)) where
+  toValue = pure . NVList'
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
@@ -474,7 +492,7 @@ instance Convertible e t f m
         (pure Nothing)
         (fmap pure . toValue)
         ts
-    pure $ NVSet' mempty $ M.fromList $ catMaybes
+    pure $ NVSet' mempty $ HM.fromList $ catMaybes
       [ ("path"      ,) <$> path
       , ("allOutputs",) <$> allOutputs
       , ("outputs"   ,) <$> outputs

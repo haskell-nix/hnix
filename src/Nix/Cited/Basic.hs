@@ -2,7 +2,13 @@
 {-# language UndecidableInstances #-}
 {-# language PatternSynonyms    #-}
 
-module Nix.Cited.Basic where
+module Nix.Cited.Basic
+  ( Cited(..)
+  , pattern CitedP
+  , cite
+  , handleDisplayProvenance
+  , displayProvenance
+  ) where
 
 import           Nix.Prelude
 import           Control.Comonad                ( Comonad )

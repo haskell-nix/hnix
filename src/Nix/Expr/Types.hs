@@ -36,13 +36,14 @@ import           Symbolize                      ( Symbol )
 import qualified Symbolize
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
+import           Data.Aeson.Types               ( toJSONKeyText )
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
 import           Data.Fix                       ( Fix(..) )
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
-import qualified Data.HashMap.Lazy             as MapL
+import qualified Data.HashMap.Strict           as HM
 import qualified Data.Set                      as Set
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
@@ -218,6 +219,11 @@ instance Binary VarName where
   put = Binary.put . varNameText
   get = mkVarName <$> Binary.get
 
+-- Binary instance for HashMap (serialize via sorted list for determinism)
+instance (Binary k, Binary v, Eq k, Hashable k, Ord k) => Binary (HashMap k v) where
+  put = Binary.put . sortOn fst . HM.toList
+  get = HM.fromList <$> Binary.get
+
 -- Custom JSON instances: serialize as Text
 instance ToJSON VarName where
   toJSON = toJSON . varNameText
@@ -225,6 +231,13 @@ instance ToJSON VarName where
 
 instance FromJSON VarName where
   parseJSON = fmap mkVarName . parseJSON
+
+-- Key instances for HashMap serialization
+instance ToJSONKey VarName where
+  toJSONKey = toJSONKeyText varNameText
+
+instance FromJSONKey VarName where
+  fromJSONKey = FromJSONKeyText mkVarName
 
 -- Data instance needs manual implementation since Symbol doesn't have Data
 instance Data VarName where
@@ -248,9 +261,14 @@ instance TH.Lift VarName where
 
 -- *** utils
 
--- This uses an association list because nix XML serialization preserves the
--- order of the param set.
-type ParamSet r = [(VarName, Maybe r)]
+-- | Parameter set stored as HashMap for O(1) lookup during evaluation.
+-- When ordered output is needed (XML, pretty-printing), convert to list
+-- and sort lexicographically by parameter name.
+type ParamSet r = AttrSet (Maybe r)
+
+-- | Get parameters in lexicographically sorted order for deterministic output.
+paramSetToSortedList :: ParamSet r -> [(VarName, Maybe r)]
+paramSetToSortedList = sortOn fst . HM.toList
 
 data Variadic = Closed | Variadic
   deriving
@@ -786,19 +804,7 @@ hashAt
 #else
 hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 #endif
-hashAt = alterF
- where
-  alterF
-    :: (Functor f)
-    => VarName
-    -> (Maybe v -> f (Maybe v))
-    -> AttrSet v
-    -> f (AttrSet v)
-  alterF k f m =
-    maybe
-      (MapL.delete k m)
-      (\ v -> MapL.insert k v m)
-      <$> f (MapL.lookup k m)
+hashAt = flip HM.alterF
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
@@ -899,9 +905,9 @@ getFreeVars e =
     (NAbs (ParamSet varname _ pset) expr) ->
       Set.difference
         -- Include all free variables from the expression and the default arguments
-        (getFreeVars expr <> Set.unions (getFreeVars <$> mapMaybe snd pset))
+        (getFreeVars expr <> Set.unions (getFreeVars <$> catMaybes (HM.elems pset)))
         -- But remove the argument name if existing, and all arguments in the parameter set
-        ((one `whenJust` varname) <> Set.fromList (fst <$> pset))
+        ((one `whenJust` varname) <> Set.fromList (HM.keys pset))
     (NLet         bindings expr   ) ->
       Set.difference
         (getFreeVars expr <> bindFreeVars bindings)

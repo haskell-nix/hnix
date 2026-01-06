@@ -9,6 +9,7 @@ module Nix.Fresh.Basic where
 import           Control.Monad.Fail ( MonadFail )
 #endif
 import           Nix.Prelude
+import           Data.Vector                    ( Vector )
 import           Nix.Effects
 import           Nix.Render
 import           Nix.Fresh
@@ -37,7 +38,7 @@ instance (MonadEffects t f m, MonadDataContext f m)
   findEnvPath :: String -> StdIdT m Path
   findEnvPath      = lift . findEnvPath @t @f @m
 
-  findPath :: [NValue t f (StdIdT m)] -> Path -> StdIdT m Path
+  findPath :: Vector (NValue t f (StdIdT m)) -> Path -> StdIdT m Path
   findPath vs path =
     do
       i <- FreshIdT ask

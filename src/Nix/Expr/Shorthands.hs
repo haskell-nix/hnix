@@ -6,6 +6,7 @@ module Nix.Expr.Shorthands where
 
 import           Nix.Prelude
 import           Data.Fix
+import qualified Data.HashMap.Strict           as HM
 import           Nix.Atoms
 import           Nix.Expr.Types
 
@@ -129,7 +130,7 @@ mkNamedVariadicParamSet name params = mkGeneralParamSet (pure name) params True
 -- > False -> {}
 --  @since 0.15.0
 mkGeneralParamSet :: Maybe Text -> [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkGeneralParamSet mname params variadic = ParamSet (mkVarName <$> mname) (Variadic `whenTrue` variadic) (first mkVarName <$> params)
+mkGeneralParamSet mname params variadic = ParamSet (mkVarName <$> mname) (Variadic `whenTrue` variadic) (HM.fromList [(mkVarName k, v) | (k, v) <- params])
 
 -- | > rec { .. }
 mkRecSet :: [Binding NExpr] -> NExpr
@@ -453,4 +454,4 @@ mkBinop = mkOp2
 --   * `mkVariadicSet` is for variadic;
 --   * `mkGeneralParamSet` a general constructor.
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (first mkVarName <$> params)
+mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (HM.fromList [(mkVarName k, v) | (k, v) <- params])

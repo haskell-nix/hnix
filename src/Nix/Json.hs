@@ -56,7 +56,7 @@ toJSON = \case
   NVConstant (NBool  b) -> pure $ A.toJSON b
   NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
-  NVList l -> A.Array . V.fromList <$> traverse intoJson l
+  NVList l -> A.Array <$> traverse intoJson l
   NVSet _ m ->
     maybe
       (A.Object <$> traverse intoJson kmap)

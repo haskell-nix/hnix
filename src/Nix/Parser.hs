@@ -64,7 +64,8 @@ import           Data.Char                      ( isAlpha
 import           Data.Data                      ( Data(..) )
 import           Data.List.Extra                ( groupSort )
 import           Data.Fix                       ( Fix(..) )
-import qualified Data.HashSet                  as HashSet
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
@@ -126,7 +127,7 @@ annotateNamedLocation name = annotateLocation . label name
 
 reservedNames :: HashSet VarName
 reservedNames =
-  HashSet.fromList
+  HS.fromList
     ["let", "in", "if", "then", "else", "assert", "with", "rec", "inherit"]
 
 reservedEnd :: Char -> Bool
@@ -358,7 +359,7 @@ identifier =
             (satisfy (\x -> isAlpha x || x == '_'))
             (takeWhileP mempty identLetter)
         let varName = mkVarName iD
-        guard $ not $ varName `HashSet.member` reservedNames
+        guard $ not $ varName `HS.member` reservedNames
         pure varName
  where
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
@@ -744,14 +745,14 @@ argExpr =
       do
         name             <- identifier <* symbol '@'
         (variadic, pset) <- params
-        pure $ ParamSet (pure name) variadic pset
+        pure $ ParamSet (pure name) variadic (HM.fromList pset)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight =
     do
       (variadic, pset) <- params
       name             <- optional $ symbol '@' *> identifier
-      pure $ ParamSet name variadic pset
+      pure $ ParamSet name variadic (HM.fromList pset)
 
   -- Return the parameters set.
   params = braces getParams

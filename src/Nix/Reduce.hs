@@ -31,12 +31,7 @@ import           Data.Fix                       ( Fix(..)
                                                 , foldFix
                                                 , foldFixM
                                                 )
-import qualified Data.HashMap.Internal         as HM
-                                                ( lookup
-                                                , insert
-                                                , singleton
-                                                , fromList
-                                                )
+import qualified Data.HashMap.Strict           as HM
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Nix.Atoms
@@ -327,7 +322,7 @@ reduce (NAbsAnnF ann params body) = do
       case params' of
         Param    name     -> one (name, NSymAnn ann name)
         ParamSet _ _ pset ->
-          HM.fromList $ (\(k, _) -> (k, NSymAnn ann k)) <$> pset
+          HM.mapWithKey (\k _ -> NSymAnn ann k) pset
   NAbsAnn ann params' <$> pushScope scope body
 
 reduce v = reduceLayer v
@@ -447,15 +442,15 @@ pruneTree opts =
   pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
   pruneParams (Param n) = Param n
   pruneParams (ParamSet mname variadic pset) =
-    ParamSet mname variadic (reduceOrPassMode <$> pset)
+    ParamSet mname variadic (reduceValue <$> pset)
    where
-    reduceOrPassMode =
-      second $
-        bool
-          fmap
-          ((pure .) . maybe annNNull)
-          (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
-          (fromMaybe annNNull)
+    -- Transform Maybe (Maybe NExprLoc) -> Maybe NExprLoc
+    reduceValue :: Maybe (Maybe NExprLoc) -> Maybe NExprLoc
+    reduceValue =
+      bool
+        (fmap (fromMaybe annNNull))  -- False: unwrap nested Maybe
+        (pure . maybe annNNull (fromMaybe annNNull))  -- True: reduce set members
+        (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _                 Nothing  _  ) = Nothing

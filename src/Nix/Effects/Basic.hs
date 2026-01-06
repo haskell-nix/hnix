@@ -10,8 +10,9 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad                  ( foldM )
 import qualified Control.Monad.State           as State
 import qualified "crypton" Crypto.Hash        as Crypto.Hash
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import           Data.Dependent.Sum            ( DSum((:=>)) )
+import           Data.Vector                    ( Vector )
 import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
 import qualified Data.ByteString               as B
@@ -116,7 +117,7 @@ findEnvPathM name =
     (fail "impossible")
     (\ v ->
       do
-        l <- fromValue @[NValue t f m] =<< demand v
+        l <- fromValue @(Vector (NValue t f m)) =<< demand v
         findPathBy nixFilePath l name
     )
     =<< lookupVar "__nixPath"
@@ -139,7 +140,7 @@ findPathBy
   :: forall e t f m
    . MonadNix e t f m
   => (Path -> m (Maybe Path))
-  -> [NValue t f m]
+  -> Vector (NValue t f m)
   -> Path
   -> m Path
 findPathBy finder ls name =
@@ -174,7 +175,7 @@ findPathBy finder ls name =
                     )
                     mns
             )
-            (M.lookup "prefix" s)
+            (HM.lookup "prefix" s)
       )
       (const . pure . pure)
 
@@ -189,10 +190,10 @@ findPathBy finder ls name =
       (maybe
         (throwError $ ErrorCall $ "__nixPath must be a list of attr sets with 'path' elements, but received: " <> show s)
         (defer . fetchTarball)
-        (M.lookup "uri" s)
+        (HM.lookup "uri" s)
       )
       pure
-      (M.lookup "path" s)
+      (HM.lookup "path" s)
 
 fetchTarball
   :: forall e t f m
@@ -202,10 +203,10 @@ fetchTarball
 fetchTarball =
   \case
     NVSet _ s -> do
-      urlVal <- maybe (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute") pure (M.lookup "url" s)
+      urlVal <- maybe (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute") pure (HM.lookup "url" s)
       url <- fromValue =<< demand urlVal
-      mShaVal <- traverse (fromValue <=< demand) (M.lookup "sha256" s <|> M.lookup "hash" s)
-      mNameVal <- traverse (fromValue <=< demand) (M.lookup "name" s)
+      mShaVal <- traverse (fromValue <=< demand) (HM.lookup "sha256" s <|> HM.lookup "hash" s)
+      mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
       fetch url mShaVal mNameVal
     NVStr ns -> fetch (ignoreContext ns) Nothing Nothing
     v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
@@ -367,7 +368,7 @@ fetchTree =
   in
   \case
     NVSet _ s -> do
-      typeVal <- maybe (throwError $ ErrorCall "builtins.fetchTree: missing type") pure (M.lookup "type" s)
+      typeVal <- maybe (throwError $ ErrorCall "builtins.fetchTree: missing type") pure (HM.lookup "type" s)
       typ <- fromValue =<< demand typeVal
       if typ == ("git" :: Text)
         then fetchGitFromSet mode s
@@ -411,23 +412,23 @@ fetchGitFromSet
   -> AttrSet (NValue t f m)
   -> m (NValue t f m)
 fetchGitFromSet mode s = do
-  urlVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: Missing url attribute") pure (M.lookup "url" s)
+  urlVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: Missing url attribute") pure (HM.lookup "url" s)
   url <- extractUrlLike =<< demand urlVal
-  mNameVal <- traverse (fromValue <=< demand) (M.lookup "name" s)
+  mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
   when (not (fgAllowName mode) && isJust mNameVal) $
     throwError $ ErrorCall "builtins.fetchTree: argument 'name' isn’t supported"
-  mRevVal <- traverse (fromValue <=< demand) (M.lookup "rev" s)
-  mRefVal <- traverse (fromValue <=< demand) (M.lookup "ref" s)
-  mSubVal <- traverse (fromValue <=< demand) (M.lookup "submodules" s)
-  mShallowVal <- traverse (fromValue <=< demand) (M.lookup "shallow" s)
-  mExportIgnoreVal <- traverse (fromValue <=< demand) (M.lookup "exportIgnore" s)
-  mAllRefsVal <- traverse (fromValue <=< demand) (M.lookup "allRefs" s)
-  mLfsVal <- traverse (fromValue <=< demand) (M.lookup "lfs" s)
-  mNarHashVal <- traverse (fromValue <=< demand) (M.lookup "narHash" s)
-  mVerifyCommitVal <- traverse (fromValue <=< demand) (M.lookup "verifyCommit" s)
-  mKeyTypeVal <- traverse (fromValue <=< demand) (M.lookup "keytype" s)
-  mPublicKeyVal <- traverse (fromValue <=< demand) (M.lookup "publicKey" s)
-  mPublicKeysVal <- traverse (fromValue @[NValue t f m] <=< demand) (M.lookup "publicKeys" s)
+  mRevVal <- traverse (fromValue <=< demand) (HM.lookup "rev" s)
+  mRefVal <- traverse (fromValue <=< demand) (HM.lookup "ref" s)
+  mSubVal <- traverse (fromValue <=< demand) (HM.lookup "submodules" s)
+  mShallowVal <- traverse (fromValue <=< demand) (HM.lookup "shallow" s)
+  mExportIgnoreVal <- traverse (fromValue <=< demand) (HM.lookup "exportIgnore" s)
+  mAllRefsVal <- traverse (fromValue <=< demand) (HM.lookup "allRefs" s)
+  mLfsVal <- traverse (fromValue <=< demand) (HM.lookup "lfs" s)
+  mNarHashVal <- traverse (fromValue <=< demand) (HM.lookup "narHash" s)
+  mVerifyCommitVal <- traverse (fromValue <=< demand) (HM.lookup "verifyCommit" s)
+  mKeyTypeVal <- traverse (fromValue <=< demand) (HM.lookup "keytype" s)
+  mPublicKeyVal <- traverse (fromValue <=< demand) (HM.lookup "publicKey" s)
+  mPublicKeysVal <- traverse (fromValue @[NValue t f m] <=< demand) (HM.lookup "publicKeys" s)
 
   pubKeys <- parsePublicKeys (fromMaybe "ssh-ed25519" mKeyTypeVal) mPublicKeyVal mPublicKeysVal
 
@@ -525,7 +526,7 @@ buildFetchGitAttrs mode args res = do
         , ("lastModifiedDate", lastModDateVal)
         ]
 
-  toValue (M.fromList (attrsBase <> revAttrs <> dirtyAttrs <> lastModAttrs) :: AttrSet (NValue t f m))
+  toValue (HM.fromList (attrsBase <> revAttrs <> dirtyAttrs <> lastModAttrs) :: AttrSet (NValue t f m))
 
 fetchGitToStore
   :: forall e t f m
@@ -1062,9 +1063,9 @@ parsePublicKeys defaultType mKey mKeysList = do
     v <- demand val
     case v of
       NVSet _ attrs -> do
-        keyVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'") pure (M.lookup "key" attrs)
+        keyVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'") pure (HM.lookup "key" attrs)
         key <- fromValue =<< demand keyVal
-        let typeVal = M.lookup "type" attrs
+        let typeVal = HM.lookup "type" attrs
         typ <- maybe (pure defaultType) (\tv -> fromValue =<< demand tv) typeVal
         pure $ PublicKey typ key
       _ ->
@@ -1207,13 +1208,13 @@ parseSha256Digest t =
     Right (StoreHash.HashAlgo_SHA256 :=> d) -> pure d
     Right _ -> throwError $ ErrorCall "builtins.fetchGit: unsupported hash algorithm"
 
-defaultFindPath :: MonadNix e t f m => [NValue t f m] -> Path -> m Path
+defaultFindPath :: MonadNix e t f m => Vector (NValue t f m) -> Path -> m Path
 defaultFindPath = findPathM
 
 findPathM
   :: forall e t f m
    . MonadNix e t f m
-  => [NValue t f m]
+  => Vector (NValue t f m)
   -> Path
   -> m Path
 findPathM = findPathBy existingPath
@@ -1241,13 +1242,13 @@ defaultImportPath path =
               (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
               (\ expr ->
                 do
-                  modify $ first $ M.insert path expr
+                  modify $ first $ HM.insert path expr
                   pure expr
               )
               =<< parseNixFileLoc path
             )
             pure  -- return expr
-            . M.lookup path
+            . HM.lookup path
           ) =<< gets fst
 
 defaultPathToDefaultNix :: MonadNix e t f m => Path -> m Path

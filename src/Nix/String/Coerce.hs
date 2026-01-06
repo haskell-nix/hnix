@@ -5,7 +5,7 @@ module Nix.String.Coerce where
 import           Nix.Prelude
 import           Control.Monad.Catch            ( MonadThrow )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import           Nix.Atoms
 import           Nix.Expr.Types                 ( VarName )
 import           Nix.Effects
@@ -13,6 +13,7 @@ import           Nix.Frames
 import           Nix.Options                   ( Options )
 import           Nix.String
 import           Nix.Value
+import qualified Data.Vector                   as V
 import           Nix.Value.Monad
 
 #ifdef MIN_VERSION_ghc_datasize
@@ -90,7 +91,7 @@ coerceAnyToNixString call ctsm = go
           NVConstant NNull ->
             castToNixString mempty
           NVList l ->
-            nixStringUnwords <$> traverse go l
+            nixStringUnwords . V.toList <$> V.mapM go l
           v@(NVSet _ s) ->
             fromMaybe
               (err v)
@@ -98,7 +99,7 @@ coerceAnyToNixString call ctsm = go
               <|> continueOnKey pure "outPath"
            where
             continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
-            continueOnKey f = fmap (go <=< f) . (`M.lookup` s)
+            continueOnKey f = fmap (go <=< f) . (`HM.lookup` s)
             err v' = throwError $ ErrorCall $ "Expected a Set that has `__toString` or `outpath`, but saw: " <> show v'
           v -> coerceStringlike v
        where

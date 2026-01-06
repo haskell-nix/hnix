@@ -11,7 +11,7 @@ import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Semialign.Indexed         ( ialignWith )
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as HM
 import           Data.List                      ( partition )
 import           Data.These                     ( These(..) )
 import           Nix.Atoms
@@ -241,7 +241,7 @@ attrSetAlter ks' pos m' p' val =
             (swap -> (sp, st)) <- fromValue @(AttrSet v, PositionSet) =<< x
             recurse sp $ demand <$> st
         )
-        ((`M.lookup` m) k)
+        ((`HM.lookup` m) k)
       )
       (isPresent ks)
    where
@@ -251,8 +251,8 @@ attrSetAlter ks' pos m' p' val =
       , insertV v
       )
      where
-      insertV v' = M.insert k v' m
-      insertPos = M.insert k pos p
+      insertV v' = HM.insert k v' m
+      insertPos = HM.insert k pos p
 
     recurse
       :: PositionSet
@@ -280,11 +280,11 @@ desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
       :: AttrSet (NSourcePos, [Binding r])
       -> AttrSet (NSourcePos, [Binding r])
     updateBindingInformation =
-      M.insert x
+      HM.insert x
         =<< maybe
             (mkBindingSingleton oldPosition)
             (\ (foundPosition, newBindings) -> second (<> newBindings) $ mkBindingSingleton foundPosition)
-            . M.lookup x
+            . HM.lookup x
     mkBindingSingleton :: NSourcePos -> (NSourcePos, [Binding r])
     mkBindingSingleton np = (np , one $ bindValAt np)
      where
@@ -301,7 +301,7 @@ desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
         maybe
           (error $ "No binding " <> show x)
           (\ (p, v) -> pure $ NamedVar (one $ StaticKey x) (embed v) p)
-          =<< gets (M.lookup x)
+          =<< gets (HM.lookup x)
       )
       pure
 
@@ -352,10 +352,10 @@ evalBinds isRecursive binds =
       pure $
         (\ (k, v) ->
           ( one k
-          , fromMaybe pos $ M.lookup k p'
+          , fromMaybe pos $ HM.lookup k p'
           , demand v
           )
-        ) <$> M.toList o'
+        ) <$> HM.toList o'
 
   applyBindToAdt _ (NamedVar pathExpr finalValue pos) =
     (\case
@@ -440,7 +440,7 @@ evalSelect aset attr =
           ks
           . demand
         )
-        . M.lookup k . fst
+        . HM.lookup k . fst
       )
       =<< fromValueMay @(AttrSet v, PositionSet) x
    where
@@ -505,16 +505,16 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (`M.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
+                (`HM.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
                 mname
           loebM $
             inject $
-              M.mapMaybe
+              HM.mapMaybe
                 id
                 $ ialignWith
                     (assemble scope variadic)
                     args
-                    $ M.fromList pset
+                    pset
  where
   assemble
     :: Scopes m v

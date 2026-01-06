@@ -13,7 +13,7 @@ import           Control.Monad.Trans.Except     ( throwE )
 import           Data.Semialign                 ( Align
                                                 , Semialign(align)
                                                 )
-import qualified Data.HashMap.Lazy             as HashMap.Lazy
+import qualified Data.HashMap.Strict           as HM
 import           Data.These                     ( These(These) )
 import           Nix.Atoms
 import           Nix.Frames
@@ -79,7 +79,7 @@ isDerivationM f m =
     -- We should probably really make sure the context is empty here
     -- but the C++ implementation ignores it.
     ((==) "derivation" . ignoreContext)
-    . join <$> traverse f (HashMap.Lazy.lookup "type" m)
+    . join <$> traverse f (HM.lookup "type" m)
 
 
 isDerivation
@@ -144,7 +144,7 @@ compareAttrSetsM f eq lm rm =
     =<< areDerivations
  where
   areDerivations = on (liftA2 (&&)) (isDerivationM f              ) lm rm
-  equalOutPaths  = on (liftA2   eq) (HashMap.Lazy.lookup "outPath") lm rm
+  equalOutPaths  = on (liftA2   eq) (HM.lookup "outPath") lm rm
   compareAttrs   =     alignEqM eq                                  lm rm
 
 compareAttrSets
