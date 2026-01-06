@@ -1,5 +1,10 @@
+{-# language AllowAmbiguousTypes #-}
+{-# language DataKinds #-}
+{-# language KindSignatures #-}
+
 module Nix
   ( module Nix.Cache
+  , module Nix.Config.Singleton
   , module Nix.Exec
   , module Nix.Expr.Types
   , module Nix.Expr.Shorthands
@@ -18,6 +23,7 @@ module Nix
   , withNixContext
   , nixEvalExpr
   , nixEvalExprLoc
+  , nixEvalExprLocT
   , nixTracingEvalExprLoc
   , evaluateExpression
   , processResult
@@ -33,6 +39,7 @@ import qualified Data.Text                     as Text
 import qualified Data.Text.Read                as Text
 import           Nix.Builtins
 import           Nix.Cache
+import           Nix.Config.Singleton
 import qualified Nix.Eval                      as Eval
 import           Nix.Exec
 import           Nix.Expr.Types
@@ -79,6 +86,19 @@ nixEvalExprLoc
   -> NExprLoc
   -> m (NValue t f m)
 nixEvalExprLoc mpath = withNixContext mpath . evalExprLoc
+
+-- | Type-parameterized evaluation with compile-time feature dispatch.
+--
+-- When configuration flags are known at compile time (via 'withEvalConfig'),
+-- GHC eliminates branches for disabled features. Use this instead of
+-- 'nixEvalExprLoc' when type-level configuration is available.
+nixEvalExprLocT
+  :: forall (stats :: Bool) (trace :: Bool) e t f m
+   . (MonadNix e t f m, Has e Options, MonadIO m, HasStats stats, HasTracing trace)
+  => Maybe Path
+  -> NExprLoc
+  -> m (NValue t f m)
+nixEvalExprLocT mpath = withNixContext mpath . evalExprLocT @stats @trace
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
 --   this function doesn't do any tracing itself, but 'evalExprLoc' will be

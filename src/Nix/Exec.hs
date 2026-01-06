@@ -1,6 +1,7 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language CPP #-}
 {-# language ConstraintKinds #-}
+{-# language DataKinds #-}
 {-# language PartialTypeSignatures #-}
 {-# language RankNTypes #-}
 {-# language Strict #-}
@@ -26,6 +27,7 @@ import qualified Data.List.NonEmpty            as NE
 import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Cited
+import           Nix.Config.Singleton
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
@@ -139,6 +141,14 @@ type MonadCitedThunks t f m =
   , HasCitations1 m (NValue t f m) f
   )
 
+-- | Core constraint for Nix evaluation monad.
+--
+-- Type-level configuration for compile-time specialization (stats, tracing) is
+-- provided separately via 'EvalConfig' from "Nix.Config.Singleton". Functions
+-- like 'evalExprLocT' use both 'MonadNix' and 'HasStats'/'HasTracing' constraints
+-- to achieve zero-cost conditional execution. We deliberately avoid adding type
+-- parameters here, as doing so would cause cascading ambiguous type variable
+-- errors throughout the codebase.
 type MonadNix e t f m =
   ( Has e SrcSpan
   , Has e Options
@@ -159,7 +169,7 @@ data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
-nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
+nverr :: forall e t f s m a. (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
 askSpan :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
@@ -614,6 +624,7 @@ addStats
 addStats stats k v@(AnnF _ x) =
   let exprType = Text.pack (show (toConstr (void x)))
   in withExprTiming stats exprType (k v)
+{-# INLINABLE addStats #-}
 
 evalWithTracingAndMetaInfo
   :: forall e t f m
@@ -627,6 +638,7 @@ evalWithTracingAndMetaInfo =
   where
   addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
   addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
+{-# INLINABLE evalWithTracingAndMetaInfo #-}
 
 evalWithTimingAndMetaInfo
   :: forall e t f m
@@ -638,6 +650,7 @@ evalWithTimingAndMetaInfo thresholdMs =
   adi
     Eval.addMetaInfo
     (addTiming thresholdMs Eval.evalContent)
+{-# INLINABLE evalWithTimingAndMetaInfo #-}
 
 evalWithTracingTimingAndMetaInfo
   :: forall e t f m
@@ -652,6 +665,7 @@ evalWithTracingTimingAndMetaInfo thresholdMs =
   where
   addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
   addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
+{-# INLINABLE evalWithTracingTimingAndMetaInfo #-}
 
 evalWithStatsAndMetaInfo
   :: forall e t f m
@@ -663,8 +677,9 @@ evalWithStatsAndMetaInfo stats =
   adi
     Eval.addMetaInfo
     (addStats stats Eval.evalContent)
+{-# INLINABLE evalWithStatsAndMetaInfo #-}
 
-evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
+evalExprLoc :: forall e t f m. MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
     opts <- askOptions
@@ -686,11 +701,69 @@ evalExprLoc expr =
           (False, False, Nothing) ->
             Eval.evalWithMetaInfo
     pTracedAdi expr
+{-# INLINABLE evalExprLoc #-}
+
+-- | Type-parameterized evaluation with compile-time feature dispatch.
+--
+-- When configuration flags are known at compile time (via 'withEvalConfig'),
+-- GHC eliminates branches for disabled features via case-of-known-constructor.
+--
+-- This function should be used when the type-level configuration is available.
+-- For backward compatibility, use 'evalExprLoc' which does runtime dispatch.
+--
+-- Example usage:
+--
+-- @
+-- withEvalConfig (isEvalStats opts) (isValues opts) (isTrace opts) $
+--   \\(_ :: Proxy \'(s, p, t)) ->
+--     runWithStoreEffectsIOT @s @p @t opts $
+--       evalExprLocT @s @t expr
+-- @
+evalExprLocT
+  :: forall (stats :: Bool) (trace :: Bool) e t f m
+   . (MonadNix e t f m, HasStats stats, HasTracing trace)
+  => NExprLoc
+  -> m (NValue t f m)
+evalExprLocT =
+  ifTracing @trace
+    -- Tracing enabled: use tracing evaluator
+    (join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo)
+    -- Tracing disabled: check stats at type level
+    (ifStats @stats
+      -- Stats enabled: use stats evaluator (still need runtime lookup for handle)
+      (\expr -> do
+        mstats <- askEvalStats
+        case mstats of
+          Just s  -> evalWithStatsAndMetaInfo s expr
+          Nothing -> Eval.evalWithMetaInfo expr  -- fallback
+      )
+      -- Stats disabled: use plain evaluator (fastest path, zero overhead)
+      Eval.evalWithMetaInfo
+    )
+{-# INLINABLE evalExprLocT #-}
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => Vector Text -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
+
+-- | Type-parameterized version of 'exec' with compile-time feature dispatch.
+execT
+  :: forall (stats :: Bool) (trace :: Bool) e t f m
+   . (MonadNix e t f m, MonadInstantiate m, HasStats stats, HasTracing trace)
+  => Vector Text
+  -> m (NValue t f m)
+execT args = either throwError (evalExprLocT @stats @trace) =<< exec' args
+{-# INLINABLE execT #-}
 
 -- Please, delete `nix` from the name
 nixInstantiateExpr
   :: (MonadNix e t f m, MonadInstantiate m) => Text -> m (NValue t f m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
+
+-- | Type-parameterized version of 'nixInstantiateExpr' with compile-time feature dispatch.
+nixInstantiateExprT
+  :: forall (stats :: Bool) (trace :: Bool) e t f m
+   . (MonadNix e t f m, MonadInstantiate m, HasStats stats, HasTracing trace)
+  => Text
+  -> m (NValue t f m)
+nixInstantiateExprT s = either throwError (evalExprLocT @stats @trace) =<< instantiateExpr s
+{-# INLINABLE nixInstantiateExprT #-}

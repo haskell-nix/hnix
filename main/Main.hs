@@ -1,3 +1,5 @@
+{-# language AllowAmbiguousTypes #-}
+{-# language DataKinds #-}
 {-# language MultiWayIf #-}
 {-# language TypeFamilies #-}
 {-# language RecordWildCards #-}
@@ -44,11 +46,17 @@ main =
     main' opts
 
 main' :: Options -> IO ()
-main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
+main' opts@Options{..} =
+  -- Bridge runtime options to type-level configuration.
+  -- This enables compile-time specialization in evaluation hot paths.
+  withEvalConfig isEvalStats isValues isTrace $
+    \(_ :: Proxy '(s, p, t)) ->
+      runWithStoreEffectsIOT @s @p @t opts (execContentsFilesOrRepl @s @t)
  where
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
-  execContentsFilesOrRepl :: forall m. StdBase m => StdM m ()
+  execContentsFilesOrRepl
+    :: forall (s :: Bool) (t :: Bool) m. (StdBase m, HasStats s, HasTracing t) => StdM m ()
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
@@ -70,12 +78,12 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
 
       readExpressionFromStdin :: StdM m ()
       readExpressionFromStdin =
-        processExpr =<< liftIO Text.getContents
+        processExpr @s @t =<< liftIO Text.getContents
 
     processSeveralFiles :: [Path] -> StdM m ()
     processSeveralFiles = traverse_ processFile
      where
-      processFile path = handleResult (pure path) =<< parseNixFileLoc path
+      processFile path = handleResult @s @t (pure path) =<< parseNixFileLoc path
 
     -- |  The `--read` option: load expression from a serialized file.
     loadBinaryCacheFile :: Maybe (StdM m ())
@@ -83,12 +91,12 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
       (\ (binaryCacheFile :: Path) ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions (pure file) =<< liftIO (readCache binaryCacheFile)
+          processCLIOptions @s @t (pure file) =<< liftIO (readCache binaryCacheFile)
       ) <$> getReadFrom
 
     -- | The `--expr` option: read expression from the argument string
     loadLiteralExpression :: Maybe (StdM m ())
-    loadLiteralExpression = processExpr <$> getExpression
+    loadLiteralExpression = processExpr @s @t <$> getExpression
 
     -- | The `--file` argument: read expressions from the files listed in the argument file
     loadExpressionFromFile :: Maybe (StdM m ())
@@ -102,14 +110,18 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
           _fp -> readFile _fp
         ) <$> getFromFile
 
-  processExpr :: forall m. StdBase m => Text -> StdM m ()
-  processExpr = handleResult mempty . parseNixTextLoc
+  processExpr
+    :: forall (s :: Bool) (t :: Bool) m. (StdBase m, HasStats s, HasTracing t)
+    => Text -> StdM m ()
+  processExpr = handleResult @s @t mempty . parseNixTextLoc
 
   withEmptyNixContext :: forall m a. StdBase m => StdM m a -> StdM m a
   withEmptyNixContext = withNixContext mempty
 
   --  2021-07-15: NOTE: @handleResult@ & @process@ - have atrocious size & compexity, they need to be decomposed & refactored.
-  handleResult :: forall m err. (StdBase m, Show err) => Maybe Path -> Either err NExprLoc -> StdM m ()
+  handleResult
+    :: forall (s :: Bool) (t :: Bool) m err. (StdBase m, HasStats s, HasTracing t, Show err)
+    => Maybe Path -> Either err NExprLoc -> StdM m ()
   handleResult mpath =
     either
       (\ err ->
@@ -135,7 +147,7 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
 
-          catch (processCLIOptions mpath expr) $
+          catch (processCLIOptions @s @t mpath expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show =<<
@@ -148,19 +160,22 @@ main' opts@Options{..} = runWithStoreEffectsIO opts execContentsFilesOrRepl
             withEmptyNixContext $
               bool
                 Repl.main
-                ((Repl.main' . pure) =<< nixEvalExprLoc (coerce mpath) expr)
+                ((Repl.main' . pure) =<< nixEvalExprLocT @s @t (coerce mpath) expr)
                 isEvaluate
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
-  processCLIOptions :: forall m. StdBase m => Maybe Path -> NExprLoc -> StdM m ()
+  -- Now uses type-level dispatch for stats/tracing via HasStats s and HasTracing t.
+  processCLIOptions
+    :: forall (s :: Bool) (t :: Bool) m. (StdBase m, HasStats s, HasTracing t)
+    => Maybe Path -> NExprLoc -> StdM m ()
   processCLIOptions mpath expr
     | isEvaluate =
       if
-        | isTrace                       -> evaluateExprWith nixTracingEvalExprLoc expr
+        -- Type-level dispatch: when t ~ 'True, use tracing evaluator; when t ~ 'False, skip entirely
         | Just path <- getReduce        -> evaluateExprWith (reduction path . coerce) expr
-        | null getArg || null getArgstr -> evaluateExprWith nixEvalExprLoc expr
-        | otherwise                     -> processResult printer <=< nixEvalExprLoc (coerce mpath) $ expr
+        | null getArg || null getArgstr -> evaluateExprWith (nixEvalExprLocT @s @t) expr
+        | otherwise                     -> processResult printer <=< nixEvalExprLocT @s @t (coerce mpath) $ expr
     | isXml                        = fail "Rendering expression trees to XML is not yet implemented"
     | isJson                       = fail "Rendering expression trees to JSON is not implemented"
     | getVerbosity >= DebugInfo    = liftIO . putStr . ppShow . stripAnnotation $ expr

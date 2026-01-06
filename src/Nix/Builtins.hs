@@ -1,6 +1,7 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language CPP #-}
 {-# language ConstraintKinds #-}
+{-# language DataKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language KindSignatures #-}
 {-# language MonoLocalBinds #-}

@@ -1,4 +1,5 @@
 {-# language CPP #-}
+{-# language DataKinds #-}
 {-# language PackageImports #-}
 {-# language Strict #-}
 

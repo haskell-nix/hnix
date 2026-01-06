@@ -1,4 +1,5 @@
 {-# language CPP #-}
+{-# language DataKinds #-}
 
 module Nix.Json where
 

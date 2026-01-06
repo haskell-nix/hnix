@@ -1,5 +1,6 @@
 {-# language TypeFamilies #-}
 {-# language CPP #-}
+{-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
 {-# language RankNTypes #-}
@@ -39,6 +40,7 @@ import           Control.Monad.Ref              ( MonadRef(newRef)
 import qualified Text.Show
 import           Nix.Cited
 import           Nix.Cited.Basic
+import           Nix.Config.Singleton
 import           Nix.Context
 import           Nix.EvalStats                  ( EvalStats
                                                 , newEvalStats
@@ -508,3 +510,52 @@ runWithStoreEffectsIO opts action = do
   traverse_ printEvalStats mstats
 
   pure result
+
+-- | Type-parameterized runner with compile-time configuration dispatch.
+--
+-- When configuration flags are known at compile time (established via 'withEvalConfig'),
+-- this function enables zero-cost conditional execution. The type parameters flow through
+-- to the action, allowing evaluation functions like 'evalExprLocT' to use compile-time
+-- dispatch.
+--
+-- Example usage:
+--
+-- @
+-- main' opts = withEvalConfig (isEvalStats opts) (isValues opts) (isTrace opts) $
+--   \\(_ :: Proxy \'(s, p, t)) ->
+--     runWithStoreEffectsIOT @s @p @t opts myAction
+-- @
+runWithStoreEffectsIOT
+  :: forall (stats :: Bool) (prov :: Bool) (trace :: Bool) a
+   . EvalConfig stats prov trace
+  => Options
+  -> (forall m. (StdBase m, EvalConfig stats prov trace) => StdM m a)
+  -> IO a
+runWithStoreEffectsIOT opts action = do
+  -- Create stats collector only when type-level says it's needed
+  -- When stats ~ 'False, this entire branch compiles to (pure Nothing)
+  mstats <- ifStatsM @stats
+    (Just <$> newEvalStats)
+    (pure Nothing)
+
+  -- Run the action
+  result <- case getStoreMode opts of
+    StoreRemote ->
+      runWithBasicEffectsAndStats opts mstats (action :: StdM IO a)
+    StoreOverlay ->
+      let
+        storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
+        cfg = OverlayStoreConfig
+          { overlayStoreDir = storeDir
+          , overlayReadThrough = True
+          }
+      in
+        evalOverlayStoreT cfg defaultOverlayStoreState $
+          runWithBasicEffectsAndStats opts mstats (action :: StdM (OverlayStoreT IO) a)
+
+  -- Print stats only when enabled at type level
+  -- When stats ~ 'False, this compiles to (pure ())
+  whenStats @stats $ traverse_ printEvalStats mstats
+
+  pure result
+{-# INLINABLE runWithStoreEffectsIOT #-}
