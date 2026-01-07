@@ -22,6 +22,12 @@ import           Data.Foldable                  ( foldl )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import qualified Data.Text                     as Text
+import qualified Data.ByteString               as B
+import qualified System.Directory              as Directory
+import qualified System.FilePath               as FP
+import qualified System.IO.Temp                as Temp
+import           System.Exit                    ( ExitCode(..) )
+import           System.Process                 ( readProcessWithExitCode )
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -79,6 +85,47 @@ data Derivation = Derivation
 
 data HashMode = Flat | Recursive
   deriving (Show, Eq)
+
+-- | Configuration for builtin:fetchurl builder
+data BuiltinFetchurlConfig = BuiltinFetchurlConfig
+  { bfUrl :: !Text
+  , bfName :: !Text
+  , bfExecutable :: !Bool
+  , bfUnpack :: !Bool
+  , bfExpectedHash :: !(Maybe HashDigest)
+  , bfHashMode :: !HashMode
+  }
+  deriving Show
+
+-- | Parse configuration from derivation environment for builtin:fetchurl
+parseBuiltinFetchurlConfig :: Derivation -> Either Text BuiltinFetchurlConfig
+parseBuiltinFetchurlConfig drv = do
+  let envMap = env drv
+
+  -- URL is required
+  url <- maybe (Left "builtin:fetchurl: missing 'url' in environment") Right
+    $ Map.lookup "url" envMap
+
+  when (Text.null url) $
+    Left "builtin:fetchurl: 'url' is empty"
+
+  -- Parse boolean environment variables (Nix uses "1" for true, "" or missing for false)
+  let parseBool key = case Map.lookup key envMap of
+        Nothing -> False
+        Just "" -> False
+        Just "0" -> False
+        Just "1" -> True
+        Just "true" -> True
+        Just _ -> False  -- Conservative default
+
+  pure $ BuiltinFetchurlConfig
+    { bfUrl = url
+    , bfName = name drv
+    , bfExecutable = parseBool "executable"
+    , bfUnpack = parseBool "unpack"
+    , bfExpectedHash = mFixed drv
+    , bfHashMode = hashMode drv
+    }
 
 makeStorePathName :: (Framed e m) => Text -> m Store.StorePathName
 makeStorePathName name = case Store.mkStorePathName name of
@@ -272,6 +319,116 @@ derivationParser = do
     _ -> (Nothing, Flat)
 
 
+-- | Execute the builtin:fetchurl builder
+-- This downloads a URL and optionally unpacks it, adding the result to the store
+executeBuiltinFetchurl
+  :: forall e t f m
+   . (MonadNix e t f m)
+  => BuiltinFetchurlConfig
+  -> Text                  -- ^ Expected output path
+  -> m ()
+executeBuiltinFetchurl cfg expectedPath = do
+  -- 1. Check if output already exists (cache hit)
+  let expectedStorePath = coerce @String @Path $ toString expectedPath
+  exists <- storePathExists expectedStorePath
+  when exists $ pure ()
+
+  -- 2. Download the URL
+  -- For unpack, we don't set executable during download - we'll handle it after unpacking
+  let execDuringDownload = bfExecutable cfg && not (bfUnpack cfg)
+  downloadResult <- fetchURLWithNameAndExecutable
+    (bfUrl cfg)
+    (bfName cfg)
+    execDuringDownload
+
+  downloadedPath <- case downloadResult of
+    Left err -> throwError err
+    Right sp -> pure sp
+
+  -- 3. Handle unpacking if needed
+  finalPath <- if bfUnpack cfg
+    then unpackAndAddToStore cfg downloadedPath
+    else pure downloadedPath
+
+  -- 4. Verify hash (if this produces a different path, it's a hash mismatch)
+  let actualPath = coerce @StorePath @Path finalPath
+  when (actualPath /= expectedStorePath) $
+    throwError $ ErrorCall $
+      "builtin:fetchurl: hash mismatch\n  expected: " <> toString expectedPath <>
+      "\n  got: " <> show finalPath
+
+-- | Unpack an archive and add the result to the store
+unpackAndAddToStore
+  :: forall e t f m
+   . (MonadNix e t f m)
+  => BuiltinFetchurlConfig
+  -> StorePath             -- ^ Downloaded archive path
+  -> m StorePath
+unpackAndAddToStore cfg archivePath = do
+  -- Read the archive content
+  archiveBytes <- either throwError pure =<< readStoreFile (coerce archivePath)
+
+  -- Create temp directory for unpacking
+  tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
+  tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-builtin-fetchurl"
+
+  -- Write archive to temp file (tar needs a file)
+  let tarFile = tmpDir FP.</> "archive"
+  liftIO $ B.writeFile tarFile archiveBytes
+
+  -- Create unpack directory
+  let unpackDir = tmpDir FP.</> "unpack"
+  liftIO $ Directory.createDirectory unpackDir
+
+  -- Try to unpack (supporting .tar, .tar.gz, .tar.bz2, .tar.xz via tar auto-detection)
+  (exitCode, _out, err) <- liftIO $
+    readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
+
+  when (exitCode /= ExitSuccess) $ do
+    liftIO $ Directory.removeDirectoryRecursive tmpDir
+    throwError $ ErrorCall $
+      "builtin:fetchurl: failed to unpack archive: " <> err
+
+  -- Pick the root directory (single directory -> descend into it)
+  rootDir <- liftIO $ pickUnpackRoot unpackDir
+
+  -- Set executable permissions if needed
+  when (bfExecutable cfg) $
+    liftIO $ setTreeExecutable rootDir
+
+  -- Add to store (always recursive for unpacked content)
+  result <- addToStore (bfName cfg) (NarFile $ coerce rootDir) True False
+
+  -- Cleanup temp directory
+  liftIO $ Directory.removeDirectoryRecursive tmpDir
+
+  either throwError pure result
+
+-- | Pick the root of an unpacked archive
+-- If there's a single directory inside, descend into it (common pattern for tarballs)
+pickUnpackRoot :: FilePath -> IO FilePath
+pickUnpackRoot unpackDir = do
+  entries <- Directory.listDirectory unpackDir
+  case entries of
+    [single] -> do
+      let singlePath = unpackDir FP.</> single
+      isDir <- Directory.doesDirectoryExist singlePath
+      pure $ if isDir then singlePath else unpackDir
+    _ -> pure unpackDir
+
+-- | Recursively set executable permissions on all regular files in a directory tree
+setTreeExecutable :: FilePath -> IO ()
+setTreeExecutable path = do
+  isFile <- Directory.doesFileExist path
+  if isFile
+    then setExecutableFile path
+    else do
+      isDir <- Directory.doesDirectoryExist path
+      when isDir $ do
+        entries <- Directory.listDirectory path
+        traverse_ (setTreeExecutable . (path FP.</>)) entries
+
+
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
     s <- HM.mapKeys varNameText <$> fromValue @(AttrSet (NValue t f m)) val
@@ -314,6 +471,28 @@ defaultDerivationStrict val = do
           , outputs = outputs'
           , env = modEnv (outputs' <>)
           }
+
+    -- Handle builtin builders (like builtin:fetchurl)
+    case Text.stripPrefix "builtin:" (builder drv') of
+      Just "fetchurl" -> do
+        -- Parse configuration from derivation environment
+        cfg <- case parseBuiltinFetchurlConfig drv' of
+          Left err -> throwError $ ErrorCall $ Text.unpack err
+          Right c -> pure c
+
+        -- Get expected output path (builtin:fetchurl only supports single "out" output)
+        expectedOut <- case Map.lookup "out" (outputs drv') of
+          Just path -> pure path
+          Nothing -> throwError $ ErrorCall "builtin:fetchurl: missing 'out' output"
+
+        -- Execute the fetch (downloads URL, optionally unpacks, adds to store)
+        executeBuiltinFetchurl cfg expectedOut
+
+      Just other ->
+        throwError $ ErrorCall $ "Unknown builtin builder: builtin:" <> Text.unpack other
+
+      Nothing ->
+        pure ()  -- Normal derivation, continue with writeDerivation below
 
     (mkVarName -> drvPath) <- pathToText storeDir <$> writeDerivation drv'
 
@@ -363,8 +542,9 @@ defaultDerivationStrict val = do
       case (hashAlgo, mode) of
         (Store.HashAlgo_SHA256, Recursive) -> do
           -- Case 1: SHA256 + Recursive -> use "source" type directly
-          -- Format: "source:<hash_hex>:<storeDir>:<name>"
-          let toHash = "source:" <> hashText <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
+          -- Format: "source:sha256:<hash_hex>:<storeDir>:<name>"
+          -- NOTE: Nix includes "sha256:" prefix in the hash input string for "source" type
+          let toHash = "source:sha256:" <> hashText <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
           let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
           let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
           pure $ storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
@@ -475,8 +655,11 @@ buildDerivationWithContext drvAttrs = do
           (\ hash -> do
             when (outputs /= one "out") $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
             -- mkNamedDigest returns Either String (DSum HashAlgo Digest)
+            -- Note: Empty outputHashAlgo should be treated as missing (infer from hash)
+            -- This handles SRI hashes like "sha256-..." where outputHashAlgo is ""
+            let mHashAlgo' = mHashAlgo >>= \a -> if Text.null a then Nothing else Just a
             digest <- lift $ either (throwError . ErrorCall) pure $
-              maybe (inferHashDigest hash) (`Store.mkNamedDigest` hash) mHashAlgo
+              maybe (inferHashDigest hash) (`Store.mkNamedDigest` hash) mHashAlgo'
             pure $ Just digest)
           mHash
 
