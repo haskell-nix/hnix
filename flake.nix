@@ -45,6 +45,10 @@
                     pkg-config
                   ];
                   withHoogle = false;
+                  # Point to source data directory for development
+                  shellHook = ''
+                    export NIX_DATA_DIR="$PWD/data"
+                  '';
                 };
                 # modules = [{
                 #   # enableLibraryProfiling = true;

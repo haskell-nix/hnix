@@ -416,6 +416,28 @@ prettyNValue v =
     (prettyNix $ valueToExpr v)
     (derivationDoc v)
 
+-- | Detect derivations and render them as @\<derivation path\>@ instead of
+-- recursively printing all attributes.
+--
+-- This is necessary because derivations are self-referential:
+--
+-- @
+-- drv = {
+--   out = drv;           -- points back to itself
+--   all = [ drv.out ];   -- list containing self-reference
+--   drvPath = "...";
+--   outPath = "...";
+--   type = "derivation";
+--   ...
+-- }
+-- @
+--
+-- Without special handling, 'valueToExpr' would follow @out@ → @drv@ → @out@ → ...
+-- infinitely. This matches @nix eval@'s behavior which displays derivations as
+-- @«derivation \/nix\/store\/...-name.drv»@.
+--
+-- Note: This is distinct from string coercion (@toString drv@ or @"${drv}"@),
+-- which uses @outPath@ during evaluation. Pretty-printing is purely for display.
 derivationDoc :: forall t f m ann . MonadDataContext f m => NValue t f m -> Maybe (Doc ann)
 derivationDoc =
   \case

@@ -187,15 +187,35 @@ bindComputedThunkOrStub
   -> m a
 bindComputedThunkOrStub = (<=< query (pure thunkStubVal))
 
+-- | Traverse a value, replacing uncomputed thunks with @\<thunk\>@ stubs.
+--
+-- Unlike 'normalizeValue', this function:
+--
+--   * Does NOT track visited nodes (no @Ord (ThunkId m)@ constraint)
+--   * Does NOT force thunks - only examines already-computed values via 'query'
+--   * Uses depth limiting (200) instead of cycle detection
+--
+-- The depth limit is necessary because self-referential structures can exist
+-- in computed values (e.g., derivations where @drv.out = drv@). Without cycle
+-- tracking, following such references would recurse forever.
+--
+-- This trades precision for generality - it works in more contexts but may
+-- truncate legitimate deep structures at the arbitrary depth limit.
 removeEffects
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  :: forall t f m . (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => NValue t f m
   -> m (NValue t f m)
-removeEffects =
-  iterNValueM
-    id
-    bindComputedThunkOrStub
-    (fmap Free . sequenceNValue' id)
+removeEffects = go 0
+ where
+  maxDepth :: Int
+  maxDepth = 200
+
+  go :: Int -> NValue t f m -> m (NValue t f m)
+  go depth v
+    | depth > maxDepth = pure $ mkNVStrWithoutContext "<deep>"
+    | otherwise = case v of
+        Pure t -> bindComputedThunkOrStub (go (depth + 1)) t
+        Free fv -> Free <$> bindNValue' id (go (depth + 1)) fv
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
