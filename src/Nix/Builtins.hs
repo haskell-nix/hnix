@@ -94,10 +94,11 @@ import           Nix.Value.Monad
 import           Nix.XML
 import           Data.Dependent.Sum             ( DSum((:=>)) )
 import qualified System.Nix.Hash               as StoreHash
-import qualified System.Nix.Store.Types        as StoreTypes
+import qualified System.Nix.Store.ReadOnly     as StoreRO
 import qualified System.Nix.StorePath          as Store
 import           System.Nix.Base32             as Base32
 import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
+import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
 import qualified "crypton" Crypto.Hash         as CryptonHash
 import           Data.ByteArray                 ( convert )
 import qualified Text.Show
@@ -2236,11 +2237,7 @@ execNix xs = do
   strs <- V.mapM (coerceStringlikeToNixString DontCopyToStore) v
   exec $ fmap ignoreContext strs
 
--- | Compute fixed-output store path according to Nix's algorithm.
--- This mirrors the implementation in Nix C++ and Derivation.hs.
---
--- For SHA256 + Recursive (NAR): uses "source:sha256:<hash>:<storeDir>:<name>"
--- For everything else (including flat): uses two-step "fixed:out:" process
+-- | Compute fixed-output store path using hnix-store-readonly.
 makeFixedOutputPathLocal
   :: Store.StoreDir
   -> FileIngestionMethod
@@ -2248,37 +2245,10 @@ makeFixedOutputPathLocal
   -> Store.StorePathName
   -> Store.StorePath
 makeFixedOutputPathLocal storeDir' method digest name =
-  let storeDirText = Text.dropWhileEnd (== '/') $ decodeUtf8 $ Store.unStoreDir storeDir'
-      storeDirPrefix = storeDirText <> "/"
-      -- Convert digest to hex text
-      hashText = decodeUtf8 (convertToBase Base16 (convert digest :: ByteString) :: ByteString)
-  in case method of
-    FileIngestionMethod_NixArchive ->
-      -- Case 1: Recursive (NAR) -> use "source" type directly
-      -- Format: "source:sha256:<hash_hex>:<storeDir>:<name>"
-      let toHash = "source:sha256:" <> hashText <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
-          hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
-          hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
-          pathText = storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
-      in case Store.parsePath storeDir' (encodeUtf8 pathText) of
-        Right sp -> sp
-        Left err -> error $ "makeFixedOutputPathLocal: failed to parse path: " <> show err
-
-    FileIngestionMethod_Flat ->
-      -- Case 2: Flat -> two-step "fixed:out:" process
-      -- Step 1: digest1 = SHA256("fixed:out:sha256:<hash>:")
-      let fixedPayload = "fixed:out:sha256:" <> hashText <> ":"
-          fixedDigest = CryptonHash.hash @ByteString @CryptonHash.SHA256 $ encodeUtf8 fixedPayload
-          fixedDigestHex = decodeUtf8 (convertToBase Base16 (convert fixedDigest :: ByteString) :: ByteString)
-          -- Step 2: makeStorePath with the intermediate digest
-          -- Format: "output:out:sha256:<digest1_hex>:<storeDir>:<name>"
-          toHash = "output:out:sha256:" <> fixedDigestHex <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
-          hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
-          hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
-          pathText = storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
-      in case Store.parsePath storeDir' (encodeUtf8 pathText) of
-        Right sp -> sp
-        Left err -> error $ "makeFixedOutputPathLocal: failed to parse path: " <> show err
+  let caMethod = case method of
+        FileIngestionMethod_NixArchive -> ContentAddressMethod_NixArchive
+        FileIngestionMethod_Flat -> ContentAddressMethod_Flat
+  in StoreRO.makeFixedOutputPath storeDir' caMethod (StoreHash.HashAlgo_SHA256 :=> digest) mempty name
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

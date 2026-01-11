@@ -34,7 +34,6 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
 import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
-import qualified System.Nix.Base32             as Base32
 
 import           Nix.Atoms
 import           Nix.Expr.Types          hiding ( Recursive )
@@ -60,7 +59,9 @@ import           Nix.Value.Monad
 
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
+import qualified System.Nix.Store.ReadOnly     as StoreRO
 import qualified System.Nix.Nar                as Nar
+import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
 import qualified "crypton" Crypto.Hash         as CryptonHash
 import           Data.Dependent.Sum             ( DSum(..) )
 import qualified Data.Dependent.Sum            as DSum
@@ -559,8 +560,8 @@ defaultDerivationStrict val = do
     drv' <- case mFixed drv of
       Just digest -> do
         -- Fixed-output derivation: output path is content-addressed
-        outputPath <- makeFixedOutputPath storeDir drvName digest (hashMode drv)
-        let outputs' = one ("out", outputPath)
+        let outputPath = makeFixedOutputPath storeDir drvName digest (hashMode drv)
+            outputs' = one ("out", outputPath)
         pure $ drv
           { inputs
           , outputs = outputs'
@@ -623,76 +624,23 @@ defaultDerivationStrict val = do
 
     pathToText storeDir' = decodeUtf8 . Store.storePathToRawFilePath storeDir'
 
-    storeDirTextFrom :: Store.StoreDir -> Text
-    storeDirTextFrom = Text.dropWhileEnd (== '/') . decodeUtf8 . Store.unStoreDir
-
-    makeFixedOutputPath :: (Framed e m) => Store.StoreDir -> Store.StorePathName -> HashDigest -> HashMode -> m Text
-    makeFixedOutputPath storeDir' name digest@(hashAlgo DSum.:=> hashDigest) mode = do
-      -- Nix's makeFixedOutputPath has TWO cases:
-      --
-      -- Case 1: SHA256 + Recursive (NixArchive)
-      --   This is the common case for fetchurl, addToStore, etc.
-      --   Uses: makeStorePath("source", hash, name) directly
-      --   Format: "source:<hash_hex>:<storeDir>:<name>"
-      --
-      -- Case 2: Everything else (flat hash, or non-SHA256)
-      --   Uses a two-step process:
-      --   Step 1: digest1 = SHA256("fixed:out:<modePrefix><algo>:<hash>:")
-      --   Step 2: makeStorePath("output:out", digest1, name)
-      --
-      let storeDirText = storeDirTextFrom storeDir'
-      let storeDirPrefix = storeDirText <> "/"
-      let hashText = hashDigestText digest
-
-      case (hashAlgo, mode) of
-        (Store.HashAlgo_SHA256, Recursive) -> do
-          -- Case 1: SHA256 + Recursive -> use "source" type directly
-          -- Format: "source:sha256:<hash_hex>:<storeDir>:<name>"
-          -- NOTE: Nix includes "sha256:" prefix in the hash input string for "source" type
-          let toHash = "source:sha256:" <> hashText <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
-          let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
-          let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
-          pure $ storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
-
-        _ -> do
-          -- Case 2: Other cases -> two-step "fixed:out:" process
-          let algoText = hashDigestAlgoText digest
-          let modePrefix = case mode of
-                Recursive -> "r:"
-                Flat -> mempty
-          -- Step 1: Create the fixed-output content hash (no storeDir, no name, trailing colon)
-          -- Format: "fixed:out:<modePrefix><algo>:<hash>:"
-          let fixedPayload = "fixed:out:" <> modePrefix <> algoText <> ":" <> hashText <> ":"
-          let fixedDigest = CryptonHash.hash @ByteString @CryptonHash.SHA256 $ encodeUtf8 fixedPayload
-          let fixedDigestHex = decodeUtf8 (convertToBase Base16 (convert fixedDigest :: ByteString) :: ByteString)
-          -- Step 2: makeStorePath with the intermediate digest
-          -- Nix's makeStorePath(type, hash, name) uses hash.to_string(Base16, true) which includes "sha256:"
-          -- Format: "output:out:sha256:<digest1_hex>:<storeDir>:<name>"
-          let toHash = "output:out:sha256:" <> fixedDigestHex <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
-          let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
-          let hashBase32 = Base32.encode $ Store.unStorePathHashPart hashPart
-          let result = storeDirPrefix <> hashBase32 <> "-" <> Store.unStorePathName name
-          pure result
+    makeFixedOutputPath :: Store.StoreDir -> Store.StorePathName -> HashDigest -> HashMode -> Text
+    makeFixedOutputPath storeDir' name digest mode =
+      let method = case mode of
+            Recursive -> ContentAddressMethod_NixArchive
+            Flat -> ContentAddressMethod_Flat
+          storePath = StoreRO.makeFixedOutputPath storeDir' method digest mempty name
+      in pathToText storeDir' storePath
 
     makeOutputPath storeDir' o h n = do
-      name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then mempty else "-" <> o
-      -- Compute the output path hash according to Nix's algorithm:
-      -- For non-fixed outputs, hash = sha256("output:<outputName>:sha256:<drv_modulo_hex>:<storeDir>:<outputPathName>")
-      -- where outputPathName is the base name for "out", or base name + "-" + output name for other outputs
-      -- Convert the hash digest to hex string (lowercase)
-      let storeDirText = storeDirTextFrom storeDir'
-      let storeDirPrefix = storeDirText <> "/"
-      let drvHashHex = decodeUtf8 (convertToBase Base16 h :: ByteString)
-      -- The final name in the hash input must match the output-specific name (same as 'name')
-      -- This is critical: Nix's makeOutputPath uses outputPathName(drvName, outputName) here
-      let toHash = "output:" <> o <> ":sha256:" <> drvHashHex <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
-      -- Use hnix-store-core's mkStorePathHashPart which handles truncation and returns raw bytes
-      -- Use crypton's SHA256 (compatible with hnix-store-core)
-      let hashPart = Store.mkStorePathHashPart @CryptonHash.SHA256 (encodeUtf8 toHash)
-      -- Extract raw bytes and base32-encode using Nix base32
-      let hashText = Base32.encode $ Store.unStorePathHashPart hashPart
-      -- Build the store path
-      pure $ storeDirPrefix <> hashText <> "-" <> Store.unStorePathName name
+      -- Output path name is drvName for "out", drvName-outputName for other outputs
+      outputPathName <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then mempty else "-" <> o
+      -- Convert cryptonite digest to crypton digest (both have same byte representation)
+      let bytes :: ByteString
+          bytes = convert h
+          Just cryptonDigest = CryptonHash.digestFromByteString bytes
+          storePath = StoreRO.makeOutputPath storeDir' o cryptonDigest outputPathName
+      pure $ pathToText storeDir' storePath
 
     toStorePaths :: HashSet StringContext -> (Set Text, Map Text [Text])
     toStorePaths = foldl (flip addToInputs) mempty
