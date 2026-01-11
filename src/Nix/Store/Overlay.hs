@@ -42,6 +42,10 @@ import           Nix.Render                    ( MonadFile )
 import qualified System.Nix.Store.ReadOnly     as StoreRO
 import qualified System.Nix.Store.Types        as StoreTypes
 import qualified System.Nix.StorePath          as Store
+import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
+import           System.Nix.Hash                ( HashAlgo(..) )
+import           Data.Dependent.Sum             ( DSum((:=>)) )
+import qualified "crypton" Crypto.Hash         as Hash
 
 data OverlayStoreConfig = OverlayStoreConfig
   { overlayStoreDir :: Store.StoreDir
@@ -107,8 +111,8 @@ instance MonadIO m => MonadStore (OverlayStoreT m) where
       Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
       Right pathName -> do
         let method = if recursive
-              then StoreTypes.FileIngestionMethod_FileRecursive
-              else StoreTypes.FileIngestionMethod_Flat
+              then ContentAddressMethod_NixArchive
+              else ContentAddressMethod_Flat
         result <- case content of
           NarText bytes ->
             liftIO $
@@ -151,12 +155,20 @@ instance MonadIO m => MonadStore (OverlayStoreT m) where
       Right pathName -> do
         let textBytes = TextEncoding.encodeUtf8 text
         let refs = parseReferences storeDir references
+        -- Hash the text content with SHA256
+        let digest = Hash.hash textBytes :: Hash.Digest Hash.SHA256
+        -- Build References structure for makeFixedOutputPath
+        let storeRefs = StoreRO.References
+              { StoreRO.references_others = refs
+              , StoreRO.references_self = False
+              }
         let storePath =
-              StoreRO.computeStorePathForText
+              StoreRO.makeFixedOutputPath
                 storeDir
+                ContentAddressMethod_Text
+                (HashAlgo_SHA256 :=> digest)
+                storeRefs
                 pathName
-                textBytes
-                refs
         let effectsPath = toEffectsStorePath storeDir storePath
         modify' $ \st -> st { overlayObjects = HM.insert effectsPath (StoredFile textBytes) (overlayObjects st) }
         pure $ Right effectsPath

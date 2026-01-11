@@ -1,0 +1,3 @@
+[submodule "hnix-store"]
+	path = hnix-store
+	url = https://github.com/connorbaker/hnix-store

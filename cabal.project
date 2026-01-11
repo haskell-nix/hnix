@@ -9,7 +9,14 @@ optimization: 1
 -- cabal run --enable-profiling hnix -- --eval --expr '...' +RTS -p -RTS
 
 packages:
-  ./hnix.cabal
+  .
+  ./hnix-store/hnix-store-core
+  ./hnix-store/hnix-store-db
+  ./hnix-store/hnix-store-json
+  ./hnix-store/hnix-store-nar
+  ./hnix-store/hnix-store-readonly
+  ./hnix-store/hnix-store-remote
+  ./hnix-store/hnix-store-tests
 
 package hnix
   ghc-options: -rtsopts
