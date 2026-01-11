@@ -12,6 +12,8 @@ license:        BSD-3-Clause
 license-file:   License
 build-type:     Simple
 data-dir:       data/
+data-files:
+  nix/corepkgs/fetchurl.nix
 extra-source-files:
   ChangeLog.md
   ReadMe.md

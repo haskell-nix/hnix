@@ -7,6 +7,7 @@ module Nix.EvalStats
   , ThunkStats(..)
   , BuiltinStats(..)
   , ScopeStats(..)
+  , IOStats(..)
   , ScopeLookupResult(..)
   , newEvalStats
   , recordExprExclusive
@@ -15,6 +16,9 @@ module Nix.EvalStats
   , recordThunkCreate
   , recordBuiltin
   , recordScopeLookup
+  , recordDrvRead
+  , recordHttpFetch
+  , recordStoreAdd
   , printEvalStats
   ) where
 
@@ -85,6 +89,25 @@ instance Semigroup ScopeStats where
 instance Monoid ScopeStats where
   mempty = ScopeStats 0 0 0 0 0 0 0 0
 
+-- | Statistics for IO operations (file reads, HTTP fetches, store operations)
+data IOStats = IOStats
+  { ioFileReads      :: !Word64  -- ^ Number of file reads
+  , ioFileReadTimeNs :: !Word64  -- ^ Total time in file reads (nanoseconds)
+  , ioDrvReads       :: !Word64  -- ^ Number of .drv file reads specifically
+  , ioDrvReadTimeNs  :: !Word64  -- ^ Time in .drv file reads (nanoseconds)
+  , ioHttpFetches    :: !Word64  -- ^ Number of HTTP fetches
+  , ioHttpTimeNs     :: !Word64  -- ^ Time in HTTP operations (nanoseconds)
+  , ioStoreAdds      :: !Word64  -- ^ Number of store add operations
+  , ioStoreAddTimeNs :: !Word64  -- ^ Time in store add operations (nanoseconds)
+  } deriving (Show, Eq)
+
+instance Semigroup IOStats where
+  IOStats fr1 frt1 dr1 drt1 hf1 ht1 sa1 sat1 <> IOStats fr2 frt2 dr2 drt2 hf2 ht2 sa2 sat2 =
+    IOStats (fr1+fr2) (frt1+frt2) (dr1+dr2) (drt1+drt2) (hf1+hf2) (ht1+ht2) (sa1+sa2) (sat1+sat2)
+
+instance Monoid IOStats where
+  mempty = IOStats 0 0 0 0 0 0 0 0
+
 -- | All evaluation statistics
 data EvalStats = EvalStats
   { statsExprs     :: !(IORef (HashMap Text ExprStats))
@@ -92,6 +115,8 @@ data EvalStats = EvalStats
   , statsBuiltins  :: !(IORef (HashMap Text BuiltinStats))
   , statsScopes    :: !(IORef ScopeStats)
   , statsChildTime :: !(IORef Word64)  -- ^ Accumulated child time for exclusive timing
+  , statsIO        :: !(IORef IOStats) -- ^ Aggregate IO statistics
+  , statsIOTime    :: !(IORef Word64)  -- ^ Accumulated IO time for exclusive timing (like statsChildTime)
   }
 
 -- | Create a new empty stats collector
@@ -102,6 +127,8 @@ newEvalStats = liftIO $ EvalStats
   <*> newIORef mempty
   <*> newIORef mempty
   <*> newIORef 0
+  <*> newIORef mempty
+  <*> newIORef 0
 
 -- | Record an expression evaluation with exclusive timing
 recordExprExclusive :: MonadIO m => EvalStats -> Text -> Word64 -> Word64 -> m ()
@@ -110,13 +137,17 @@ recordExprExclusive stats name totalNs exclNs = liftIO $
     HM.insertWith (<>) name (ExprStats 1 totalNs exclNs)
 {-# INLINABLE recordExprExclusive #-}
 
--- | Execute an action with timing, tracking exclusive time
+-- | Execute an action with timing, tracking exclusive time (excluding children AND IO)
 --   Returns the result and adds the total time to parent's child time
 withExprTiming :: MonadIO m => EvalStats -> Text -> m a -> m a
 withExprTiming stats name action = do
   -- Save parent's accumulated child time and reset for our children
   parentChildTime <- liftIO $ readIORef (statsChildTime stats)
   liftIO $ writeIORef (statsChildTime stats) 0
+
+  -- Save parent's accumulated IO time and reset for our IO operations
+  parentIOTime <- liftIO $ readIORef (statsIOTime stats)
+  liftIO $ writeIORef (statsIOTime stats) 0
 
   -- Time the action
   start <- liftIO Clock.getMonotonicTimeNSec
@@ -125,15 +156,22 @@ withExprTiming stats name action = do
 
   -- Get time spent in our children
   ourChildTime <- liftIO $ readIORef (statsChildTime stats)
+  -- Get time spent in IO during this expression
+  ourIOTime <- liftIO $ readIORef (statsIOTime stats)
 
   let totalTime = end - start
-      exclTime = totalTime - ourChildTime
+      -- Exclusive time excludes both child expressions AND IO operations
+      exclTime = if totalTime > ourChildTime + ourIOTime
+                   then totalTime - ourChildTime - ourIOTime
+                   else 0
 
   -- Record our stats
   recordExprExclusive stats name totalTime exclTime
 
   -- Add our total time to parent's child time accumulator
   liftIO $ writeIORef (statsChildTime stats) (parentChildTime + totalTime)
+  -- Add our IO time to parent's IO time accumulator (IO bubbles up)
+  liftIO $ writeIORef (statsIOTime stats) (parentIOTime + ourIOTime)
 
   pure result
 {-# INLINABLE withExprTiming #-}
@@ -203,6 +241,41 @@ recordScopeLookup stats result elapsedNs = liftIO $
         , scopeTimeNs = scopeTimeNs s + elapsedNs
         }
 {-# INLINABLE recordScopeLookup #-}
+
+-- | Record a .drv file read
+--   Also updates the IO time accumulator so this time is excluded from expression exclusive time
+recordDrvRead :: MonadIO m => EvalStats -> Word64 -> m ()
+recordDrvRead stats elapsedNs = liftIO $ do
+  modifyIORef' (statsIO stats) $ \s -> s
+    { ioDrvReads = ioDrvReads s + 1
+    , ioDrvReadTimeNs = ioDrvReadTimeNs s + elapsedNs
+    , ioFileReads = ioFileReads s + 1
+    , ioFileReadTimeNs = ioFileReadTimeNs s + elapsedNs
+    }
+  modifyIORef' (statsIOTime stats) (+ elapsedNs)
+{-# INLINABLE recordDrvRead #-}
+
+-- | Record an HTTP fetch operation
+--   Also updates the IO time accumulator so this time is excluded from expression exclusive time
+recordHttpFetch :: MonadIO m => EvalStats -> Word64 -> m ()
+recordHttpFetch stats elapsedNs = liftIO $ do
+  modifyIORef' (statsIO stats) $ \s -> s
+    { ioHttpFetches = ioHttpFetches s + 1
+    , ioHttpTimeNs = ioHttpTimeNs s + elapsedNs
+    }
+  modifyIORef' (statsIOTime stats) (+ elapsedNs)
+{-# INLINABLE recordHttpFetch #-}
+
+-- | Record a store add operation
+--   Also updates the IO time accumulator so this time is excluded from expression exclusive time
+recordStoreAdd :: MonadIO m => EvalStats -> Word64 -> m ()
+recordStoreAdd stats elapsedNs = liftIO $ do
+  modifyIORef' (statsIO stats) $ \s -> s
+    { ioStoreAdds = ioStoreAdds s + 1
+    , ioStoreAddTimeNs = ioStoreAddTimeNs s + elapsedNs
+    }
+  modifyIORef' (statsIOTime stats) (+ elapsedNs)
+{-# INLINABLE recordStoreAdd #-}
 
 -- | Print statistics summary to stdout
 printEvalStats :: MonadIO m => EvalStats -> m ()
@@ -300,5 +373,28 @@ printEvalStats stats = liftIO $ do
     putStrLn $ printf "Total time:        %12.1f ms" (fromIntegral (scopeTimeNs scopes) / 1e6 :: Double)
     putStrLn $ printf "Avg time per lookup: %10.2f us"
       (fromIntegral (scopeTimeNs scopes) / fromIntegral (scopeLookups scopes) / 1e3 :: Double)
+
+  -- IO stats
+  ioStats <- readIORef (statsIO stats)
+  let totalIOOps = ioFileReads ioStats + ioHttpFetches ioStats + ioStoreAdds ioStats
+  when (totalIOOps > 0) $ do
+    putStrLn "\n-- IO Operations --"
+    putStrLn $ printf "File reads:        %12d (%12.1f ms)"
+      (ioFileReads ioStats)
+      (fromIntegral (ioFileReadTimeNs ioStats) / 1e6 :: Double)
+    when (ioDrvReads ioStats > 0) $
+      putStrLn $ printf "  .drv files:      %12d (%12.1f ms)"
+        (ioDrvReads ioStats)
+        (fromIntegral (ioDrvReadTimeNs ioStats) / 1e6 :: Double)
+    putStrLn $ printf "HTTP fetches:      %12d (%12.1f ms)"
+      (ioHttpFetches ioStats)
+      (fromIntegral (ioHttpTimeNs ioStats) / 1e6 :: Double)
+    putStrLn $ printf "Store adds:        %12d (%12.1f ms)"
+      (ioStoreAdds ioStats)
+      (fromIntegral (ioStoreAddTimeNs ioStats) / 1e6 :: Double)
+    let totalIOTimeNs = ioFileReadTimeNs ioStats + ioHttpTimeNs ioStats + ioStoreAddTimeNs ioStats
+    putStrLn $ printf "Total IO time:     %12s %12.1f ms"
+      ("" :: String)
+      (fromIntegral totalIOTimeNs / 1e6 :: Double)
 
   putStrLn "\n================================="

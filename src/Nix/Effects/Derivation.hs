@@ -42,6 +42,12 @@ import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
                                                 , callFunc
                                                 )
+import           Nix.Context                    ( askEvalStats )
+import           Nix.EvalStats                  ( recordDrvRead
+                                                , recordHttpFetch
+                                                , recordStoreAdd
+                                                )
+import qualified GHC.Clock                     as Clock
 import           Nix.Options
 import           Nix.Frames
 import           Nix.Json                       ( toJSONNixString )
@@ -180,13 +186,20 @@ hashDerivationModulo
     } =
   do
     cache <- gets snd
+    mstats <- askEvalStats
     inputsModulo <-
       Map.fromList <$>
         traverse
           (\(path, outs) ->
             maybe
               (do
+                -- Time the .drv file read (this is IO that should be excluded from pure eval time)
+                start <- liftIO Clock.getMonotonicTimeNSec
                 drv' <- readDerivation $ coerce $ toString path
+                end <- liftIO Clock.getMonotonicTimeNSec
+                -- Record the IO time so it's excluded from expression exclusive time
+                for_ mstats $ \stats -> recordDrvRead stats (end - start)
+
                 digestValue <- hashDerivationModulo drv'
                 -- Nix uses base16 when substituting derivation hashes in .drv serialization
                 let hashBytes = convert digestValue :: ByteString
@@ -336,10 +349,17 @@ executeBuiltinFetchurl cfg expectedPath = do
   -- 2. Download the URL
   -- For unpack, we don't set executable during download - we'll handle it after unpacking
   let execDuringDownload = bfExecutable cfg && not (bfUnpack cfg)
+
+  -- Time the HTTP fetch (this is IO that should be excluded from pure eval time)
+  mstats <- askEvalStats
+  start <- liftIO Clock.getMonotonicTimeNSec
   downloadResult <- fetchURLWithNameAndExecutable
     (bfUrl cfg)
     (bfName cfg)
     execDuringDownload
+  end <- liftIO Clock.getMonotonicTimeNSec
+  -- Record the IO time so it's excluded from expression exclusive time
+  for_ mstats $ \stats -> recordHttpFetch stats (end - start)
 
   downloadedPath <- case downloadResult of
     Left err -> throwError err
@@ -351,8 +371,11 @@ executeBuiltinFetchurl cfg expectedPath = do
     else pure downloadedPath
 
   -- 4. Verify hash (if this produces a different path, it's a hash mismatch)
+  -- Skip verification in overlay store mode since it uses content-addressed paths
+  -- while fixed-output derivations use declared-hash paths (different computations)
+  opts <- askOptions
   let actualPath = coerce @StorePath @Path finalPath
-  when (actualPath /= expectedStorePath) $
+  when (getStoreMode opts /= StoreOverlay && actualPath /= expectedStorePath) $
     throwError $ ErrorCall $
       "builtin:fetchurl: hash mismatch\n  expected: " <> toString expectedPath <>
       "\n  got: " <> show finalPath
@@ -494,7 +517,15 @@ defaultDerivationStrict val = do
       Nothing ->
         pure ()  -- Normal derivation, continue with writeDerivation below
 
-    (mkVarName -> drvPath) <- pathToText storeDir <$> writeDerivation drv'
+    -- Time the store add operation (writeDerivation calls addTextToStore)
+    mstats' <- askEvalStats
+    writeStart <- liftIO Clock.getMonotonicTimeNSec
+    drvStorePath <- writeDerivation drv'
+    writeEnd <- liftIO Clock.getMonotonicTimeNSec
+    -- Record the IO time so it's excluded from expression exclusive time
+    for_ mstats' $ \stats -> recordStoreAdd stats (writeEnd - writeStart)
+
+    let (mkVarName -> drvPath) = pathToText storeDir drvStorePath
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
     digestValue <- hashDerivationModulo drv'

@@ -42,7 +42,7 @@ import           Nix.Cited
 import           Nix.Cited.Basic
 import           Nix.Config.Singleton
 import           Nix.Context
-import           Nix.EvalStats                  ( EvalStats
+import           Nix.EvalStats                  ( EvalStats(..)
                                                 , newEvalStats
                                                 , printEvalStats
                                                 , recordThunkCreate
@@ -69,6 +69,7 @@ import           Nix.Thunk.Basic                ( NThunkF(..)
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
+import qualified System.IO                     as IO
 import qualified System.Nix.StorePath          as Store
 
 
@@ -237,10 +238,24 @@ instance
         -- Only check computed state when profiling (for accurate stats)
         let CitedP _ innerThunk = coerce t :: CitedStdThunk m
         wasComputed <- isComputed innerThunk
+
+        -- Save IO time before forcing (to exclude IO from pure compute time)
+        ioTimeBefore <- liftIO $ readIORef (statsIOTime stats)
+
         start <- liftIO Clock.getMonotonicTimeNSec
         result <- force @(CitedStdThunk m) (coerce t)
         end <- liftIO Clock.getMonotonicTimeNSec
-        recordThunkForce stats wasComputed (end - start)
+
+        -- Get IO time after forcing
+        ioTimeAfter <- liftIO $ readIORef (statsIOTime stats)
+        let ioTimeDuring = ioTimeAfter - ioTimeBefore
+
+        let elapsed = end - start
+            -- For cache misses, compute time excludes IO that happened during forcing
+            pureElapsed = if elapsed > ioTimeDuring then elapsed - ioTimeDuring else 0
+
+        -- For hits, record full elapsed (it's just overhead); for misses, record pure time
+        recordThunkForce stats wasComputed (if wasComputed then elapsed else pureElapsed)
         pure result
   {-# INLINABLE force #-}
 
@@ -491,6 +506,10 @@ runWithStoreEffectsIO opts action = do
   -- Create stats collector if enabled
   mstats <- if isEvalStats opts then Just <$> newEvalStats else pure Nothing
 
+  -- Warn about invalid option combinations
+  when (getStoreMode opts == StoreRemote && getStoreDir opts /= "/nix/store") $
+    IO.hPutStrLn IO.stderr "Warning: --store-dir is ignored in remote mode (nix-daemon always uses /nix/store)"
+
   -- Run the action
   result <- case getStoreMode opts of
     StoreRemote ->
@@ -500,7 +519,7 @@ runWithStoreEffectsIO opts action = do
         storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
         cfg = OverlayStoreConfig
           { overlayStoreDir = storeDir
-          , overlayReadThrough = True
+          , overlayReadThrough = isStoreReadThrough opts
           }
       in
         evalOverlayStoreT cfg defaultOverlayStoreState $
@@ -538,6 +557,10 @@ runWithStoreEffectsIOT opts action = do
     (Just <$> newEvalStats)
     (pure Nothing)
 
+  -- Warn about invalid option combinations
+  when (getStoreMode opts == StoreRemote && getStoreDir opts /= "/nix/store") $
+    IO.hPutStrLn IO.stderr "Warning: --store-dir is ignored in remote mode (nix-daemon always uses /nix/store)"
+
   -- Run the action
   result <- case getStoreMode opts of
     StoreRemote ->
@@ -547,7 +570,7 @@ runWithStoreEffectsIOT opts action = do
         storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
         cfg = OverlayStoreConfig
           { overlayStoreDir = storeDir
-          , overlayReadThrough = True
+          , overlayReadThrough = isStoreReadThrough opts
           }
       in
         evalOverlayStoreT cfg defaultOverlayStoreState $

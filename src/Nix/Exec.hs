@@ -36,7 +36,7 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Context                    ( askEvalStats )
-import           Nix.EvalStats                  ( EvalStats, withExprTiming )
+import           Nix.EvalStats                  ( EvalStats(..), withExprTiming )
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
@@ -598,11 +598,27 @@ addTiming
   -> Alg NExprLocF (m a)
   -> Alg NExprLocF (m a)
 addTiming thresholdMs k v@(AnnF span x) = do
+  mstats <- askEvalStats
+  -- Get IO time before evaluation (if stats available)
+  ioTimeBefore <- case mstats of
+    Just stats -> liftIO $ readIORef (statsIOTime stats)
+    Nothing -> pure 0
+
   start <- liftIO Clock.getMonotonicTimeNSec
   res <- k v
   end <- liftIO Clock.getMonotonicTimeNSec
-  let elapsedMs :: Int
-      elapsedMs = fromIntegral ((end - start) `div` 1000000)
+
+  -- Get IO time after evaluation and compute pure elapsed time
+  ioTimeAfter <- case mstats of
+    Just stats -> liftIO $ readIORef (statsIOTime stats)
+    Nothing -> pure 0
+  let ioTimeDuring = ioTimeAfter - ioTimeBefore
+      totalNs = end - start
+      -- Exclude IO time from the reported timing
+      pureNs = if totalNs > ioTimeDuring then totalNs - ioTimeDuring else 0
+      elapsedMs :: Int
+      elapsedMs = fromIntegral (pureNs `div` 1000000)
+
   when (elapsedMs >= max 0 thresholdMs) $ do
     let headTag = Text.pack (show (toConstr (void x)))
     let msg =

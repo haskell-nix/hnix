@@ -191,8 +191,12 @@ instance MonadIO m => MonadStoreRead (OverlayStoreT m) where
               Left (e :: Exception.SomeException) ->
                 Left $ ErrorCall $ "readStoreFile failed for " <> show path <> ": " <> show e
               Right bytes -> Right bytes
-          else
-            pure $ Left $ ErrorCall $ "readStoreFile: " <> show path <> " not found in overlay store"
+          else do
+            storeDir <- asks overlayStoreDir
+            pure $ Left $ ErrorCall $
+              "Store path not found in isolated overlay store: " <> show path <>
+              "\nStore directory: " <> show storeDir <>
+              "\nHint: Remove --no-store-read-through to enable fallback to filesystem."
 
   readStoreDir path = do
     mobj <- resolveStoredObject path
@@ -214,8 +218,12 @@ instance MonadIO m => MonadStoreRead (OverlayStoreT m) where
               Right items -> do
                 entries <- liftIO $ traverse (fileTypeForEntry base) items
                 pure $ Right entries
-          else
-            pure $ Left $ ErrorCall $ "readStoreDir: " <> show path <> " not found in overlay store"
+          else do
+            storeDir <- asks overlayStoreDir
+            pure $ Left $ ErrorCall $
+              "Store path not found in isolated overlay store: " <> show path <>
+              "\nStore directory: " <> show storeDir <>
+              "\nHint: Remove --no-store-read-through to enable fallback to filesystem."
 
   readStoreFileType path = do
     mobj <- resolveStoredObject path
@@ -230,8 +238,12 @@ instance MonadIO m => MonadStoreRead (OverlayStoreT m) where
               Left (e :: Exception.SomeException) ->
                 Left $ ErrorCall $ "readStoreFileType failed for " <> show path <> ": " <> show e
               Right status -> Right $ fileTypeFromStatus status
-          else
-            pure $ Left $ ErrorCall $ "readStoreFileType: " <> show path <> " not found in overlay store"
+          else do
+            storeDir <- asks overlayStoreDir
+            pure $ Left $ ErrorCall $
+              "Store path not found in isolated overlay store: " <> show path <>
+              "\nStore directory: " <> show storeDir <>
+              "\nHint: Remove --no-store-read-through to enable fallback to filesystem."
 
 toEffectsStorePath :: Store.StoreDir -> Store.StorePath -> StorePath
 toEffectsStorePath storeDir =

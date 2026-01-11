@@ -45,6 +45,9 @@ data Options =
     , getFilePaths   :: [Path]
     , getStoreDir    :: Path
     , getStoreMode   :: StoreMode
+    , isStoreReadThrough :: Bool
+    -- ^ When using overlay store mode, whether to read-through to the real
+    -- filesystem for paths not in the overlay. Default True for backwards compat.
     , isFetchurlNoDownload :: Bool
     }
     deriving Show
@@ -91,6 +94,7 @@ defaultOptions currentTime =
     , getFilePaths   = mempty
     , getStoreDir    = "/nix/store"
     , getStoreMode   = StoreRemote
+    , isStoreReadThrough = True
     , isFetchurlNoDownload = False
     }
 

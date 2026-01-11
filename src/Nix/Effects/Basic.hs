@@ -31,6 +31,9 @@ import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
                                                 , evalExprLoc
                                                 )
+import           Nix.Context                    ( askEvalStats )
+import           Nix.EvalStats                  ( recordHttpFetch, recordStoreAdd )
+import qualified GHC.Clock                     as Clock
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
@@ -217,6 +220,7 @@ fetchTarball =
   fetch :: Text -> Maybe Text -> Maybe Text -> m (NValue t f m)
   fetch uri mSha mName = do
     opts <- askOptions
+    mstats <- askEvalStats
     let defaultName = "source"
     let name0 = fromMaybe defaultName mName
     let name = if Text.null name0 then baseNameOf uri else name0
@@ -226,7 +230,11 @@ fetchTarball =
         throwError $ ErrorCall $ "builtins.fetchTarball: invalid store path name '" <> show name <> "': " <> show err
       Right n -> pure n
 
+    -- Instrument getURL for IO timing
+    start <- liftIO Clock.getMonotonicTimeNSec
     tarPath <- either throwError pure =<< getURL uri
+    end <- liftIO Clock.getMonotonicTimeNSec
+    for_ mstats $ \stats -> recordHttpFetch stats (end - start)
     tarBytes <- either throwError pure =<< readStoreFile (coerce tarPath)
 
     tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
@@ -269,7 +277,11 @@ fetchTarball =
           Right _ ->
             throwError $ ErrorCall "builtins.fetchTarball: unsupported hash algorithm"
 
+    -- Instrument addToStore for IO timing
+    storeStart <- liftIO Clock.getMonotonicTimeNSec
     res <- addToStore name (NarFile $ coerce rootDir) True False
+    storeEnd <- liftIO Clock.getMonotonicTimeNSec
+    for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
     storePath <- either throwError pure res
     liftIO $ Directory.removeDirectoryRecursive tmpDir
     toValue storePath
@@ -568,6 +580,7 @@ fetchGitWorkingTree
   -> FilePath
   -> m FetchGitResult
 fetchGitWorkingTree args path = do
+  mstats <- askEvalStats
   repoRoot <- runGitIn path ["rev-parse", "--show-toplevel"]
   let repoRootFp = toString repoRoot
   dirty <- isRepoDirty repoRootFp
@@ -586,7 +599,11 @@ fetchGitWorkingTree args path = do
 
   narHash <- liftIO $ computeNarHashSRI tmpDir
   storeName <- mkStoreName "builtins.fetchGit" (fgName args)
+  -- Instrument addToStore for IO timing
+  storeStart <- liftIO Clock.getMonotonicTimeNSec
   res <- addToStore storeName (NarFile $ coerce tmpDir) True False
+  storeEnd <- liftIO Clock.getMonotonicTimeNSec
+  for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
   storePath <- either throwError pure res
   liftIO $ Directory.removeDirectoryRecursive tmpDir
 
@@ -629,6 +646,7 @@ fetchGitFromLocalRepo
   -> FilePath
   -> m FetchGitResult
 fetchGitFromLocalRepo args path = do
+  mstats <- askEvalStats
   repoRoot <- runGitIn path ["rev-parse", "--show-toplevel"]
   let repoRootFp = toString repoRoot
 
@@ -646,7 +664,11 @@ fetchGitFromLocalRepo args path = do
         throwError $ ErrorCall $ "builtins.fetchGit: failed to unpack archive: " <> err
       narHash <- liftIO $ computeNarHashSRI unpackDir
       storeName <- mkStoreName "builtins.fetchGit" (fgName args)
+      -- Instrument addToStore for IO timing
+      storeStart <- liftIO Clock.getMonotonicTimeNSec
       res <- addToStore storeName (NarFile $ coerce unpackDir) True False
+      storeEnd <- liftIO Clock.getMonotonicTimeNSec
+      for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
       storePath <- either throwError pure res
       liftIO $ Directory.removeDirectoryRecursive tmpDir
 
@@ -673,6 +695,7 @@ fetchGitCloneRepo
   -> Text
   -> m FetchGitResult
 fetchGitCloneRepo args cloneUrl = do
+  mstats <- askEvalStats
   tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
   tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-fetchGit"
   let repoDir = tmpDir FP.</> "repo"
@@ -724,7 +747,11 @@ fetchGitCloneRepo args cloneUrl = do
   narHash <- liftIO $ computeNarHashSRI contentDir
 
   storeName <- mkStoreName "builtins.fetchGit" (fgName args)
+  -- Instrument addToStore for IO timing
+  storeStart <- liftIO Clock.getMonotonicTimeNSec
   res <- addToStore storeName (NarFile $ coerce contentDir) True False
+  storeEnd <- liftIO Clock.getMonotonicTimeNSec
+  for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
   storePath <- either throwError pure res
   liftIO $ Directory.removeDirectoryRecursive tmpDir
   pure FetchGitResult
@@ -772,8 +799,13 @@ gitLsRemoteHead
   => Text
   -> m (Maybe Text)
 gitLsRemoteHead url = do
+  mstats <- askEvalStats
+  -- Instrument git ls-remote for IO timing
+  start <- liftIO Clock.getMonotonicTimeNSec
   (exitCode, out, _err) <- liftIO $
     readProcessWithExitCode "git" ["ls-remote", "--symref", toString url, "HEAD"] ""
+  end <- liftIO Clock.getMonotonicTimeNSec
+  for_ mstats $ \stats -> recordHttpFetch stats (end - start)
   case exitCode of
     ExitSuccess -> pure $ parseLsRemoteHead out
     ExitFailure _ -> pure Nothing
@@ -972,10 +1004,15 @@ runGitFetch
   -> Bool
   -> m ()
 runGitFetch repo url refspec shallow = do
+  mstats <- askEvalStats
   let baseArgs = ["-C", repo, "fetch", "--progress", "--force"]
   let depthArgs = if shallow then ["--depth", "1"] else []
   let args = baseArgs <> depthArgs <> ["--", toString url, toString refspec]
+  -- Instrument git fetch for IO timing
+  start <- liftIO Clock.getMonotonicTimeNSec
   runGit args
+  end <- liftIO Clock.getMonotonicTimeNSec
+  for_ mstats $ \stats -> recordHttpFetch stats (end - start)
 
 runGitLfs
   :: forall e t f m
@@ -983,7 +1020,12 @@ runGitLfs
   => FilePath
   -> m ()
 runGitLfs repo = do
+  mstats <- askEvalStats
+  -- Instrument git lfs fetch for IO timing
+  start <- liftIO Clock.getMonotonicTimeNSec
   _ <- runGitIn repo ["lfs", "fetch"]
+  end <- liftIO Clock.getMonotonicTimeNSec
+  for_ mstats $ \stats -> recordHttpFetch stats (end - start)
   _ <- runGitIn repo ["lfs", "checkout"]
   pure ()
 

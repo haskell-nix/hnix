@@ -2320,10 +2320,10 @@ fetchurlNix =
         throwError $ ErrorCall $ "builtins.fetchurl: invalid store path name '" <> show name <> "': " <> show err
       Right n -> pure n
 
-    -- Use the default /nix/store for expected path computation because
-    -- addToStore (via nix-daemon) always returns paths in /nix/store,
-    -- regardless of the --store-dir option.
-    let storeDir = Store.StoreDir "/nix/store"
+    -- Use the configured store directory for path computation.
+    -- When using overlay mode, addToStore uses this directory.
+    -- When using remote mode (nix-daemon), /nix/store is always used anyway.
+    let storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
 
     mDigest <- case (mHash, mSha) of
       (Just h, _) ->
