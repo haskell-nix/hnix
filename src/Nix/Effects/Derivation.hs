@@ -2,7 +2,6 @@
 {-# language DataKinds #-}
 {-# language ExistentialQuantification #-}
 {-# language NamedFieldPuns #-}
-{-# language PackageImports #-}
 {-# language RecordWildCards #-}
 {-# language Strict #-}
 {-# language TypeApplications #-}
@@ -33,7 +32,7 @@ import qualified System.PosixCompat.Files      as Posix
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
-import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+import qualified Crypto.Hash                   as Hash
 
 import           Nix.Atoms
 import           Nix.Expr.Types          hiding ( Recursive )
@@ -62,14 +61,13 @@ import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Store.ReadOnly     as StoreRO
 import qualified System.Nix.Nar                as Nar
 import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
-import qualified "crypton" Crypto.Hash         as CryptonHash
 import           Data.Dependent.Sum             ( DSum(..) )
 import qualified Data.Dependent.Sum            as DSum
 import qualified Control.Monad.State           as State
 
 -- Type for fixed-output derivation hash digest
 -- Digest comes from crypton (Crypto.Hash.Digest)
-type HashDigest = DSum Store.HashAlgo CryptonHash.Digest
+type HashDigest = DSum Store.HashAlgo Hash.Digest
 
 -- Helper functions to work with HashDigest
 hashDigestAlgoText :: HashDigest -> Text
@@ -86,7 +84,7 @@ computeContentHash mode expectedHash path = liftIO $ case expectedHash of
   (Store.HashAlgo_SHA256 DSum.:=> _) -> case mode of
     Flat -> do
       bytes <- B.readFile path
-      pure $ Store.HashAlgo_SHA256 DSum.:=> CryptonHash.hash bytes
+      pure $ Store.HashAlgo_SHA256 DSum.:=> Hash.hash bytes
     Recursive -> do
       digest <- computeNarHashSHA256 path
       pure $ Store.HashAlgo_SHA256 DSum.:=> digest
@@ -95,14 +93,14 @@ computeContentHash mode expectedHash path = liftIO $ case expectedHash of
   _ -> error $ "computeContentHash: unsupported hash algorithm: " <> show (hashDigestAlgoText expectedHash)
  where
   -- Compute NAR hash using SHA256 (streaming to avoid loading entire NAR into memory)
-  computeNarHashSHA256 :: FilePath -> IO (CryptonHash.Digest CryptonHash.SHA256)
+  computeNarHashSHA256 :: FilePath -> IO (Hash.Digest Hash.SHA256)
   computeNarHashSHA256 p =
-    CryptonHash.hashFinalize
+    Hash.hashFinalize
       <$> State.execStateT
             (Nar.streamNarIO Nar.narEffectsIO p updateHash)
-            (CryptonHash.hashInit @CryptonHash.SHA256)
+            (Hash.hashInit @Hash.SHA256)
    where
-    updateHash chunk = State.modify (\ctx -> CryptonHash.hashUpdate ctx chunk)
+    updateHash chunk = State.modify (\ctx -> Hash.hashUpdate ctx chunk)
 
 --  2021-07-17: NOTE: Derivation consists of @"keys"@ @"vals"@ (of text), so underlining type boundary currently stops here.
 data Derivation = Derivation
@@ -397,7 +395,7 @@ executeBuiltinFetchurl cfg expectedPath = do
   case bfExpectedHash cfg of
     Nothing -> pure ()
     Just expectedHash -> do
-      let actualHash = Store.HashAlgo_SHA256 DSum.:=> CryptonHash.hash contentBytes
+      let actualHash = Store.HashAlgo_SHA256 DSum.:=> Hash.hash contentBytes
       when (actualHash /= expectedHash) $
         throwError $ ErrorCall $
           "builtin:fetchurl: hash mismatch for " <> toString (bfUrl cfg) <>
@@ -638,7 +636,7 @@ defaultDerivationStrict val = do
       -- Convert cryptonite digest to crypton digest (both have same byte representation)
       let bytes :: ByteString
           bytes = convert h
-          Just cryptonDigest = CryptonHash.digestFromByteString bytes
+          Just cryptonDigest = Hash.digestFromByteString bytes
           storePath = StoreRO.makeOutputPath storeDir' o cryptonDigest outputPathName
       pure $ pathToText storeDir' storePath
 
