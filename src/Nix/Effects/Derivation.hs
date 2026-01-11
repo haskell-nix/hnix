@@ -28,6 +28,7 @@ import qualified System.FilePath               as FP
 import qualified System.IO.Temp                as Temp
 import           System.Exit                    ( ExitCode(..) )
 import           System.Process                 ( readProcessWithExitCode )
+import qualified System.PosixCompat.Files      as Posix
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -59,9 +60,11 @@ import           Nix.Value.Monad
 
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
+import qualified System.Nix.Nar                as Nar
 import qualified "crypton" Crypto.Hash         as CryptonHash
 import           Data.Dependent.Sum             ( DSum(..) )
 import qualified Data.Dependent.Sum            as DSum
+import qualified Control.Monad.State           as State
 
 -- Type for fixed-output derivation hash digest
 -- Digest comes from crypton (Crypto.Hash.Digest)
@@ -73,6 +76,32 @@ hashDigestAlgoText (hashAlgo DSum.:=> _) = Store.algoToText hashAlgo
 
 hashDigestText :: HashDigest -> Text
 hashDigestText (_ DSum.:=> hashDigest) = Store.encodeDigestWith Store.Base16 hashDigest
+
+-- | Compute the hash of content using the specified mode and algorithm
+-- For Flat mode: hash the file bytes directly
+-- For Recursive mode: compute NAR hash of the path
+computeContentHash :: MonadIO m => HashMode -> HashDigest -> FilePath -> m HashDigest
+computeContentHash mode expectedHash path = liftIO $ case expectedHash of
+  (Store.HashAlgo_SHA256 DSum.:=> _) -> case mode of
+    Flat -> do
+      bytes <- B.readFile path
+      pure $ Store.HashAlgo_SHA256 DSum.:=> CryptonHash.hash bytes
+    Recursive -> do
+      digest <- computeNarHashSHA256 path
+      pure $ Store.HashAlgo_SHA256 DSum.:=> digest
+  -- For other algorithms, we'd need to add similar cases
+  -- For now, error on unsupported algorithms
+  _ -> error $ "computeContentHash: unsupported hash algorithm: " <> show (hashDigestAlgoText expectedHash)
+ where
+  -- Compute NAR hash using SHA256 (streaming to avoid loading entire NAR into memory)
+  computeNarHashSHA256 :: FilePath -> IO (CryptonHash.Digest CryptonHash.SHA256)
+  computeNarHashSHA256 p =
+    CryptonHash.hashFinalize
+      <$> State.execStateT
+            (Nar.streamNarIO Nar.narEffectsIO p updateHash)
+            (CryptonHash.hashInit @CryptonHash.SHA256)
+   where
+    updateHash chunk = State.modify (\ctx -> CryptonHash.hashUpdate ctx chunk)
 
 --  2021-07-17: NOTE: Derivation consists of @"keys"@ @"vals"@ (of text), so underlining type boundary currently stops here.
 data Derivation = Derivation
@@ -338,11 +367,12 @@ derivationParser = do
 
 -- | Execute the builtin:fetchurl builder
 -- This downloads a URL and optionally unpacks it, adding the result to the store
+-- Uses proper hash verification: compares declared hash vs actual content hash
 executeBuiltinFetchurl
   :: forall e t f m
    . (MonadNix e t f m)
   => BuiltinFetchurlConfig
-  -> Text                  -- ^ Expected output path
+  -> Text                  -- ^ Expected output path (computed from declared hash)
   -> m ()
 executeBuiltinFetchurl cfg expectedPath = do
   -- 1. Check if output already exists (cache hit)
@@ -350,39 +380,97 @@ executeBuiltinFetchurl cfg expectedPath = do
   exists <- storePathExists expectedStorePath
   when exists $ pure ()
 
-  -- 2. Download the URL
-  -- For unpack, we don't set executable during download - we'll handle it after unpacking
-  let execDuringDownload = bfExecutable cfg && not (bfUnpack cfg)
-
-  -- Time the HTTP fetch (this is IO that should be excluded from pure eval time)
+  -- 2. Download the URL content to bytes (not using addToStore)
   mstats <- askEvalStats
   start <- liftIO Clock.getMonotonicTimeNSec
-  downloadResult <- fetchURLWithNameAndExecutable
-    (bfUrl cfg)
-    (bfName cfg)
-    execDuringDownload
+  downloadResult <- downloadUrlBytes (bfUrl cfg)
   end <- liftIO Clock.getMonotonicTimeNSec
-  -- Record the IO time so it's excluded from expression exclusive time
   for_ mstats $ \stats -> recordHttpFetch stats (end - start)
 
-  downloadedPath <- case downloadResult of
+  contentBytes <- case downloadResult of
     Left err -> throwError err
-    Right sp -> pure sp
+    Right bytes -> pure bytes
 
-  -- 3. Handle unpacking if needed
-  finalPath <- if bfUnpack cfg
-    then unpackAndAddToStore cfg downloadedPath
-    else pure downloadedPath
+  -- 3. Verify hash of downloaded content BEFORE unpacking
+  -- The declared hash is always for the downloaded bytes, not unpacked content
+  case bfExpectedHash cfg of
+    Nothing -> pure ()
+    Just expectedHash -> do
+      let actualHash = Store.HashAlgo_SHA256 DSum.:=> CryptonHash.hash contentBytes
+      when (actualHash /= expectedHash) $
+        throwError $ ErrorCall $
+          "builtin:fetchurl: hash mismatch for " <> toString (bfUrl cfg) <>
+          "\n  specified: " <> toString (hashDigestAlgoText expectedHash) <> ":" <> toString (hashDigestText expectedHash) <>
+          "\n       got: " <> toString (hashDigestAlgoText actualHash) <> ":" <> toString (hashDigestText actualHash)
 
-  -- 4. Verify hash (if this produces a different path, it's a hash mismatch)
-  -- Skip verification in overlay store mode since it uses content-addressed paths
-  -- while fixed-output derivations use declared-hash paths (different computations)
-  opts <- askOptions
-  let actualPath = coerce @StorePath @Path finalPath
-  when (getStoreMode opts /= StoreOverlay && actualPath /= expectedStorePath) $
-    throwError $ ErrorCall $
-      "builtin:fetchurl: hash mismatch\n  expected: " <> toString expectedPath <>
-      "\n  got: " <> show finalPath
+  -- 4. Write to temp file and handle unpacking/executable
+  tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
+  tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-builtin-fetchurl"
+
+  finalContentPath <- if bfUnpack cfg
+    then do
+      -- Write archive to temp file for unpacking
+      let tarFile = tmpDir FP.</> "archive"
+      liftIO $ B.writeFile tarFile contentBytes
+      -- Unpack
+      let unpackDir = tmpDir FP.</> "unpack"
+      liftIO $ Directory.createDirectory unpackDir
+      (exitCode, _out, err) <- liftIO $ readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
+      when (exitCode /= ExitSuccess) $
+        throwError $ ErrorCall $ "builtin:fetchurl: failed to unpack archive: " <> err
+      -- Find root directory
+      rootDir <- liftIO $ pickUnpackRoot unpackDir
+      -- Set executable if needed
+      when (bfExecutable cfg) $
+        liftIO $ setExecutableRecursive rootDir
+      pure rootDir
+    else do
+      -- Write content directly
+      let contentFile = tmpDir FP.</> "content"
+      liftIO $ B.writeFile contentFile contentBytes
+      when (bfExecutable cfg) $
+        liftIO $ setExecutableFile contentFile
+      pure contentFile
+
+  -- 5. Store at the expected path (computed from declared hash)
+  let storePath = StorePath expectedStorePath
+  storeResult <- addToStoreAt storePath (NarFile $ coerce finalContentPath)
+  liftIO $ Directory.removeDirectoryRecursive tmpDir
+  case storeResult of
+    Left err -> throwError err
+    Right () -> pure ()
+ where
+  -- Find the root directory after unpacking (handle single-dir archives)
+  pickUnpackRoot :: FilePath -> IO FilePath
+  pickUnpackRoot unpackDir = do
+    entries <- Directory.listDirectory unpackDir
+    case entries of
+      [single] -> do
+        let singlePath = unpackDir FP.</> single
+        isDir <- Directory.doesDirectoryExist singlePath
+        pure $ if isDir then singlePath else unpackDir
+      _ -> pure unpackDir
+
+  -- Set executable bit on a file
+  setExecutableFile :: FilePath -> IO ()
+  setExecutableFile f = do
+    st <- Posix.getSymbolicLinkStatus f
+    let p = Posix.fileMode st
+            `Posix.unionFileModes` Posix.ownerExecuteMode
+            `Posix.unionFileModes` Posix.groupExecuteMode
+            `Posix.unionFileModes` Posix.otherExecuteMode
+    Posix.setFileMode f p
+
+  -- Set executable bit recursively
+  setExecutableRecursive :: FilePath -> IO ()
+  setExecutableRecursive dir = do
+    entries <- Directory.listDirectory dir
+    for_ entries $ \entry -> do
+      let path = dir FP.</> entry
+      isDir <- Directory.doesDirectoryExist path
+      if isDir
+        then setExecutableRecursive path
+        else setExecutableFile path
 
 -- | Unpack an archive and add the result to the store
 unpackAndAddToStore
@@ -499,27 +587,9 @@ defaultDerivationStrict val = do
           , env = modEnv (outputs' <>)
           }
 
-    -- Handle builtin builders (like builtin:fetchurl)
-    case Text.stripPrefix "builtin:" (builder drv') of
-      Just "fetchurl" -> do
-        -- Parse configuration from derivation environment
-        cfg <- case parseBuiltinFetchurlConfig drv' of
-          Left err -> throwError $ ErrorCall $ Text.unpack err
-          Right c -> pure c
-
-        -- Get expected output path (builtin:fetchurl only supports single "out" output)
-        expectedOut <- case Map.lookup "out" (outputs drv') of
-          Just path -> pure path
-          Nothing -> throwError $ ErrorCall "builtin:fetchurl: missing 'out' output"
-
-        -- Execute the fetch (downloads URL, optionally unpacks, adds to store)
-        executeBuiltinFetchurl cfg expectedOut
-
-      Just other ->
-        throwError $ ErrorCall $ "Unknown builtin builder: builtin:" <> Text.unpack other
-
-      Nothing ->
-        pure ()  -- Normal derivation, continue with writeDerivation below
+    -- Note: builtin builders (like builtin:fetchurl) are NOT executed during evaluation.
+    -- The .drv file records what should happen at build time. For fixed-output derivations,
+    -- the output path is already computed from the declared hash (makeFixedOutputPath above).
 
     -- Time the store add operation (writeDerivation calls addTextToStore)
     mstats' <- askEvalStats

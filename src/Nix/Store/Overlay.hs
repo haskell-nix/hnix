@@ -161,6 +161,19 @@ instance MonadIO m => MonadStore (OverlayStoreT m) where
         modify' $ \st -> st { overlayObjects = HM.insert effectsPath (StoredFile textBytes) (overlayObjects st) }
         pure $ Right effectsPath
 
+  -- Store content at a pre-computed path (for fixed-output derivations)
+  -- The path is computed from the declared hash, not from content
+  addToStoreAt storePath content = do
+    objRes <- case content of
+      NarText bytes -> pure $ Right $ StoredFile bytes
+      NarFile path -> liftIO $ Exception.try $ readStoredObjectFromDisk (coerce path)
+    case objRes of
+      Left (e :: Exception.SomeException) ->
+        pure $ Left $ ErrorCall $ "addToStoreAt failed for " <> show storePath <> ": " <> show e
+      Right obj -> do
+        modify' $ \st -> st { overlayObjects = HM.insert storePath obj (overlayObjects st) }
+        pure $ Right ()
+
 instance MonadIO m => MonadStoreRead (OverlayStoreT m) where
   storePathExists path = do
     mobj <- resolveStoredObject path

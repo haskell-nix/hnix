@@ -430,6 +430,80 @@ fetchURLWithName url name = fetchURLWithNameAndExecutable url name False
 fetchURLWith :: (MonadIO m, MonadStore m) => Text -> m (Either ErrorCall StorePath)
 fetchURLWith url = fetchURLWithName url (baseNameOf url)
 
+-- | Download URL content and return raw bytes (for hash verification before storing)
+-- This is used by builtin:fetchurl to verify hashes before storing at the expected path
+downloadUrlBytes :: MonadIO m => Text -> m (Either ErrorCall B.ByteString)
+downloadUrlBytes url = do
+  let urlstr = toString url
+  traceM $ "fetching HTTP URL: " <> urlstr
+  req <- liftIO $ parseRequest urlstr
+  let supported = (def :: TLS.Supported)
+        { TLS.supportedExtendedMainSecret = TLS.AllowEMS
+        }
+  let tlsSettings = NC.TLSSettingsSimple
+        { NC.settingDisableCertificateValidation = False
+        , NC.settingDisableSession = False
+        , NC.settingUseServerName = False
+        , NC.settingClientSupported = supported
+        }
+  manager <- liftIO $ newTlsManagerWith (mkManagerSettings tlsSettings Nothing)
+  let req' = req
+        { method = "GET"
+        , requestHeaders = ("User-Agent", nixUserAgent) : requestHeaders req
+        }
+  let maxAttempts = 5 :: Int
+  let baseDelayUs = 500000 :: Int
+  let maxDelayUs = 8000000 :: Int
+
+  let retryDelay attempt multiplier =
+        let raw = baseDelayUs * multiplier * (2 ^ (attempt - 1))
+        in min maxDelayUs raw
+
+  let isRetryableStatus s =
+        s == 408
+          || s == 429
+          || (s >= 500 && s < 600 && s /= 501 && s /= 505 && s /= 511)
+
+  let isRetryableHttpException = \case
+        HttpExceptionRequest _ (StatusCodeException response _) ->
+          isRetryableStatus (statusCode $ responseStatus response)
+        HttpExceptionRequest _ ResponseTimeout -> True
+        HttpExceptionRequest _ ConnectionTimeout -> True
+        HttpExceptionRequest _ (ConnectionFailure _) -> True
+        HttpExceptionRequest _ ConnectionClosed -> True
+        HttpExceptionRequest _ (ProxyConnectException _ _ _) -> True
+        HttpExceptionRequest _ NoResponseDataReceived -> True
+        _ -> False
+
+  let fetchOnce = liftIO $ Exception.try (httpLbs req' manager)
+
+  let go attempt = do
+        respOrErr <- fetchOnce
+        case respOrErr of
+          Right response -> do
+            let status = statusCode $ responseStatus response
+            if status == 200
+              then pure $ Right $ toStrict (responseBody response)
+              else if attempt < maxAttempts && isRetryableStatus status
+                then do
+                  let delayUs = retryDelay attempt (if status == 429 then 4 else 1)
+                  traceM $ "fetchurl: got " <> show status <> ", retrying in " <> show (delayUs `div` 1000) <> "ms"
+                  liftIO $ Concurrent.threadDelay delayUs
+                  go (attempt + 1)
+                else
+                  pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr
+          Left (e :: HttpException) ->
+            if attempt < maxAttempts && isRetryableHttpException e
+              then do
+                let delayUs = retryDelay attempt 1
+                traceM $ "fetchurl: " <> show e <> ", retrying in " <> show (delayUs `div` 1000) <> "ms"
+                liftIO $ Concurrent.threadDelay delayUs
+                go (attempt + 1)
+              else
+                pure $ Left $ ErrorCall $ "fetchurl: " <> show e
+
+  go 1
+
 setExecutableFile :: FilePath -> IO ()
 setExecutableFile f = do
   st <- Posix.getSymbolicLinkStatus f
@@ -601,6 +675,12 @@ class
   default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
+  -- | Store content at a pre-computed path (for fixed-output derivations)
+  -- This is used when the store path is computed from a declared hash rather than content hash
+  addToStoreAt :: StorePath -> NarContent -> m (Either ErrorCall ())
+  default addToStoreAt :: (MonadTrans t, MonadStore m', m ~ t m') => StorePath -> NarContent -> m (Either ErrorCall ())
+  addToStoreAt sp content = lift $ addToStoreAt sp content
+
 
 -- *** Instances
 
@@ -647,6 +727,13 @@ instance MonadStore IO where
           Left -- err
           (pure . toStorePath) -- path
           <$> parseStoreResult "addTextToStore" res
+
+  -- For real store, addToStoreAt would need to write content to the specified path
+  -- This is mainly used for fixed-output derivations in overlay mode
+  -- For now, error in IO mode since it's not implemented
+  addToStoreAt (StorePath path) _content =
+    pure $ Left $ ErrorCall $
+      "addToStoreAt not implemented for real store. Path: " <> show path
 
 
 -- ** Functions

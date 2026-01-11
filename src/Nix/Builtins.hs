@@ -2301,7 +2301,6 @@ fetchurlNix =
   fetchUrls :: Maybe Text -> Maybe Text -> Maybe Text -> Bool -> [Text] -> m (NValue t f m)
   fetchUrls mHashRaw mShaRaw mNameRaw executable urls = do
     opts <- askOptions
-    let skipDownload = isFetchurlNoDownload opts
     let urlsExpanded = concatMap expandUrl urls
     let mHash = nonEmptyText mHashRaw
     let mSha = nonEmptyText mShaRaw
@@ -2361,17 +2360,9 @@ fetchurlNix =
             when (getVerbosity opts >= Talkative) $
               traceEffect @t @f @m $ "fetchurl: using existing " <> show expectedPath
             toValue expectedPath
-          else if skipDownload
-            then do
-              when (getVerbosity opts >= Talkative) $
-                traceEffect @t @f @m $
-                  "fetchurl: skipping download, returning expected " <> show expectedPath
-              toValue expectedPath
-            else go opts mExpected name executable urlsExpanded
-      Nothing ->
-        if skipDownload
-          then throwError $ ErrorCall "builtins.fetchurl: --fetchurl-no-download requires a hash (sha256/hash)"
           else go opts mExpected name executable urlsExpanded
+      Nothing ->
+        go opts mExpected name executable urlsExpanded
     where
       go _opts _mExpected _name _exec [] =
         throwError $ ErrorCall "builtins.fetchurl: empty URL list"
