@@ -167,17 +167,21 @@ hashDerivationModulo
     , hashMode
     , name
     } =
-  do
-    -- For fixed-output derivations, hash a special string encoding the content address
-    -- Format: "fixed:out:<hashMode>:<hashAlgo>:<hash>"
-    -- This allows multiple derivations to share the same hash if they produce the same output
-    let algoText = hashDigestAlgoText digest
-    let hashText = hashDigestText digest
-    let modePrefix = case hashMode of
-          Recursive -> "r:"
-          Flat -> mempty
-    let toHash = "fixed:out:" <> modePrefix <> algoText <> ":" <> hashText
-    pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 toHash
+  -- For fixed-output derivations, hash a special string encoding the content address
+  -- Format: "fixed:out:<hashMode>:<hashAlgo>:<hash>:<outputPath>"
+  -- This allows multiple derivations to share the same hash if they produce the same output
+  case Map.lookup "out" outputs of
+    Just outputPath -> do
+      let algoText = hashDigestAlgoText digest
+      let hashText = hashDigestText digest
+      let modePrefix = case hashMode of
+            Recursive -> "r:"
+            Flat -> mempty
+      let toHash = "fixed:out:" <> modePrefix <> algoText <> ":" <> hashText <> ":" <> outputPath
+      pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 toHash
+    Nothing ->
+      throwError $ ErrorCall $
+        "Fixed-output derivation '" <> toString name <> "' must have exactly one output named 'out'"
 hashDerivationModulo
   drv@Derivation
     { inputs = ( inputSrcs
