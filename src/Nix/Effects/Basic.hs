@@ -57,6 +57,7 @@ import qualified System.Nix.Store.ReadOnly     as StoreRO
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Store.Types        as StoreTypes
 import qualified System.Nix.Hash               as StoreHash
+import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
 
 #ifdef MIN_VERSION_ghc_datasize
 import           GHC.DataSize
@@ -255,7 +256,7 @@ fetchTarball =
         storeDir
         storeName
         rootDir
-        StoreTypes.FileIngestionMethod_FileRecursive
+        ContentAddressMethod_NixArchive
         (StoreTypes.PathFilter (const True))
         StoreTypes.RepairMode_DontRepair
 
@@ -268,8 +269,9 @@ fetchTarball =
             let expectedPath =
                   StoreRO.makeFixedOutputPath
                     storeDir
-                    StoreTypes.FileIngestionMethod_FileRecursive
-                    digest
+                    ContentAddressMethod_NixArchive
+                    (StoreHash.HashAlgo_SHA256 :=> digest)
+                    mempty
                     storeName
             when (expectedPath /= actualPath) $
               throwError $ ErrorCall $

@@ -25,16 +25,25 @@
         };
         overlays = [ haskellNix.overlay
           (final: prev: {
+            # Source for hnix-store-json that includes upstream test data
+            hnix-store-json-src = final.lib.fileset.toSource {
+              root = ./hnix-store;
+              fileset = final.lib.fileset.unions [
+                ./hnix-store/hnix-store-json
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libstore-tests/data/build-result)
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libstore-tests/data/content-address)
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libstore-tests/data/derived-path)
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libstore-tests/data/outputs-spec)
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libstore-tests/data/realisation)
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libstore-tests/data/store-path)
+                (final.lib.fileset.fileFilter (file: file.hasExt "json") ./hnix-store/upstream-nix/src/libutil-tests/data/hash)
+              ];
+            };
             hnix =
               final.haskell-nix.project' {
                 src = ./.;
                 supportHpack = true;
                 compiler-nix-name = "ghc910";
-                # packageRoot = pkgs.runCommand "hnix-src" {} ''
-                #   cp -r ${./.} $out
-                #   chmod -R +w $out
-                #   cp -r ${nix} $out/data/nix
-                # '';
                 shell = {
                   tools = {
                     cabal = {};
@@ -50,15 +59,21 @@
                     export NIX_DATA_DIR="$PWD/data"
                   '';
                 };
-                # modules = [{
-                #   # enableLibraryProfiling = true;
-                #   # enableProfiling = true;
-                #   # profilingDetail = "late-toplevel";
-                #   # TODO(@connorbaker): Can't build XML with overloaded-calls.
-                #   # ghcOptions = [
-                #   #   "-fprof-late-overloaded"
-                #   # ];
-                # }];
+                modules = [{
+                  # Override hnix-store-json source to include upstream test data
+                  packages.hnix-store-json.src = final.lib.mkForce (final.runCommand "hnix-store-json-src" {} ''
+                    cp -r ${final.hnix-store-json-src}/hnix-store-json $out
+                    chmod -R +w $out
+                    # Create upstream-libstore-data with actual files instead of symlink
+                    rm -f $out/upstream-libstore-data
+                    mkdir -p $out/upstream-libstore-data
+                    cp -r ${final.hnix-store-json-src}/upstream-nix/src/libstore-tests/data/* $out/upstream-libstore-data/
+                    # Create upstream-libutil-data with actual files instead of symlink
+                    rm -f $out/upstream-libutil-data
+                    mkdir -p $out/upstream-libutil-data
+                    cp -r ${final.hnix-store-json-src}/upstream-nix/src/libutil-tests/data/* $out/upstream-libutil-data/
+                  '');
+                }];
               };
           })
         ];

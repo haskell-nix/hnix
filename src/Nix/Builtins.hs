@@ -97,6 +97,7 @@ import qualified System.Nix.Hash               as StoreHash
 import qualified System.Nix.Store.Types        as StoreTypes
 import qualified System.Nix.StorePath          as Store
 import           System.Nix.Base32             as Base32
+import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
 import qualified "crypton" Crypto.Hash         as CryptonHash
 import           Data.ByteArray                 ( convert )
 import qualified Text.Show
@@ -2242,7 +2243,7 @@ execNix xs = do
 -- For everything else (including flat): uses two-step "fixed:out:" process
 makeFixedOutputPathLocal
   :: Store.StoreDir
-  -> StoreTypes.FileIngestionMethod
+  -> FileIngestionMethod
   -> CryptonHash.Digest CryptonHash.SHA256
   -> Store.StorePathName
   -> Store.StorePath
@@ -2252,7 +2253,7 @@ makeFixedOutputPathLocal storeDir' method digest name =
       -- Convert digest to hex text
       hashText = decodeUtf8 (convertToBase Base16 (convert digest :: ByteString) :: ByteString)
   in case method of
-    StoreTypes.FileIngestionMethod_FileRecursive ->
+    FileIngestionMethod_NixArchive ->
       -- Case 1: Recursive (NAR) -> use "source" type directly
       -- Format: "source:sha256:<hash_hex>:<storeDir>:<name>"
       let toHash = "source:sha256:" <> hashText <> ":" <> storeDirText <> ":" <> Store.unStorePathName name
@@ -2263,7 +2264,7 @@ makeFixedOutputPathLocal storeDir' method digest name =
         Right sp -> sp
         Left err -> error $ "makeFixedOutputPathLocal: failed to parse path: " <> show err
 
-    StoreTypes.FileIngestionMethod_Flat ->
+    FileIngestionMethod_Flat ->
       -- Case 2: Flat -> two-step "fixed:out:" process
       -- Step 1: digest1 = SHA256("fixed:out:sha256:<hash>:")
       let fixedPayload = "fixed:out:sha256:" <> hashText <> ":"
@@ -2339,8 +2340,8 @@ fetchurlNix =
 
     let ingestionMethod =
           if executable
-            then StoreTypes.FileIngestionMethod_FileRecursive
-            else StoreTypes.FileIngestionMethod_Flat
+            then FileIngestionMethod_NixArchive
+            else FileIngestionMethod_Flat
     let mExpected = case mDigest of
           Just (StoreHash.HashAlgo_SHA256 :=> digest) ->
             -- Use local implementation that correctly handles flat vs recursive hashes
