@@ -222,7 +222,7 @@ lookupVarReaderWithInfo k = do
   let (val, info) = result
   pure (val, info, end - start)
  where
-  searchDynamic lexCount dynSearched totalDepth [] =
+  searchDynamic _lexCount _dynSearched totalDepth [] =
     pure (Nothing, LookupMiss totalDepth)
   searchDynamic lexCount dynSearched totalDepth (weakscope : rest) = do
     mres' <- HM.lookup k . coerce @(Scope a) <$> weakscope

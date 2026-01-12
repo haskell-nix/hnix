@@ -28,7 +28,6 @@ import           Nix.Prelude
 import qualified Data.HashMap.Strict as HM
 import qualified Data.List as List
 import qualified Data.Aeson as A
-import qualified Data.Aeson.KeyMap as AKM
 import qualified Data.Aeson.Key as AK
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified GHC.Clock as Clock

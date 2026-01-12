@@ -63,9 +63,7 @@ import           Data.Char                      ( isAlpha
                                                 )
 import           Data.Data                      ( Data(..) )
 import           Data.Foldable                  ( minimum )
-import           Data.List                      ( sortBy )
 import           Data.List.Extra                ( groupSort )
-import           Data.Ord                       ( comparing )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS

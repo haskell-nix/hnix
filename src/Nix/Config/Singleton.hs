@@ -242,9 +242,9 @@ withEvalCfg
   -> Bool  -- ^ Enable tracing
   -> (forall cfg. KnownEvalCfg cfg => Proxy cfg -> r)
   -> r
-withEvalCfg stats prov trace k =
+withEvalCfg stats prov tracing k =
   reifyBoolT stats $ \(_ :: Proxy s) ->
     reifyBoolT prov $ \(_ :: Proxy p) ->
-      reifyBoolT trace $ \(_ :: Proxy t) ->
+      reifyBoolT tracing $ \(_ :: Proxy t) ->
         k (Proxy @('MkEvalCfg s p t))
 {-# INLINE withEvalCfg #-}

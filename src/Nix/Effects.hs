@@ -57,7 +57,6 @@ import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Nar                as Store.Nar
 import qualified System.Nix.Hash               as Store.Hash
-import qualified System.Nix.Store.Types        as Store.Types
 import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
 import           Data.Some.Newtype              ( Some(..) )
 import           Data.Default.Class             ( def )

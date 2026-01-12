@@ -1,6 +1,7 @@
 {-# language CPP                #-}
 {-# language DeriveAnyClass     #-}
 {-# language KindSignatures     #-}
+{-# language MonoLocalBinds     #-}
 {-# language PatternSynonyms    #-}
 {-# language RankNTypes         #-}
 {-# language TemplateHaskell    #-}

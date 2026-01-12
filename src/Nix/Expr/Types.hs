@@ -77,12 +77,13 @@ import           Instances.TH.Lift              ()  -- importing Lift Text for G
 -- * utils
 
 newtype NPos = NPos Pos
- deriving
+ deriving stock
    ( Eq, Ord
    , Read, Show
-   , Data, NFData
+   , Data
    , Generic
    )
+ deriving newtype NFData
 
 instance Semigroup NPos where
   (NPos x) <> (NPos y) = NPos (x <> y)

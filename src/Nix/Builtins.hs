@@ -95,7 +95,6 @@ import qualified System.Nix.StorePath          as Store
 import           System.Nix.Base32             as Base32
 import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
 import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
-import           Data.ByteArray                 ( convert )
 import qualified Text.Show
 import           Text.Regex.TDFA                ( Regex
                                                 , makeRegex

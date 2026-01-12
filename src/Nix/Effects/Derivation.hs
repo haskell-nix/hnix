@@ -79,8 +79,8 @@ hashDigestText (_ DSum.:=> hashDigest) = Store.encodeDigestWith Store.Base16 has
 -- | Compute the hash of content using the specified mode and algorithm
 -- For Flat mode: hash the file bytes directly
 -- For Recursive mode: compute NAR hash of the path
-computeContentHash :: MonadIO m => HashMode -> HashDigest -> FilePath -> m HashDigest
-computeContentHash mode expectedHash path = liftIO $ case expectedHash of
+_computeContentHash :: MonadIO m => HashMode -> HashDigest -> FilePath -> m HashDigest
+_computeContentHash mode expectedHash path = liftIO $ case expectedHash of
   (Store.HashAlgo_SHA256 DSum.:=> _) -> case mode of
     Flat -> do
       bytes <- B.readFile path
@@ -100,7 +100,7 @@ computeContentHash mode expectedHash path = liftIO $ case expectedHash of
             (Nar.streamNarIO Nar.narEffectsIO p updateHash)
             (Hash.hashInit @Hash.SHA256)
    where
-    updateHash chunk = State.modify (\ctx -> Hash.hashUpdate ctx chunk)
+    updateHash chunkData = State.modify (\ctx -> Hash.hashUpdate ctx chunkData)
 
 --  2021-07-17: NOTE: Derivation consists of @"keys"@ @"vals"@ (of text), so underlining type boundary currently stops here.
 data Derivation = Derivation
@@ -132,8 +132,8 @@ data BuiltinFetchurlConfig = BuiltinFetchurlConfig
   deriving Show
 
 -- | Parse configuration from derivation environment for builtin:fetchurl
-parseBuiltinFetchurlConfig :: Derivation -> Either Text BuiltinFetchurlConfig
-parseBuiltinFetchurlConfig drv = do
+_parseBuiltinFetchurlConfig :: Derivation -> Either Text BuiltinFetchurlConfig
+_parseBuiltinFetchurlConfig drv = do
   let envMap = env drv
 
   -- URL is required
@@ -144,7 +144,7 @@ parseBuiltinFetchurlConfig drv = do
     Left "builtin:fetchurl: 'url' is empty"
 
   -- Parse boolean environment variables (Nix uses "1" for true, "" or missing for false)
-  let parseBool key = case Map.lookup key envMap of
+  let parseBool envKey = case Map.lookup envKey envMap of
         Nothing -> False
         Just "" -> False
         Just "0" -> False
@@ -369,13 +369,13 @@ derivationParser = do
 -- | Execute the builtin:fetchurl builder
 -- This downloads a URL and optionally unpacks it, adding the result to the store
 -- Uses proper hash verification: compares declared hash vs actual content hash
-executeBuiltinFetchurl
+_executeBuiltinFetchurl
   :: forall e t f m
    . (MonadNix e t f m)
   => BuiltinFetchurlConfig
   -> Text                  -- ^ Expected output path (computed from declared hash)
   -> m ()
-executeBuiltinFetchurl cfg expectedPath = do
+_executeBuiltinFetchurl cfg expectedPath = do
   -- 1. Check if output already exists (cache hit)
   let expectedStorePath = coerce @String @Path $ toString expectedPath
   exists <- storePathExists expectedStorePath
@@ -446,15 +446,15 @@ executeBuiltinFetchurl cfg expectedPath = do
   pickUnpackRoot unpackDir = do
     entries <- Directory.listDirectory unpackDir
     case entries of
-      [single] -> do
-        let singlePath = unpackDir FP.</> single
+      [singleEntry] -> do
+        let singlePath = unpackDir FP.</> singleEntry
         isDir <- Directory.doesDirectoryExist singlePath
         pure $ if isDir then singlePath else unpackDir
       _ -> pure unpackDir
 
   -- Set executable bit on a file
-  setExecutableFile :: FilePath -> IO ()
-  setExecutableFile f = do
+  setExecFile :: FilePath -> IO ()
+  setExecFile f = do
     st <- Posix.getSymbolicLinkStatus f
     let p = Posix.fileMode st
             `Posix.unionFileModes` Posix.ownerExecuteMode
@@ -471,16 +471,16 @@ executeBuiltinFetchurl cfg expectedPath = do
       isDir <- Directory.doesDirectoryExist path
       if isDir
         then setExecutableRecursive path
-        else setExecutableFile path
+        else setExecFile path
 
 -- | Unpack an archive and add the result to the store
-unpackAndAddToStore
+_unpackAndAddToStore
   :: forall e t f m
    . (MonadNix e t f m)
   => BuiltinFetchurlConfig
   -> StorePath             -- ^ Downloaded archive path
   -> m StorePath
-unpackAndAddToStore cfg archivePath = do
+_unpackAndAddToStore cfg archivePath = do
   -- Read the archive content
   archiveBytes <- either throwError pure =<< readStoreFile (coerce archivePath)
 
@@ -506,11 +506,11 @@ unpackAndAddToStore cfg archivePath = do
       "builtin:fetchurl: failed to unpack archive: " <> err
 
   -- Pick the root directory (single directory -> descend into it)
-  rootDir <- liftIO $ pickUnpackRoot unpackDir
+  rootDir <- liftIO $ _pickUnpackRoot unpackDir
 
   -- Set executable permissions if needed
   when (bfExecutable cfg) $
-    liftIO $ setTreeExecutable rootDir
+    liftIO $ _setTreeExecutable rootDir
 
   -- Add to store (always recursive for unpacked content)
   result <- addToStore (bfName cfg) (NarFile $ coerce rootDir) True False
@@ -522,19 +522,19 @@ unpackAndAddToStore cfg archivePath = do
 
 -- | Pick the root of an unpacked archive
 -- If there's a single directory inside, descend into it (common pattern for tarballs)
-pickUnpackRoot :: FilePath -> IO FilePath
-pickUnpackRoot unpackDir = do
+_pickUnpackRoot :: FilePath -> IO FilePath
+_pickUnpackRoot unpackDir = do
   entries <- Directory.listDirectory unpackDir
   case entries of
-    [single] -> do
-      let singlePath = unpackDir FP.</> single
+    [singleEntry] -> do
+      let singlePath = unpackDir FP.</> singleEntry
       isDir <- Directory.doesDirectoryExist singlePath
       pure $ if isDir then singlePath else unpackDir
     _ -> pure unpackDir
 
 -- | Recursively set executable permissions on all regular files in a directory tree
-setTreeExecutable :: FilePath -> IO ()
-setTreeExecutable path = do
+_setTreeExecutable :: FilePath -> IO ()
+_setTreeExecutable path = do
   isFile <- Directory.doesFileExist path
   if isFile
     then setExecutableFile path
@@ -542,7 +542,7 @@ setTreeExecutable path = do
       isDir <- Directory.doesDirectoryExist path
       when isDir $ do
         entries <- Directory.listDirectory path
-        traverse_ (setTreeExecutable . (path FP.</>)) entries
+        traverse_ (_setTreeExecutable . (path FP.</>)) entries
 
 
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)

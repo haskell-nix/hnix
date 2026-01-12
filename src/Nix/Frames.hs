@@ -49,8 +49,8 @@ instance Show NixFrame where
 -- The depth counter is kept in sync with the list length via 'pushFrame'.
 -- Use 'framesToList' to access the underlying list for traversal.
 data Frames = Frames
-  { framesDepth :: {-# UNPACK #-} !Int  -- ^ Current stack depth (inline, no boxing)
-  , framesList  :: [NixFrame]           -- ^ The actual frame stack
+  { _framesDepth :: {-# UNPACK #-} !Int  -- ^ Current stack depth (inline, no boxing)
+  , framesList   :: [NixFrame]           -- ^ The actual frame stack
   }
 
 instance Show Frames where

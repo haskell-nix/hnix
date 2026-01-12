@@ -267,7 +267,7 @@ fetchTarball =
       Nothing -> pure ()
       Just shaText -> do
         case StoreHash.mkNamedDigest "sha256" shaText of
-          Left err -> throwError $ ErrorCall $ "builtins.fetchTarball: " <> err
+          Left shaErr -> throwError $ ErrorCall $ "builtins.fetchTarball: " <> shaErr
           Right (StoreHash.HashAlgo_SHA256 :=> digest) -> do
             let expectedPath =
                   StoreRO.makeFixedOutputPath
@@ -1088,8 +1088,8 @@ buildAllowedSigners keys = do
   pure $ Text.unlines entries
 
 computeKeyFingerprint :: PublicKey -> Either String Text
-computeKeyFingerprint (PublicKey _ key) = do
-  bytes <- StoreBase.decodeWith StoreBase.Base64 key
+computeKeyFingerprint (PublicKey _ pubKey) = do
+  bytes <- StoreBase.decodeWith StoreBase.Base64 pubKey
   let digest = Crypto.Hash.hash @BS.ByteString @Crypto.Hash.SHA256 bytes
       b64 = StoreHash.encodeDigestWith StoreBase.Base64 digest
   pure $ Text.dropWhileEnd (== '=') b64
@@ -1103,20 +1103,20 @@ parsePublicKeys
   -> m [PublicKey]
 parsePublicKeys defaultType mKey mKeysList = do
   let single = maybe [] (\k -> [PublicKey defaultType k]) mKey
-  fromList <- case mKeysList of
+  keysFromList <- case mKeysList of
     Nothing -> pure []
     Just vals -> traverse parseEntry vals
-  pure (single <> fromList)
+  pure (single <> keysFromList)
  where
   parseEntry val = do
     v <- demand val
     case v of
       NVSet _ attrs -> do
         keyVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'") pure (HM.lookup "key" attrs)
-        key <- fromValue =<< demand keyVal
+        keyText <- fromValue =<< demand keyVal
         let typeVal = HM.lookup "type" attrs
         typ <- maybe (pure defaultType) (\tv -> fromValue =<< demand tv) typeVal
-        pure $ PublicKey typ key
+        pure $ PublicKey typ keyText
       _ ->
         throwError $ ErrorCall $ "builtins.fetchGit: publicKeys entry must be a set"
 
