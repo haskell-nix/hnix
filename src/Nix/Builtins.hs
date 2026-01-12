@@ -70,6 +70,8 @@ import qualified System.FilePath               as FP
 import qualified System.PosixCompat.Files      as Posix
 import qualified Data.ByteString               as BS
 import           Nix.Exec
+import           Nix.Config.Singleton           ( HasProvCfg )
+import           Nix.Context                    ( CtxCfg )
 import           Nix.Expr.Types
 import qualified Nix.Eval                      as Eval
 import           Nix.Frames
@@ -388,7 +390,7 @@ instance Convertible e t f m => ToValue FileType m (NValue t f m) where
 -- ** Builtin functions
 
 derivationNix
-  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m)
+  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m, HasProvCfg (CtxCfg e))
   => m (NValue t f m)
 derivationNix = foldFix Eval.eval $$(do
     -- This is compiled in so that we only parse it once at compile-time.
@@ -1491,7 +1493,7 @@ throwNix =
 -- what imports whould be needed up until where it would be determined & they import strictly
 --
 importNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+  :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NValue t f m -> m (NValue t f m)
 importNix = scopedImportNix $ NVSet mempty mempty
 
 -- | @scopedImport scope path@
@@ -1534,7 +1536,7 @@ importNix = scopedImportNix $ NVSet mempty mempty
 -- In the related matter the function can be added and passed around as builtin.
 scopedImportNix
   :: forall e t f m
-   . MonadNix e t f m
+   . (MonadNix e t f m, HasProvCfg (CtxCfg e))
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
@@ -2230,7 +2232,7 @@ addErrorContextNix
 addErrorContextNix _ = pure
 
 execNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+  :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NValue t f m -> m (NValue t f m)
 execNix xs = do
   -- 2018-11-19: NOTE: Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
@@ -2534,7 +2536,7 @@ langVersionNix = toValue (5 :: Int)
 
 -- ** @builtinsList@
 
-builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
+builtinsList :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => m [Builtin (NValue t f m)]
 builtinsList =
   sequenceA
     [ add  TopLevel "abort"            throwNix -- for now
@@ -2738,7 +2740,7 @@ builtinsList =
 -- | Evaluate expression in the default context.
 withNixContext
   :: forall e t f m r
-   . (MonadNix e t f m, Has e Options)
+   . (MonadNix e t f m, Has e Options, HasProvCfg (CtxCfg e))
   => Maybe Path
   -> m r
   -> m r
@@ -2766,6 +2768,7 @@ builtins
   :: forall e t f m
   . ( MonadNix e t f m
      , Scoped (NValue t f m) m
+     , HasProvCfg (CtxCfg e)
      )
   => m (Scopes m (NValue t f m))
 builtins =

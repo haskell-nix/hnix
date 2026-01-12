@@ -2,6 +2,7 @@
 {-# language CPP #-}
 {-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language KindSignatures #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
@@ -26,6 +27,7 @@ import qualified Data.List.NonEmpty            as NE
 import qualified Data.Text                     as Text
 import qualified Text.Show
 import           Nix.Atoms
+import           Nix.Config.Singleton           ( DefaultCfg )
 import           Nix.Context
 import           Nix.Convert
 import           Nix.Eval                       ( MonadEval(..) )
@@ -486,14 +488,15 @@ lintApp context fun arg =
         (Unsafe.head args, ) <$> foldM (unify context) y ys
   ) =<< unpackSymbolic fun
 
+-- | Lint monad using DefaultCfg (linting doesn't need stats/provenance/tracing).
 newtype Lint s a = Lint
-  { runLint :: ReaderT (Context (Lint s) (Symbolic (Lint s))) (FreshIdT Int (ST s)) a }
+  { runLint :: ReaderT (Context DefaultCfg (Lint s) (Symbolic (Lint s))) (FreshIdT Int (ST s)) a }
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadFix
-    , MonadReader (Context (Lint s) (Symbolic (Lint s)))
+    , MonadReader (Context DefaultCfg (Lint s) (Symbolic (Lint s)))
     , MonadThunkId
     , MonadRef
     , MonadAtomicRef

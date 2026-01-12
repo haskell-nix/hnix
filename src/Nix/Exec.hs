@@ -2,8 +2,12 @@
 {-# language CPP #-}
 {-# language ConstraintKinds #-}
 {-# language DataKinds #-}
+{-# language DerivingStrategies #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language KindSignatures #-}
 {-# language PartialTypeSignatures #-}
 {-# language RankNTypes #-}
+{-# language StandaloneDeriving #-}
 {-# language Strict #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
@@ -35,7 +39,7 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
-import           Nix.Context                    ( askEvalStats )
+import           Nix.Context                    ( askEvalStats, CtxCfg, HasEvalCfg )
 import           Nix.EvalStats                  ( EvalStats(..), withExprTiming, withBuiltinTiming )
 import           Nix.Pretty
 import           Nix.Render
@@ -169,7 +173,7 @@ data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
-nverr :: forall e t f s m a. (MonadNix e t f m, Exception s) => s -> m a
+nverr :: forall e t f s m a. (MonadNix e t f m, HasProvCfg (CtxCfg e), Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
 askSpan :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
@@ -179,9 +183,38 @@ wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
 {-# INLINABLE wrapExprLoc #-}
 
+-- | Zero-cost provenance dispatch with scope and span.
+--
+-- Captures the common pattern where provenance-enabled code needs to fetch
+-- scope and span, while provenance-disabled code can skip these lookups entirely.
+--
+-- @
+-- evalConstant c = withProvCtx
+--   (\\scope span -> pure $ mkNVConstantWithProvenance scope span c)
+--   (pure $ NVConstant c)
+-- @
+--
+-- When @CfgProv (CtxCfg e) ~ 'False@, the first argument is eliminated at
+-- compile time, and @askScopes@ / @askSpan@ calls are never executed.
+withProvCtx
+  :: forall e t f m a. (MonadNix e t f m, HasProvCfg (CtxCfg e))
+  => (Scopes m (NValue t f m) -> SrcSpan -> m a)  -- ^ With provenance
+  -> m a                                           -- ^ Without provenance
+  -> m a
+withProvCtx withProv withoutProv = case singProv @(CtxCfg e) of
+  STrue -> do
+    scope <- askScopes
+    span  <- askSpan
+    withProv scope span
+  SFalse -> withoutProv
+{-# INLINE withProvCtx #-}
+
 --  2021-01-07: NOTE: This instance belongs to be beside MonadEval type class.
 -- Currently instance is stuck in orphanage between the requirements to be MonadEval, aka Eval stage, and emposed requirement to be MonadNix (Execution stage). MonadNix constraint tries to put the cart before horse and seems superflous, since Eval in Nix also needs and can throw exceptions. It is between `nverr` and `evalError`.
-instance MonadNix e t f m => MonadEval (NValue t f m) m where
+--
+-- The HasProvCfg constraint enables compile-time provenance dispatch.
+-- When cfg is known (via withEvalCfg), GHC eliminates unused branches.
+instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m where
   freeVariable var =
     nverr @e @t @f $ ErrorCall $ toString @Text $ "Undefined variable '" <> varNameText var <> "'"
 
@@ -205,123 +238,123 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
        where
         attr = Text.intercalate "." $ NE.toList $ fmap varNameText ks
 
-  evalCurPos =
-    do
-      scope                  <- askScopes
-      span@(SrcSpan delta _) <- askSpan
-      addProvenance @_ @_ @(NValue t f m)
-        (Provenance scope . NSymAnnF span $ "__curPos") <$>
-          toValue delta
+  -- Compile-time provenance dispatch using singProv @(CtxCfg e).
+  -- When CfgProv (CtxCfg e) ~ 'False, GHC eliminates the STrue branches entirely.
 
-  evaledSym name val =
-    do
+  evalCurPos = do
+    span@(SrcSpan delta _) <- askSpan
+    case singProv @(CtxCfg e) of
+      STrue -> do
+        scope <- askScopes
+        addProvenance @_ @_ @(NValue t f m)
+          (Provenance scope . NSymAnnF span $ "__curPos") <$>
+            toValue delta
+      SFalse -> toValue delta
+
+  evaledSym name val = case singProv @(CtxCfg e) of
+    STrue -> do
       scope <- askScopes
       span  <- askSpan
       pure $
         addProvenance @_ @_ @(NValue t f m)
           (Provenance scope $ NSymAnnF span name)
           val
+    SFalse -> pure val
 
-  evalConstant c =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      pure $ mkNVConstantWithProvenance scope span c
+  evalConstant c = withProvCtx
+    (\scope span -> pure $ mkNVConstantWithProvenance scope span c)
+    (pure $ NVConstant c)
 
   evalString =
     maybe
       (nverr $ ErrorCall "Failed to assemble string")
-      (\ ns ->
-        do
+      (\ ns -> case singProv @(CtxCfg e) of
+        STrue -> do
           scope <- askScopes
           span  <- askSpan
           pure $ mkNVStrWithProvenance scope span ns
+        SFalse -> pure $ NVStr ns
       )
       <=< assembleString
 
-  evalLiteralPath p =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      mkNVPathWithProvenance scope span p <$> toAbsolutePath @t @f @m p
+  evalLiteralPath p = do
+    realPath <- toAbsolutePath @t @f @m p
+    withProvCtx
+      (\scope span -> pure $ mkNVPathWithProvenance scope span p realPath)
+      (pure $ NVPath realPath)
 
   evalPath =
     maybe
       (nverr $ ErrorCall "Failed to assemble path")
       (\ ns -> do
-          scope <- askScopes
-          span  <- askSpan
           let litText = ignoreContext ns
           let litPath = fromString (toString litText)
           real <- toAbsolutePath @t @f @m litPath
-          pure $ addProvenance (Provenance scope . NPathAnnF span $ DoubleQuoted $ one $ Plain litText) $ NVPath real
+          case singProv @(CtxCfg e) of
+            STrue -> do
+              scope <- askScopes
+              span  <- askSpan
+              pure $ addProvenance (Provenance scope . NPathAnnF span $ DoubleQuoted $ one $ Plain litText) $ NVPath real
+            SFalse -> pure $ NVPath real
       )
       <=< assembleString
 
-  evalEnvPath p =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      mkNVPathWithProvenance scope span p <$> findEnvPath @t @f @m (coerce p)
+  evalEnvPath p = do
+    realPath <- findEnvPath @t @f @m (coerce p)
+    withProvCtx
+      (\scope span -> pure $ mkNVPathWithProvenance scope span p realPath)
+      (pure $ NVPath realPath)
 
-  evalUnary op arg =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      execUnaryOp scope span op arg
+  evalUnary = execUnaryOp'
 
-  evalBinary op larg rarg =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      execBinaryOp scope span op larg rarg
+  evalBinary = execBinaryOp'
 
-  evalWith c b =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
-      f <$> evalWithAttrSet c b
+  evalWith c b = do
+    result <- evalWithAttrSet c b
+    case singProv @(CtxCfg e) of
+      STrue -> do
+        scope <- askScopes
+        span  <- askSpan
+        let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
+        pure $ f result
+      SFalse -> pure result
 
-  evalIf c tVal fVal =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      bl <- fromValue c
+  evalIf c tVal fVal = do
+    bl :: Bool <- fromValue c
+    case singProv @(CtxCfg e) of
+      STrue -> do
+        scope <- askScopes
+        span  <- askSpan
+        let
+          fun x y = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y)
+          falseVal = (fun Nothing =<< pure) <$> fVal
+          trueVal = (flip fun Nothing =<< pure) <$> tVal
+        bool falseVal trueVal bl
+      SFalse -> bool fVal tVal bl
 
-      let
-        fun x y = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y)
-        falseVal = (fun Nothing =<< pure) <$> fVal
-        trueVal = (flip fun Nothing =<< pure) <$> tVal
-
-      bool
-        falseVal
-        trueVal
-        bl
-
-  evalAssert c body =
-    do
-      span <- askSpan
-      b <- fromValue c
-      bool
-        (nverr $ Assertion span c)
-        (do
+  evalAssert c body = do
+    span <- askSpan
+    b :: Bool <- fromValue c
+    bool
+      (nverr $ Assertion span c)
+      (case singProv @(CtxCfg e) of
+        STrue -> do
           scope <- askScopes
           join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body
-        )
-        b
+        SFalse -> body
+      )
+      b
 
   evalApp f x = do
     result <- callFunc f =<< defer x
-    opts <- askOptions
-    -- Only allocate provenance when --values flag is set (for debugging)
-    -- This eliminates ~213k Provenance allocations in production
-    if isValues opts
-      then do
+    -- Compile-time provenance dispatch eliminates this check when disabled.
+    -- When CfgProv ~ 'False, this entire branch is eliminated.
+    case singProv @(CtxCfg e) of
+      STrue -> do
         scope <- askScopes
         span <- askSpan
         pure $ mkNVAppOpWithProvenance scope span (pure f) Nothing result
-      else pure result
+      SFalse -> pure result
 
   evalAbs
     :: Params (m (NValue t f m))
@@ -335,10 +368,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       )
     -> m (NValue t f m)
   evalAbs p k =
-    do
-      scope <- askScopes
-      span  <- askSpan
-      pure $ mkNVClosureWithProvenance scope span (void p) (fmap snd . flip (k @()) (const (fmap (mempty ,))) . pure)
+    let closureFunc = fmap snd . flip (k @()) (const (fmap (mempty ,))) . pure
+    in case singProv @(CtxCfg e) of
+      STrue -> do
+        scope <- askScopes
+        span  <- askSpan
+        pure $ mkNVClosureWithProvenance scope span (void p) closureFunc
+      SFalse -> pure $ NVClosure (void p) closureFunc
 
   evalError = throwError
 
@@ -371,39 +407,46 @@ callFunc fun arg =
         (`callFunc` arg) =<< (`callFunc` fun') f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
-execUnaryOp
+-- | Unified unary operator execution with zero-cost provenance dispatch.
+--
+-- When provenance is disabled, the @wrapResult@ helper compiles to @pure@.
+-- When enabled, it adds provenance tracking to the result.
+execUnaryOp'
   :: forall e t f m
-   . (Framed e m, MonadCited t f m, Show t)
-  => Scopes m (NValue t f m)
-  -> SrcSpan
-  -> NUnaryOp
+   . (MonadNix e t f m, HasProvCfg (CtxCfg e))
+  => NUnaryOp
   -> NValue t f m
   -> m (NValue t f m)
-execUnaryOp scope span op arg =
+execUnaryOp' op arg =
   case arg of
     NVConstant c ->
       case (op, c) of
-        (NNeg, NInt   i) -> mkUnaryOp NInt negate i
-        (NNeg, NFloat f) -> mkUnaryOp NFloat negate f
-        (NNot, NBool  b) -> mkUnaryOp NBool not b
+        (NNeg, NInt   i) -> wrapResult $ NVConstant $ NInt (negate i)
+        (NNeg, NFloat f) -> wrapResult $ NVConstant $ NFloat (negate f)
+        (NNot, NBool  b) -> wrapResult $ NVConstant $ NBool (not b)
         _seq ->
-          throwError $ ErrorCall $ "unsupported argument type for unary operator " <> show _seq
+          nverr @e @t @f $ ErrorCall $ "unsupported argument type for unary operator " <> show _seq
     _x ->
-      throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
+      nverr @e @t @f $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
  where
-  mkUnaryOp :: (a -> NAtom) -> (a -> a) -> a -> m (NValue t f m)
-  mkUnaryOp c b a = pure . mkNVUnaryOpWithProvenance scope span op (pure arg) . NVConstant $ c (b a)
+  wrapResult :: NValue t f m -> m (NValue t f m)
+  wrapResult v = withProvCtx
+    (\scope span -> pure $ mkNVUnaryOpWithProvenance scope span op (pure arg) v)
+    (pure v)
+  {-# INLINE wrapResult #-}
 
-execBinaryOp
+-- | Unified binary operator execution with zero-cost provenance dispatch.
+--
+-- Handles short-circuit operators (NEq, NNEq, NOr, NAnd, NImpl) directly,
+-- and delegates forced operations to 'execBinaryOpForced''.
+execBinaryOp'
   :: forall e t f m
-   . (MonadNix e t f m, MonadEval (NValue t f m) m)
-  => Scopes m (NValue t f m)
-  -> SrcSpan
-  -> NBinaryOp
+   . (MonadNix e t f m, MonadEval (NValue t f m) m, HasProvCfg (CtxCfg e))
+  => NBinaryOp
   -> NValue t f m
   -> m (NValue t f m)
   -> m (NValue t f m)
-execBinaryOp scope span op lval rarg =
+execBinaryOp' op lval rarg =
   case op of
     NEq   -> helperEq id
     NNEq  -> helperEq not
@@ -415,47 +458,44 @@ execBinaryOp scope span op lval rarg =
         rval  <- rarg
         rval' <- demand rval
         lval' <- demand lval
-
-        execBinaryOpForced scope span op lval' rval'
+        execBinaryOpForced' op lval' rval'
 
  where
-
   helperEq :: (Bool -> Bool) -> m (NValue t f m)
-  helperEq flag =
-    do
-      rval <- rarg
-      eq <- valueEqM lval rval
-      boolOp rval $ flag eq
+  helperEq flag = do
+    rval <- rarg
+    eq <- valueEqM lval rval
+    wrapBool (pure rval) $ flag eq
 
   helperLogic flp flag =
     flp bool
-      (bypass flag)
+      (wrapBool Nothing flag)
       (do
           rval <- rarg
           x <- fromValue rval
-          boolOp rval x
+          wrapBool (pure rval) x
       )
       =<< fromValue lval
 
-  boolOp rval = toBoolOp $ pure rval
+  -- | Zero-cost bool wrapper: adds provenance when enabled, identity when disabled.
+  wrapBool :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
+  wrapBool rvalM b = withProvCtx
+    (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) rvalM $ NVConstant $ NBool b)
+    (pure $ NVConstant $ NBool b)
+  {-# INLINE wrapBool #-}
 
-  bypass      = toBoolOp Nothing
-
-  toBoolOp :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
-  toBoolOp r b =
-    pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) r $ NVConstant $ NBool b
-
-execBinaryOpForced
+-- | Unified forced binary operator execution with zero-cost provenance dispatch.
+--
+-- When provenance is disabled, all wrapper functions compile to identity.
+-- When enabled, provenance tracking is added to the result.
+execBinaryOpForced'
   :: forall e t f m
-   . (MonadNix e t f m, MonadEval (NValue t f m) m)
-  => Scopes m (NValue t f m)
-  -> SrcSpan
-  -> NBinaryOp
+   . (MonadNix e t f m, MonadEval (NValue t f m) m, HasProvCfg (CtxCfg e))
+  => NBinaryOp
   -> NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-
-execBinaryOpForced scope span op lval rval =
+execBinaryOpForced' op lval rval =
   case op of
     NLt    -> mkCmpOp (<)
     NLte   -> mkCmpOp (<=)
@@ -466,73 +506,64 @@ execBinaryOpForced scope span op lval rval =
     NDiv   -> mkBinNumOp' div (/)
     NConcat ->
       case (lval, rval) of
-        (NVList ls, NVList rs) -> pure $ mkListP $ ls <> rs
+        (NVList ls, NVList rs) -> wrapResult $ NVList $ ls <> rs
         _ -> unsupportedTypes
 
     NUpdate ->
       case (lval, rval) of
-        (NVSet lp ls, NVSet rp rs) -> pure $ mkSetP (rp <> lp) (rs <> ls)
-        (NVSet lp ls, NVConstant NNull) -> pure $ mkSetP lp ls
-        (NVConstant NNull, NVSet rp rs) -> pure $ mkSetP rp rs
+        (NVSet lp ls, NVSet rp rs) -> wrapResult $ NVSet (rp <> lp) (rs <> ls)
+        (NVSet lp ls, NVConstant NNull) -> wrapResult $ NVSet lp ls
+        (NVConstant NNull, NVSet rp rs) -> wrapResult $ NVSet rp rs
         _ -> unsupportedTypes
 
     NPlus ->
       case (lval, rval) of
         (NVConstant _, NVConstant _) -> mkBinNumOp (+)
-        (NVStr ls, NVStr rs) -> pure $ mkStrP (ls <> rs)
+        (NVStr ls, NVStr rs) -> wrapResult $ NVStr (ls <> rs)
         (NVStr ls, NVPath p) ->
-          mkStrP . (ls <>) <$>
+          wrapResult . NVStr . (ls <>) =<<
             coercePathToNixString CopyToStore p
         (NVPath ls, NVStr rs) ->
           maybe
             (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
-            (\ rs2 -> mkPathP <$> toAbsolutePath @t @f (ls <> coerce (toString rs2)))
+            (\ rs2 -> wrapResult . NVPath =<< toAbsolutePath @t @f (ls <> coerce (toString rs2)))
             (getStringNoContext rs)
-        (NVPath ls, NVPath rs) -> mkPathP <$> toAbsolutePath @t @f (ls <> rs)
+        (NVPath ls, NVPath rs) -> wrapResult . NVPath =<< toAbsolutePath @t @f (ls <> rs)
 
         (ls@NVSet{}, NVStr rs) ->
-          mkStrP . (<> rs) <$>
+          wrapResult . NVStr . (<> rs) =<<
             coerceAnyToNixString callFunc DontCopyToStore ls
         (NVStr ls, rs@NVSet{}) ->
-          mkStrP . (ls <>) <$>
+          wrapResult . NVStr . (ls <>) =<<
             coerceAnyToNixString callFunc DontCopyToStore rs
         _ -> unsupportedTypes
     _other   -> shouldBeAlreadyHandled
 
  where
-  addProv :: NValue t f m -> NValue t f m
-  addProv =
-    mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval)
+  -- | Zero-cost wrapper: adds provenance when enabled, identity when disabled.
+  wrapResult :: NValue t f m -> m (NValue t f m)
+  wrapResult v = withProvCtx
+    (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) v)
+    (pure v)
+  {-# INLINE wrapResult #-}
 
   mkBoolP :: Bool -> m (NValue t f m)
-  mkBoolP = pure . addProv . NVConstant . NBool
+  mkBoolP = wrapResult . NVConstant . NBool
 
   mkIntP :: Integer -> m (NValue t f m)
-  mkIntP = pure . addProv . NVConstant . NInt
+  mkIntP = wrapResult . NVConstant . NInt
 
   mkFloatP :: Float -> m (NValue t f m)
-  mkFloatP = pure . addProv . NVConstant . NFloat
-
-  mkListP :: Vector (NValue t f m) -> NValue t f m
-  mkListP = addProv . NVList
-
-  mkStrP :: NixString -> NValue t f m
-  mkStrP = addProv . NVStr
-
-  mkPathP :: Path -> NValue t f m
-  mkPathP = addProv . NVPath
-
-  mkSetP :: (PositionSet -> AttrSet (NValue t f m) -> NValue t f m)
-  mkSetP x s = addProv $ NVSet x s
+  mkFloatP = wrapResult . NVConstant . NFloat
 
   mkCmpOp :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
-  mkCmpOp op = case (lval, rval) of
-    (NVConstant l, NVConstant r) -> mkBoolP $ l `op` r
-    (NVStr l, NVStr r) -> mkBoolP $ l `op` r
+  mkCmpOp cmpOp = case (lval, rval) of
+    (NVConstant l, NVConstant r) -> mkBoolP $ l `cmpOp` r
+    (NVStr l, NVStr r) -> mkBoolP $ l `cmpOp` r
     _ -> unsupportedTypes
 
   mkBinNumOp :: (forall a. Num a => a -> a -> a) -> m (NValue t f m)
-  mkBinNumOp op = mkBinNumOp' op op
+  mkBinNumOp numOp = mkBinNumOp' numOp numOp
 
   mkBinNumOp'
     :: (Integer -> Integer -> Integer)
@@ -552,7 +583,6 @@ execBinaryOpForced scope span op lval rval =
   unsupportedTypes = throwError $ ErrorCall $ "Unsupported argument types for binary operator " <> show op <> ": " <> show lval <> ", " <> show rval
 
   shouldBeAlreadyHandled = throwError $ ErrorCall $ "This cannot happen: operator " <> show op <> " should have been handled in execBinaryOp."
-
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
@@ -648,7 +678,7 @@ addStats stats k v@(AnnF _ x) =
 
 evalWithTracingAndMetaInfo
   :: forall e t f m
-  . MonadNix e t f m
+  . (MonadNix e t f m, HasProvCfg (CtxCfg e))
   => NExprLoc
   -> ReaderT Int m (m (NValue t f m))
 evalWithTracingAndMetaInfo =
@@ -662,7 +692,7 @@ evalWithTracingAndMetaInfo =
 
 evalWithTimingAndMetaInfo
   :: forall e t f m
-  . MonadNix e t f m
+  . (MonadNix e t f m, HasProvCfg (CtxCfg e))
   => Int
   -> NExprLoc
   -> m (NValue t f m)
@@ -674,7 +704,7 @@ evalWithTimingAndMetaInfo thresholdMs =
 
 evalWithTracingTimingAndMetaInfo
   :: forall e t f m
-  . MonadNix e t f m
+  . (MonadNix e t f m, HasProvCfg (CtxCfg e))
   => Int
   -> NExprLoc
   -> ReaderT Int m (m (NValue t f m))
@@ -689,7 +719,7 @@ evalWithTracingTimingAndMetaInfo thresholdMs =
 
 evalWithStatsAndMetaInfo
   :: forall e t f m
-  . MonadNix e t f m
+  . (MonadNix e t f m, HasProvCfg (CtxCfg e))
   => EvalStats
   -> NExprLoc
   -> m (NValue t f m)
@@ -699,7 +729,7 @@ evalWithStatsAndMetaInfo stats =
     (addStats stats Eval.evalContent)
 {-# INLINABLE evalWithStatsAndMetaInfo #-}
 
-evalExprLoc :: forall e t f m. MonadNix e t f m => NExprLoc -> m (NValue t f m)
+evalExprLoc :: forall e t f m. (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
     opts <- askOptions
@@ -723,67 +753,71 @@ evalExprLoc expr =
     pTracedAdi expr
 {-# INLINABLE evalExprLoc #-}
 
--- | Type-parameterized evaluation with compile-time feature dispatch.
+-- | Evaluation with compile-time feature dispatch tied to environment config.
 --
--- When configuration flags are known at compile time (via 'withEvalConfig'),
--- GHC eliminates branches for disabled features via case-of-known-constructor.
+-- Unlike 'evalExprLoc' which does runtime dispatch, this function uses the
+-- configuration from the environment type ('CtxCfg e') for compile-time
+-- specialization. GHC eliminates branches for disabled features.
 --
--- This function should be used when the type-level configuration is available.
--- For backward compatibility, use 'evalExprLoc' which does runtime dispatch.
+-- The 'HasEvalCfg e' constraint guarantees that stats, provenance, and tracing
+-- all use the same configuration - there's no risk of mismatch.
 --
 -- Example usage:
 --
 -- @
--- withEvalConfig (isEvalStats opts) (isValues opts) (isTrace opts) $
---   \\(_ :: Proxy \'(s, p, t)) ->
---     runWithStoreEffectsIOT @s @p @t opts $
---       evalExprLocT @s @t expr
+-- withEvalCfg (isEvalStats opts) (isValues opts) (isTrace opts) $
+--   \\(_ :: Proxy cfg) ->
+--     runWithStoreEffectsIOT @cfg opts $
+--       evalExprLocT expr  -- config inferred from environment
 -- @
 evalExprLocT
-  :: forall (stats :: Bool) (trace :: Bool) e t f m
-   . (MonadNix e t f m, HasStats stats, HasTracing trace)
+  :: forall e t f m
+   . (MonadNix e t f m, HasEvalCfg e)
   => NExprLoc
   -> m (NValue t f m)
-evalExprLocT =
-  ifTracing @trace
+evalExprLocT = case singTrace @(CtxCfg e) of
+  STrue ->
     -- Tracing enabled: use tracing evaluator
-    (join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo)
-    -- Tracing disabled: check stats at type level
-    (ifStats @stats
+    join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo
+  SFalse -> case singStats @(CtxCfg e) of
+    STrue ->
       -- Stats enabled: use stats evaluator (still need runtime lookup for handle)
-      (\expr -> do
+      \expr -> do
         mstats <- askEvalStats
         case mstats of
           Just s  -> evalWithStatsAndMetaInfo s expr
           Nothing -> Eval.evalWithMetaInfo expr  -- fallback
-      )
+    SFalse ->
       -- Stats disabled: use plain evaluator (fastest path, zero overhead)
       Eval.evalWithMetaInfo
-    )
 {-# INLINABLE evalExprLocT #-}
 
-exec :: (MonadNix e t f m, MonadInstantiate m) => Vector Text -> m (NValue t f m)
+exec :: (MonadNix e t f m, MonadInstantiate m, HasProvCfg (CtxCfg e)) => Vector Text -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
 
 -- | Type-parameterized version of 'exec' with compile-time feature dispatch.
+-- Uses 'CtxCfg e' from the environment for all config dispatch, ensuring
+-- stats, provenance, and tracing settings stay consistent.
 execT
-  :: forall (stats :: Bool) (trace :: Bool) e t f m
-   . (MonadNix e t f m, MonadInstantiate m, HasStats stats, HasTracing trace)
+  :: forall e t f m
+   . (MonadNix e t f m, MonadInstantiate m, HasEvalCfg e)
   => Vector Text
   -> m (NValue t f m)
-execT args = either throwError (evalExprLocT @stats @trace) =<< exec' args
+execT args = either throwError evalExprLocT =<< exec' args
 {-# INLINABLE execT #-}
 
 -- Please, delete `nix` from the name
 nixInstantiateExpr
-  :: (MonadNix e t f m, MonadInstantiate m) => Text -> m (NValue t f m)
+  :: (MonadNix e t f m, MonadInstantiate m, HasProvCfg (CtxCfg e)) => Text -> m (NValue t f m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
 
 -- | Type-parameterized version of 'nixInstantiateExpr' with compile-time feature dispatch.
+-- Uses 'CtxCfg e' from the environment for all config dispatch, ensuring
+-- stats, provenance, and tracing settings stay consistent.
 nixInstantiateExprT
-  :: forall (stats :: Bool) (trace :: Bool) e t f m
-   . (MonadNix e t f m, MonadInstantiate m, HasStats stats, HasTracing trace)
+  :: forall e t f m
+   . (MonadNix e t f m, MonadInstantiate m, HasEvalCfg e)
   => Text
   -> m (NValue t f m)
-nixInstantiateExprT s = either throwError (evalExprLocT @stats @trace) =<< instantiateExpr s
+nixInstantiateExprT s = either throwError evalExprLocT =<< instantiateExpr s
 {-# INLINABLE nixInstantiateExprT #-}

@@ -31,7 +31,10 @@ import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
                                                 , evalExprLoc
                                                 )
-import           Nix.Context                    ( askEvalStats )
+import           Nix.Context                    ( askEvalStats
+                                                , CtxCfg
+                                                )
+import           Nix.Config.Singleton           ( HasProvCfg )
 import           Nix.EvalStats                  ( recordHttpFetch, recordStoreAdd, recordFileRead )
 import qualified GHC.Clock                     as Clock
 import           Nix.Expr.Types
@@ -1273,7 +1276,7 @@ findPathM = findPathBy existingPath
       pure $ pure apath `whenTrue` doesExist
 
 defaultImportPath
-  :: (MonadNix e t f m, MonadState (HashMap Path NExprLoc, b) m)
+  :: (MonadNix e t f m, MonadState (HashMap Path NExprLoc, b) m, HasProvCfg (CtxCfg e))
   => Path
   -> m (NValue t f m)
 defaultImportPath path =

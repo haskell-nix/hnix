@@ -22,6 +22,7 @@ import           Nix.Parser
 import           Nix.Standard
 import           Nix.Value
 import qualified NixLanguageTests
+import           TestCommon (runWithBasicEffectsIO)
 import qualified ParserTests
 import qualified PrettyTests
 import qualified ReduceExprTests

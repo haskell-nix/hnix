@@ -16,6 +16,7 @@ module Repl
 
 import           Nix.Prelude             hiding ( state )
 import           Nix                     hiding ( exec )
+import           Nix.Context                    ( CtxCfg )
 import           Nix.Scope
 import           Nix.Value.Monad                ( demand )
 
@@ -54,13 +55,13 @@ import qualified System.Exit                   as Exit
 import qualified System.IO.Error               as Error
 
 -- | Repl entry point
-main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
+main :: (MonadNix e t f m, MonadIO m, MonadMask m, HasProvCfg (CtxCfg e)) =>  m ()
 main = main' Nothing
 
 -- | Principled version allowing to pass initial value for context.
 --
 -- Passed value is stored in context with "input" key.
-main' :: (MonadNix e t f m, MonadIO m, MonadMask m) => Maybe (NValue t f m) -> m ()
+main' :: (MonadNix e t f m, MonadIO m, MonadMask m, HasProvCfg (CtxCfg e)) => Maybe (NValue t f m) -> m ()
 main' iniVal =
   do
     s <- initState iniVal
@@ -151,7 +152,7 @@ defReplConfig = ReplConfig
   }
 
 -- | Create initial IState for REPL
-initState :: MonadNix e t f m => Maybe (NValue t f m) -> m (IState t f m)
+initState :: (MonadNix e t f m, HasProvCfg (CtxCfg e)) => Maybe (NValue t f m) -> m (IState t f m)
 initState mIni = do
 
   builtins <- evalText "builtins"
@@ -172,7 +173,7 @@ initState mIni = do
         , cfgValues = isValues opts
         }
   where
-    evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
+    evalText :: (MonadNix e t f m, HasProvCfg (CtxCfg e)) => Text -> m (NValue t f m)
     evalText expr =
       either
         (\ e -> fail $ toString $ "Impossible happened: Unable to parse expression - '" <> expr <> "' fail was " <> show e)
@@ -186,7 +187,7 @@ type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
 exec
   :: forall e t f m
-   . (MonadNix e t f m, MonadIO m)
+   . (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   => Bool
   -> Text
   -> Repl e t f m (Maybe (NValue t f m))
@@ -257,7 +258,7 @@ exec update source =
     "{" <> i <> whenFalse ";" (Text.isSuffixOf ";" i) <> "}"
 
 cmd
-  :: (MonadNix e t f m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   => Text
   -> Repl e t f m ()
 cmd source =
@@ -304,7 +305,7 @@ browse _ =
 
 -- | @:load@ command
 load
-  :: (MonadNix e t f m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   => Path
   -> Repl e t f m ()
 load path =
@@ -318,7 +319,7 @@ load path =
 
 -- | @:type@ command
 typeof
-  :: (MonadNix e t f m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   => Text
   -> Repl e t f m ()
 typeof src = do
@@ -360,7 +361,7 @@ defaultMatcher =
   one (":load", Console.fileCompleter)
 
 completion
-  :: (MonadNix e t f m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   => CompleterStyle (StateT (IState t f m) m)
 completion =
   System.Console.Repline.Prefix
@@ -375,7 +376,7 @@ completion =
 -- Heavily inspired by Dhall Repl, with `algebraicComplete`
 -- adjusted to monadic variant able to `demand` thunks.
 completeFunc
-  :: forall e t f m . (MonadNix e t f m, MonadIO m)
+  :: forall e t f m . (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   -- 2021-04-02: So far conversiton to Text here is not productive,
   -- since Haskeline uses String of all this.
   => String
@@ -472,7 +473,7 @@ data HelpOption e t f m = HelpOption
 
 type HelpOptions e t f m = [HelpOption e t f m]
 
-helpOptions :: (MonadNix e t f m, MonadIO m) => HelpOptions e t f m
+helpOptions :: (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e)) => HelpOptions e t f m
 helpOptions =
   [ HelpOption
       "help"
@@ -590,6 +591,6 @@ help hs _ = do
     hs
 
 options
-  :: (MonadNix e t f m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m, HasProvCfg (CtxCfg e))
   => Console.Options (Repl e t f m)
 options = (\ h -> (toString $ helpOptionName h, helpOptionFunction h)) <$> helpOptions

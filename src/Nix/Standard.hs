@@ -1,7 +1,10 @@
+{-# language AllowAmbiguousTypes #-}
 {-# language TypeFamilies #-}
 {-# language CPP #-}
 {-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language KindSignatures #-}
+{-# language TypeApplications #-}
 {-# language UndecidableInstances #-}
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
@@ -87,13 +90,18 @@ newtype StdThunk m =
     (StdCited m (NThunkF m (StdValue m)))
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
-type StdM m = StandardT (StdIdT m)
-type StdValM m = StdValue (StdM m)
-type StdThunM m = StdThunk (StdM m)
-type StandardIO = StdM IO
-type StdVal = StdValue StandardIO
-type StdThun = StdThunk StandardIO
-type StdIO = StandardIO ()
+
+-- | Standard evaluation monad with compile-time configuration.
+--
+-- The @cfg@ parameter enables zero-cost conditional execution.
+-- Use 'withEvalCfg' at program startup to bridge runtime options to @cfg@.
+type StdM (cfg :: EvalCfg) m = StandardT cfg (StdIdT m)
+
+-- | Value type in the standard monad.
+type StdValM (cfg :: EvalCfg) m = StdValue (StdM cfg m)
+
+-- | Thunk type in the standard monad.
+type StdThunM (cfg :: EvalCfg) m = StdThunk (StdM cfg m)
 
 type StdBase m =
   ( MonadFix m
@@ -131,7 +139,7 @@ instance HasCitations m (StdValue m) (StdThunk m) where
   citations (StdThunk c) = citations1 c
   addProvenance x (StdThunk c) = StdThunk $ addProvenance1 x c
 
-instance (MonadReader (Context m (StdValue m)) m, MonadIO m) => Scoped (StdValue m) m where
+instance (MonadReader (Context cfg m (StdValue m)) m, MonadIO m) => Scoped (StdValue m) m where
   askScopes   = askScopesReader
   clearScopes = clearScopesReader @m @(StdValue m)
   pushScopes  = pushScopesReader
@@ -140,8 +148,8 @@ instance (MonadReader (Context m (StdValue m)) m, MonadIO m) => Scoped (StdValue
 
 -- | Instrumented lookupVar that records scope stats when enabled
 lookupVarWithStats
-  :: forall m
-  . ( MonadReader (Context m (StdValue m)) m
+  :: forall cfg m
+  . ( MonadReader (Context cfg m (StdValue m)) m
     , MonadIO m
     )
   => VarName
@@ -176,11 +184,12 @@ instance
   , MonadAtomicRef m
   , Typeable m
   , Scoped (StdValue m) m
-  , MonadReader (Context m (StdValue m)) m
+  , MonadReader (Context cfg m (StdValue m)) m
   , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
   , MonadDataErrorContext (StdThunk m) (StdCited m) m
   , MonadThunk (StdThunk m) m (StdValue m)
   , MonadValue (StdValue m) m
+  , HasProvCfg cfg
   )
   => MonadEffects (StdThunk m) (StdCited m) m where
   toAbsolutePath   = defaultToAbsolutePath
@@ -201,7 +210,7 @@ instance
   , MonadAtomicRef m
   , MonadCatch     m
   , MonadIO        m
-  , MonadReader (Context m (StdValue m)) m
+  , MonadReader (Context cfg m (StdValue m)) m
   )
   => MonadThunk (StdThunk m) m (StdValue m) where
 
@@ -295,7 +304,7 @@ instance
   , MonadThunkId   m
   , MonadAtomicRef m
   , MonadCatch     m
-  , MonadReader (Context m (StdValue m)) m
+  , MonadReader (Context cfg m (StdValue m)) m
   )
   => MonadThunkF (StdThunk m) m (StdValue m) where
 
@@ -340,7 +349,7 @@ instance
   , MonadCatch m
   , MonadIO m
   , Typeable m
-  , MonadReader (Context m (StdValue m)) m
+  , MonadReader (Context cfg m (StdValue m)) m
   , MonadThunkId m
   )
   => MonadValue (StdValue m) m where
@@ -383,7 +392,7 @@ instance
   , MonadCatch m
   , MonadIO m
   , Typeable m
-  , MonadReader (Context m (StdValue m)) m
+  , MonadReader (Context cfg m (StdValue m)) m
   , MonadThunkId m
   )
   => MonadValueF (StdValue m) m where
@@ -415,10 +424,15 @@ instance
 -- whileForcingThunk frame =
 --   withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame
 
-newtype StandardTF r m a
+-- | The core evaluation transformer, parameterized by compile-time config.
+--
+-- The @cfg@ parameter enables zero-cost conditional execution in the
+-- 'MonadEval' instance. When @cfg@ is known at compile time (via 'withEvalCfg'),
+-- GHC eliminates unused branches for disabled features.
+newtype StandardTF (cfg :: EvalCfg) r m a
   = StandardTF
       (ReaderT
-        (Context r (StdValue r))
+        (Context cfg r (StdValue r))
         (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
         a
       )
@@ -434,55 +448,59 @@ newtype StandardTF r m a
     , MonadCatch
     , MonadThrow
     , MonadMask
-    , MonadReader (Context r (StdValue r))
+    , MonadReader (Context cfg r (StdValue r))
     , MonadState (HashMap Path NExprLoc, HashMap Text Text)
     )
 
-instance MonadTrans (StandardTF r) where
+instance MonadTrans (StandardTF cfg r) where
   lift = StandardTF . lift . lift
   {-# INLINABLE lift #-}
 
 instance (MonadPutStr r, MonadPutStr m)
-  => MonadPutStr (StandardTF r m)
+  => MonadPutStr (StandardTF cfg r m)
 instance (MonadHttp r, MonadHttp m)
-  => MonadHttp (StandardTF r m)
+  => MonadHttp (StandardTF cfg r m)
 instance (MonadEnv r, MonadEnv m)
-  => MonadEnv (StandardTF r m)
+  => MonadEnv (StandardTF cfg r m)
 instance (MonadPaths r, MonadPaths m)
-  => MonadPaths (StandardTF r m)
+  => MonadPaths (StandardTF cfg r m)
 instance (MonadInstantiate r, MonadInstantiate m)
-  => MonadInstantiate (StandardTF r m)
+  => MonadInstantiate (StandardTF cfg r m)
 instance (MonadExec r, MonadExec m)
-  => MonadExec (StandardTF r m)
+  => MonadExec (StandardTF cfg r m)
 instance (MonadIntrospect r, MonadIntrospect m)
-  => MonadIntrospect (StandardTF r m)
+  => MonadIntrospect (StandardTF cfg r m)
 
 ---------------------------------------------------------------------------------
 
-type StandardT m = Fix1T StandardTF m
+-- | Standard evaluation monad, parameterized by compile-time config.
+--
+-- When @cfg@ is known at compile time, GHC eliminates unused branches
+-- for disabled features (stats, provenance, tracing).
+type StandardT (cfg :: EvalCfg) m = Fix1T (StandardTF cfg) m
 
-instance MonadTrans (Fix1T StandardTF) where
+instance MonadTrans (Fix1T (StandardTF cfg)) where
   lift = Fix1T . lift
   {-# INLINABLE lift #-}
 
 instance MonadThunkId m
-  => MonadThunkId (StandardT m) where
+  => MonadThunkId (StandardT cfg m) where
 
-  type ThunkId (StandardT m) = ThunkId m
+  type ThunkId (StandardT cfg m) = ThunkId m
 
 mkStandardT
   :: ReaderT
-      (Context (StandardT m) (StdValue (StandardT m)))
+      (Context cfg (StandardT cfg m) (StdValue (StandardT cfg m)))
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
-  -> StandardT m a
+  -> StandardT cfg m a
 mkStandardT = coerce
 {-# INLINABLE mkStandardT #-}
 
 runStandardT
-  :: StandardT m a
+  :: StandardT cfg m a
   -> ReaderT
-      (Context (StandardT m) (StdValue (StandardT m)))
+      (Context cfg (StandardT cfg m) (StdValue (StandardT cfg m)))
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
 runStandardT = coerce
@@ -492,7 +510,7 @@ runWithBasicEffectsAndStats
   :: (MonadIO m, MonadAtomicRef m)
   => Options
   -> Maybe EvalStats
-  -> StandardT (StdIdT m) a
+  -> StandardT cfg (StdIdT m) a
   -> m a
 runWithBasicEffectsAndStats opts mstats =
   fun . (`evalStateT` mempty) . (`runReaderT` newContextWithStats opts mstats) . runStandardT
@@ -503,49 +521,13 @@ runWithBasicEffectsAndStats opts mstats =
 runWithBasicEffects
   :: (MonadIO m, MonadAtomicRef m)
   => Options
-  -> StandardT (StdIdT m) a
+  -> StandardT cfg (StdIdT m) a
   -> m a
 runWithBasicEffects opts = runWithBasicEffectsAndStats opts Nothing
 
-runWithBasicEffectsIO :: Options -> StandardIO a -> IO a
-runWithBasicEffectsIO = runWithBasicEffects
-
-runWithStoreEffectsIO
-  :: forall a
-   . Options
-  -> (forall m. StdBase m => StdM m a)
-  -> IO a
-runWithStoreEffectsIO opts action = do
-  -- Create stats collector if enabled
-  mstats <- if isEvalStats opts then Just <$> newEvalStats else pure Nothing
-
-  -- Warn about invalid option combinations
-  when (getStoreMode opts == StoreRemote && getStoreDir opts /= "/nix/store") $
-    IO.hPutStrLn IO.stderr "Warning: --store-dir is ignored in remote mode (nix-daemon always uses /nix/store)"
-
-  -- Run the action
-  result <- case getStoreMode opts of
-    StoreRemote ->
-      runWithBasicEffectsAndStats opts mstats (action :: StdM IO a)
-    StoreOverlay ->
-      let
-        storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
-        cfg = OverlayStoreConfig
-          { overlayStoreDir = storeDir
-          , overlayReadThrough = isStoreReadThrough opts
-          }
-      in
-        evalOverlayStoreT cfg defaultOverlayStoreState $
-          runWithBasicEffectsAndStats opts mstats (action :: StdM (OverlayStoreT IO) a)
-
-  -- Print stats if enabled
-  traverse_ printEvalStats mstats
-
-  pure result
-
 -- | Type-parameterized runner with compile-time configuration dispatch.
 --
--- When configuration flags are known at compile time (established via 'withEvalConfig'),
+-- When configuration flags are known at compile time (established via 'withEvalCfg'),
 -- this function enables zero-cost conditional execution. The type parameters flow through
 -- to the action, allowing evaluation functions like 'evalExprLocT' to use compile-time
 -- dispatch.
@@ -553,22 +535,20 @@ runWithStoreEffectsIO opts action = do
 -- Example usage:
 --
 -- @
--- main' opts = withEvalConfig (isEvalStats opts) (isValues opts) (isTrace opts) $
---   \\(_ :: Proxy \'(s, p, t)) ->
---     runWithStoreEffectsIOT @s @p @t opts myAction
+-- main' opts = withEvalCfg (isEvalStats opts) (isValues opts) (isTrace opts) $
+--   \\(_ :: Proxy cfg) ->
+--     runWithStoreEffectsIOT @cfg opts myAction
 -- @
 runWithStoreEffectsIOT
-  :: forall (stats :: Bool) (prov :: Bool) (trace :: Bool) a
-   . EvalConfig stats prov trace
+  :: forall (cfg :: EvalCfg) a
+   . KnownEvalCfg cfg
   => Options
-  -> (forall m. (StdBase m, EvalConfig stats prov trace) => StdM m a)
+  -> (forall m. (StdBase m, KnownEvalCfg cfg) => StdM cfg m a)
   -> IO a
 runWithStoreEffectsIOT opts action = do
   -- Create stats collector only when type-level says it's needed
-  -- When stats ~ 'False, this entire branch compiles to (pure Nothing)
-  mstats <- ifStatsM @stats
-    (Just <$> newEvalStats)
-    (pure Nothing)
+  -- When CfgStats cfg ~ 'False, GHC eliminates the Just branch
+  mstats <- ifStats @cfg (Just <$> newEvalStats) (pure Nothing)
 
   -- Warn about invalid option combinations
   when (getStoreMode opts == StoreRemote && getStoreDir opts /= "/nix/store") $
@@ -577,21 +557,21 @@ runWithStoreEffectsIOT opts action = do
   -- Run the action
   result <- case getStoreMode opts of
     StoreRemote ->
-      runWithBasicEffectsAndStats opts mstats (action :: StdM IO a)
+      runWithBasicEffectsAndStats opts mstats (action :: StdM cfg IO a)
     StoreOverlay ->
       let
         storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
-        cfg = OverlayStoreConfig
+        storeCfg = OverlayStoreConfig
           { overlayStoreDir = storeDir
           , overlayReadThrough = isStoreReadThrough opts
           }
       in
-        evalOverlayStoreT cfg defaultOverlayStoreState $
-          runWithBasicEffectsAndStats opts mstats (action :: StdM (OverlayStoreT IO) a)
+        evalOverlayStoreT storeCfg defaultOverlayStoreState $
+          runWithBasicEffectsAndStats opts mstats (action :: StdM cfg (OverlayStoreT IO) a)
 
   -- Print stats only when enabled at type level
-  -- When stats ~ 'False, this compiles to (pure ())
-  whenStats @stats $ traverse_ printEvalStats mstats
+  -- When CfgStats cfg ~ 'False, GHC eliminates this branch
+  whenStatsM @cfg $ traverse_ printEvalStats mstats
 
   pure result
 {-# INLINABLE runWithStoreEffectsIOT #-}

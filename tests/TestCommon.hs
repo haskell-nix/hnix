@@ -1,4 +1,19 @@
-module TestCommon where
+module TestCommon
+  ( -- * Test-specific type aliases
+    StandardIO
+  , StdVal
+  , StdThun
+    -- * Test runners
+  , runWithBasicEffectsIO
+    -- * Test helpers
+  , hnixEvalFile
+  , hnixEvalText
+  , nixEvalFile
+  , nixEvalText
+  , assertEvalMatchesNix
+  , assertEvalFileMatchesNix
+  , assertEvalTextMatchesNix
+  ) where
 
 import           Nix.Prelude
 import           GHC.Err                        ( errorWithoutStackTrace )
@@ -13,6 +28,15 @@ import           System.PosixCompat.Files
 import           System.PosixCompat.Temp
 import           System.Process
 import           Test.Tasty.HUnit
+
+-- | Test-specific type aliases using default configuration (all flags disabled)
+type StandardIO = StdM DefaultCfg IO
+type StdVal = StdValue StandardIO
+type StdThun = StdThunk StandardIO
+
+-- | Run with basic effects in IO using default configuration.
+runWithBasicEffectsIO :: Options -> StdM DefaultCfg IO a -> IO a
+runWithBasicEffectsIO = runWithBasicEffects
 
 hnixEvalFile :: Options -> Path -> IO StdVal
 hnixEvalFile opts file =

@@ -1,216 +1,250 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
--- | Type-level configuration for HNix evaluation.
+-- | Type-level evaluation configuration for zero-cost conditional execution.
 --
 -- This module provides compile-time specialization for evaluation hot paths
--- using the @singleton-bool@ library. Configuration flags (stats collection,
--- provenance tracking, tracing) are lifted to the type level, allowing GHC
--- to generate specialized code with zero runtime overhead for disabled features.
+-- using a type-level configuration record. Configuration flags (stats collection,
+-- provenance tracking, tracing) are bundled into a single 'EvalCfg' type,
+-- allowing GHC to generate specialized code with zero runtime overhead for
+-- disabled features.
 --
 -- == Usage
 --
--- At program startup, use 'withEvalConfig' to bridge runtime options to
+-- At program startup, use 'withEvalCfg' to bridge runtime options to
 -- type-level configuration:
 --
 -- @
 -- main :: IO ()
 -- main = do
 --   opts <- parseOptions
---   withEvalConfig
+--   withEvalCfg
 --     (isEvalStats opts)
---     (isProvenance opts)
+--     (isValues opts)
 --     (isTrace opts)
---     $ \(_ :: Proxy '(s, p, t)) ->
---         runEvaluation @s @p @t ...
+--     $ \\(_ :: Proxy cfg) ->
+--         runEvaluation \@cfg ...
 -- @
 --
--- Within evaluation code, use 'whenStats', 'whenProvenance', and 'whenTracing'
+-- Within evaluation code, use 'singStats', 'singProv', and 'singTrace'
 -- for zero-cost conditional execution:
 --
 -- @
--- evalExpr :: forall s p t m. EvalConfig s p t => Expr -> m Value
--- evalExpr expr = do
---   whenStats @s $ recordExprStart expr
---   result <- doEval expr
---   whenStats @s $ recordExprEnd expr
---   pure result
+-- evalExpr :: forall cfg m. KnownEvalCfg cfg => Expr -> m Value
+-- evalExpr expr = case singProv \@cfg of
+--   STrue  -> evalWithProvenance expr
+--   SFalse -> evalWithoutProvenance expr
 -- @
 --
--- When @s ~ 'False@, GHC eliminates the 'whenStats' calls entirely via
+-- When @CfgProv cfg ~ 'False@, GHC eliminates the 'STrue' branch entirely via
 -- case-of-known-constructor optimization.
 module Nix.Config.Singleton
-  ( -- * Type-level configuration flags
-    EvalConfig
-  , HasStats
-  , HasProvenance
-  , HasTracing
-    -- * Conditional operations (zero-cost when disabled)
-  , whenStats
-  , whenProvenance
-  , whenTracing
+  ( -- * Configuration type
+    EvalCfg  -- Abstract: constructor not exported
+  , KnownEvalCfg
+    -- * Default configuration (all flags disabled, for tests)
+  , DefaultCfg
+    -- * Per-flag constraints (use these for minimal constraints)
+  , HasStatsCfg
+  , HasProvCfg
+  , HasTraceCfg
+    -- * Type families
+  , CfgStats
+  , CfgProv
+  , CfgTrace
+    -- * Singleton accessors (zero-cost)
+  , singStats
+  , singProv
+  , singTrace
+    -- * Helper functions (zero-cost dispatch)
+  , ifSBool
   , ifStats
-  , ifProvenance
-  , ifTracing
-    -- * Monadic conditional operations
-  , ifStatsM
-  , ifProvenanceM
-  , ifTracingM
+  , ifProv
+  , ifTrace
+  , whenStatsM
+  , whenProvM
+  , whenTraceM
     -- * Runtime bridge
-  , withEvalConfig
-  , SomeEvalConfig(..)
+  , withEvalCfg
     -- * Re-exports from singleton-bool
+  , SBool(..)
   , SBoolI(..)
   ) where
 
 import           Relude
 
-import           Data.Singletons.Bool (SBool(..), SBoolI(..), reifyBool)
+import           Data.Singletons.Bool (SBool(..), SBoolI(..), sbool)
 
--- | Constraint bundle for evaluation configuration.
+-- | Like 'reifyBool' from singleton-bool, but also provides 'Typeable' constraint.
+-- This is needed because the standard 'reifyBool' only provides 'SBoolI',
+-- but 'renderFrames' needs 'Typeable (StdValM cfg m)' which requires 'Typeable cfg'.
+reifyBoolT :: forall r. Bool -> (forall b. (SBoolI b, Typeable b) => Proxy b -> r) -> r
+reifyBoolT True  k = k (Proxy @'True)
+reifyBoolT False k = k (Proxy @'False)
+{-# INLINE reifyBoolT #-}
+
+-- | Type-level configuration record (promoted to kind level via DataKinds).
 --
--- This constraint provides access to all three configuration flags at the
--- type level. Functions with this constraint can use 'whenStats',
--- 'whenProvenance', and 'whenTracing' for zero-cost conditional execution.
-type EvalConfig (stats :: Bool) (prov :: Bool) (trace :: Bool) =
-  (HasStats stats, HasProvenance prov, HasTracing trace)
+-- Each field corresponds to a runtime configuration option that affects
+-- evaluation behavior. By lifting these to the type level, we enable
+-- compile-time specialization.
+data EvalCfg = MkEvalCfg
+  { _cfgStats :: Bool  -- ^ Collect evaluation statistics
+  , _cfgProv  :: Bool  -- ^ Track provenance information
+  , _cfgTrace :: Bool  -- ^ Enable expression tracing
+  }
 
--- | Individual constraint for stats collection flag.
-type HasStats s = SBoolI s
+-- | Default configuration with all flags disabled.
+-- Use this for tests and simple usage where no special features are needed.
+type DefaultCfg = 'MkEvalCfg 'False 'False 'False
 
--- | Individual constraint for provenance tracking flag.
-type HasProvenance p = SBoolI p
+-- | Extract the stats flag from a configuration.
+type family CfgStats (cfg :: EvalCfg) :: Bool where
+  CfgStats ('MkEvalCfg s _ _) = s
 
--- | Individual constraint for tracing flag.
-type HasTracing t = SBoolI t
+-- | Extract the provenance flag from a configuration.
+type family CfgProv (cfg :: EvalCfg) :: Bool where
+  CfgProv ('MkEvalCfg _ p _) = p
 
--- | Execute action only when stats collection is enabled at the type level.
+-- | Extract the trace flag from a configuration.
+type family CfgTrace (cfg :: EvalCfg) :: Bool where
+  CfgTrace ('MkEvalCfg _ _ t) = t
+
+-- | Constraint that all configuration flags are known at compile time.
 --
--- When @s ~ 'False@, GHC eliminates this call entirely at compile time.
+-- Functions with this constraint can use 'singStats', 'singProv', and
+-- 'singTrace' for zero-cost conditional execution.
+--
+-- Includes 'Typeable cfg' because renderFrames requires @Typeable v@ where
+-- @v = StdValM cfg m@, which needs @Typeable cfg@.
+type KnownEvalCfg cfg =
+  ( SBoolI (CfgStats cfg)
+  , SBoolI (CfgProv cfg)
+  , SBoolI (CfgTrace cfg)
+  , Typeable cfg
+  )
+
+-- | Constraint for functions that only need stats flag.
+-- Use this instead of 'KnownEvalCfg' to minimize constraints.
+type HasStatsCfg cfg = SBoolI (CfgStats cfg)
+
+-- | Constraint for functions that only need provenance flag.
+-- Use this instead of 'KnownEvalCfg' to minimize constraints.
+type HasProvCfg cfg = SBoolI (CfgProv cfg)
+
+-- | Constraint for functions that only need trace flag.
+-- Use this instead of 'KnownEvalCfg' to minimize constraints.
+type HasTraceCfg cfg = SBoolI (CfgTrace cfg)
+
+-- | Access the stats singleton for compile-time dispatch.
 --
 -- @
--- whenStats @s $ recordStat "function_application"
+-- case singStats \@cfg of
+--   STrue  -> collectStats
+--   SFalse -> pure ()  -- Eliminated by GHC when CfgStats cfg ~ 'False
 -- @
-whenStats :: forall s m. (HasStats s, Applicative m) => m () -> m ()
-whenStats action = case sbool @s of
-  STrue  -> action
-  SFalse -> pure ()
-{-# INLINABLE whenStats #-}
+singStats :: forall cfg. HasStatsCfg cfg => SBool (CfgStats cfg)
+singStats = sbool @(CfgStats cfg)
+{-# INLINE singStats #-}
 
--- | Execute action only when provenance tracking is enabled at the type level.
+-- | Access the provenance singleton for compile-time dispatch.
 --
--- When @p ~ 'False@, GHC eliminates this call entirely at compile time.
-whenProvenance :: forall p m. (HasProvenance p, Applicative m) => m () -> m ()
-whenProvenance action = case sbool @p of
-  STrue  -> action
-  SFalse -> pure ()
-{-# INLINABLE whenProvenance #-}
+-- When 'CfgProv cfg ~ 'False', the 'STrue' branch is eliminated entirely
+-- by GHC's case-of-known-constructor optimization.
+singProv :: forall cfg. HasProvCfg cfg => SBool (CfgProv cfg)
+singProv = sbool @(CfgProv cfg)
+{-# INLINE singProv #-}
 
--- | Execute action only when tracing is enabled at the type level.
---
--- When @t ~ 'False@, GHC eliminates this call entirely at compile time.
-whenTracing :: forall t m. (HasTracing t, Applicative m) => m () -> m ()
-whenTracing action = case sbool @t of
-  STrue  -> action
-  SFalse -> pure ()
-{-# INLINABLE whenTracing #-}
+-- | Access the trace singleton for compile-time dispatch.
+singTrace :: forall cfg. HasTraceCfg cfg => SBool (CfgTrace cfg)
+singTrace = sbool @(CfgTrace cfg)
+{-# INLINE singTrace #-}
 
--- | Choose between two values based on whether stats collection is enabled.
---
--- When @s@ is statically known, GHC eliminates the branch entirely.
+-- | Zero-cost conditional based on singleton bool.
 --
 -- @
--- result <- ifStats @s
---   (evalWithStats expr)
---   (evalWithoutStats expr)
+-- ifSBool STrue  trueVal falseVal = trueVal
+-- ifSBool SFalse trueVal falseVal = falseVal
 -- @
-ifStats :: forall s a. HasStats s => a -> a -> a
-ifStats whenTrue whenFalse = case sbool @s of
-  STrue  -> whenTrue
-  SFalse -> whenFalse
-{-# INLINABLE ifStats #-}
-
--- | Choose between two values based on whether provenance tracking is enabled.
-ifProvenance :: forall p a. HasProvenance p => a -> a -> a
-ifProvenance whenTrue whenFalse = case sbool @p of
-  STrue  -> whenTrue
-  SFalse -> whenFalse
-{-# INLINABLE ifProvenance #-}
-
--- | Choose between two values based on whether tracing is enabled.
-ifTracing :: forall t a. HasTracing t => a -> a -> a
-ifTracing whenTrue whenFalse = case sbool @t of
-  STrue  -> whenTrue
-  SFalse -> whenFalse
-{-# INLINABLE ifTracing #-}
-
--- | Monadic version of 'ifStats' - choose between two actions.
 --
--- When @s@ is statically known, GHC eliminates the branch entirely.
-ifStatsM :: forall s m a. (HasStats s, Monad m) => m a -> m a -> m a
-ifStatsM whenTrue whenFalse = case sbool @s of
-  STrue  -> whenTrue
-  SFalse -> whenFalse
-{-# INLINABLE ifStatsM #-}
+-- GHC eliminates the unused branch when the singleton is known at compile time.
+ifSBool :: SBool b -> a -> a -> a
+ifSBool STrue  t _ = t
+ifSBool SFalse _ f = f
+{-# INLINE ifSBool #-}
 
--- | Monadic version of 'ifProvenance' - choose between two actions.
-ifProvenanceM :: forall p m a. (HasProvenance p, Monad m) => m a -> m a -> m a
-ifProvenanceM whenTrue whenFalse = case sbool @p of
-  STrue  -> whenTrue
-  SFalse -> whenFalse
-{-# INLINABLE ifProvenanceM #-}
-
--- | Monadic version of 'ifTracing' - choose between two actions.
-ifTracingM :: forall t m a. (HasTracing t, Monad m) => m a -> m a -> m a
-ifTracingM whenTrue whenFalse = case sbool @t of
-  STrue  -> whenTrue
-  SFalse -> whenFalse
-{-# INLINABLE ifTracingM #-}
-
--- | Existentially wrapped configuration for runtime dispatch.
+-- | Zero-cost conditional on stats flag.
 --
--- This type allows storing a configuration that was determined at runtime
--- and using it later with pattern matching.
-data SomeEvalConfig where
-  MkEvalConfig :: forall s p t. EvalConfig s p t
-               => Proxy '(s, p, t) -> SomeEvalConfig
+-- @
+-- ifStats \@cfg trueVal falseVal
+-- @
+--
+-- When @CfgStats cfg ~ 'False@, the @trueVal@ is eliminated at compile time.
+ifStats :: forall cfg a. HasStatsCfg cfg => a -> a -> a
+ifStats = ifSBool (singStats @cfg)
+{-# INLINE ifStats #-}
+
+-- | Zero-cost conditional on provenance flag.
+ifProv :: forall cfg a. HasProvCfg cfg => a -> a -> a
+ifProv = ifSBool (singProv @cfg)
+{-# INLINE ifProv #-}
+
+-- | Zero-cost conditional on trace flag.
+ifTrace :: forall cfg a. HasTraceCfg cfg => a -> a -> a
+ifTrace = ifSBool (singTrace @cfg)
+{-# INLINE ifTrace #-}
+
+-- | Execute action only when stats enabled (zero-cost when disabled).
+whenStatsM :: forall cfg m. (HasStatsCfg cfg, Applicative m) => m () -> m ()
+whenStatsM action = ifStats @cfg action (pure ())
+{-# INLINE whenStatsM #-}
+
+-- | Execute action only when provenance enabled (zero-cost when disabled).
+whenProvM :: forall cfg m. (HasProvCfg cfg, Applicative m) => m () -> m ()
+whenProvM action = ifProv @cfg action (pure ())
+{-# INLINE whenProvM #-}
+
+-- | Execute action only when tracing enabled (zero-cost when disabled).
+whenTraceM :: forall cfg m. (HasTraceCfg cfg, Applicative m) => m () -> m ()
+whenTraceM action = ifTrace @cfg action (pure ())
+{-# INLINE whenTraceM #-}
 
 -- | Bridge runtime booleans to type-level configuration.
 --
 -- This function should be called ONCE at program startup to convert
--- runtime configuration options into type-level parameters. All subsequent
--- evaluation uses the type-level parameters, enabling compile-time
+-- runtime configuration options into a type-level 'EvalCfg'. All subsequent
+-- evaluation uses the single @cfg@ type parameter, enabling compile-time
 -- specialization.
 --
 -- @
 -- main = do
 --   opts <- parseOptions
---   withEvalConfig
---     (collectStats opts)
---     (trackProvenance opts)
---     (enableTracing opts)
---     $ \(_ :: Proxy '(s, p, t)) -> do
---         -- From here, all evaluation uses @s, @p, @t type applications
---         runEvaluation @s @p @t ...
+--   withEvalCfg
+--     (isEvalStats opts)
+--     (isValues opts)
+--     (isTrace opts)
+--     $ \\(_ :: Proxy cfg) -> do
+--         -- From here, use \@cfg type application
+--         runEvaluation \@cfg ...
 -- @
 --
 -- The CPS style ensures that the type-level configuration is available
 -- throughout the entire evaluation scope.
-withEvalConfig
+withEvalCfg
   :: Bool  -- ^ Collect stats
   -> Bool  -- ^ Track provenance
   -> Bool  -- ^ Enable tracing
-  -> (forall s p t. EvalConfig s p t => Proxy '(s, p, t) -> r)
+  -> (forall cfg. KnownEvalCfg cfg => Proxy cfg -> r)
   -> r
-withEvalConfig stats prov tracing k =
-  reifyBool stats $ \(_ :: Proxy s) ->
-    reifyBool prov $ \(_ :: Proxy p) ->
-      reifyBool tracing $ \(_ :: Proxy t) ->
-        k (Proxy @'(s, p, t))
-{-# INLINABLE withEvalConfig #-}
+withEvalCfg stats prov trace k =
+  reifyBoolT stats $ \(_ :: Proxy s) ->
+    reifyBoolT prov $ \(_ :: Proxy p) ->
+      reifyBoolT trace $ \(_ :: Proxy t) ->
+        k (Proxy @('MkEvalCfg s p t))
+{-# INLINE withEvalCfg #-}
