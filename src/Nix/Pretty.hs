@@ -56,12 +56,12 @@ antiquote x = "${" <> getDoc x <> "}"
 mkNixDoc :: NOperatorDef -> Doc ann -> NixDoc ann
 mkNixDoc o d = NixDoc { getDoc = d, rootOp = o, wasPath = False }
 
--- | A simple expression is never wrapped in parentheses. The expression
---   behaves as if its root operator had a precedence higher than all
---   other operators (including function application).
+-- | A simple expression like a symbol or literal that never needs parentheses.
+-- Uses precedence 1, same as the tightest operators (select/app), so it won't
+-- be wrapped when used as an operand of any operator.
 simpleExpr :: Doc ann -> NixDoc ann
 simpleExpr =
-  mkNixDoc $ NSpecialDef NTerm NAssoc minBound "simple expr"
+  mkNixDoc $ NSpecialDef NTerm NAssoc 1 "simple expr"
 
 pathExpr :: Doc ann -> NixDoc ann
 pathExpr d = (simpleExpr d) { wasPath = True }
@@ -87,7 +87,9 @@ needsParens
   -> NOperatorDef
   -> Bool
 needsParens mode host sub =
-  getOpPrecedence host > getOpPrecedence sub
+  -- Lower precedence number = tighter binding. We need parens when sub has
+  -- LOOSER binding (higher number) than host, otherwise sub would steal operands.
+  getOpPrecedence sub > getOpPrecedence host
   || (ProcessAllWrap == mode &&
       NAssoc /= getOpAssoc host &&
       on (==) getOpAssoc host sub &&
@@ -294,7 +296,10 @@ exprFNixDoc = \case
           , getDoc body
           ]
   NApp fun arg ->
-    mkNixDoc appOpDef (wrap appOpDef fun <> " " <> precedenceWrap appOpDef arg)
+    -- Left-assoc app: `f x y` = `(f x) y`, so:
+    -- - fun (left): precedenceWrap (no extra parens for same-prec operands)
+    -- - arg (right): wrap (add parens for nested apps: `f (g x)` needs parens)
+    mkNixDoc appOpDef (precedenceWrap appOpDef fun <> " " <> wrap appOpDef arg)
   NBinary op r1 r2 ->
     mkNixDoc
       opDef $
@@ -322,7 +327,7 @@ exprFNixDoc = \case
       (mkNixDoc selectOp)
       (const leastPrecedence)
       o
-      $ wrapPath selectOp (mkNixDoc selectOp (wrap appOpDef r')) <> "." <> prettySelector attr <>
+      $ wrapPath selectOp r' <> "." <> prettySelector attr <>
         ((" or " <>) . precedenceWrap appOpDef) `whenJust` o
    where
     selectOp :: NOperatorDef

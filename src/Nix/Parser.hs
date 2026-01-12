@@ -583,18 +583,36 @@ nixPath =
                 )
                 parts
         if hasAntiquote
-          then
+          then do
+            -- For paths with antiquotes, check the last part isn't just a slash
+            guard $ isValidPathParts parts
             pure $ mkPathStrF $ DoubleQuoted parts
           else
             case traverse getPlain parts of
-              Just texts ->
-                pure $ mkPathF False $ toString $ Text.concat texts
+              Just texts -> do
+                let pathStr = Text.concat texts
+                guard $ isValidPathStr pathStr
+                pure $ mkPathF False $ toString pathStr
               Nothing -> empty
   where
     getPlain :: Antiquoted Text NExprLoc -> Maybe Text
     getPlain = \case
       Plain t -> Just t
       _ -> Nothing
+
+    -- | Check that a path string doesn't end with "/" and isn't just a root/prefix
+    isValidPathStr :: Text -> Bool
+    isValidPathStr t =
+      not (Text.isSuffixOf "/" t) &&
+      -- Reject paths that are just "/", "~/", "./", "../" etc. with no content
+      t `notElem` ["/", "~", "~/", ".", "./", "..", "../"]
+
+    -- | Check that path parts don't end with just a slash
+    isValidPathParts :: [Antiquoted Text r] -> Bool
+    isValidPathParts parts = case reverse parts of
+      [] -> False
+      (Plain t : _) -> not (Text.isSuffixOf "/" t) && t /= "/"
+      _ -> True  -- Ends with antiquote, which is OK
 
 
 -- ** <<x>> environment path
