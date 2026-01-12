@@ -1,12 +1,6 @@
--- profiling: true
--- avoid conflicts with -fprof-late-overloaded-calls
--- profiling-detail: none
--- profiling-detail: late-toplevel
 semaphore: true
 jobs: $ncpus
 optimization: 1
-
--- cabal run --enable-profiling hnix -- --eval --expr '...' +RTS -p -RTS
 
 packages:
   .
@@ -17,6 +11,3 @@ packages:
   ./hnix-store/hnix-store-readonly
   ./hnix-store/hnix-store-remote
   ./hnix-store/hnix-store-tests
-
-package hnix
-  ghc-options: -rtsopts

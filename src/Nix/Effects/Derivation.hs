@@ -182,7 +182,8 @@ writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   referencePaths <- traverse (parsePath storeDir) (Set.toList $ inputSrcs <> Map.keysSet inputDrvs)
   let references = HS.fromList $ fmap (StorePath . fromString . decodeUtf8 . Store.storePathToRawFilePath storeDir) referencePaths
-  path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) references False
+  let serialized = unparseDrv drv
+  path <- addTextToStore (Text.append name ".drv") serialized references False
   parsePath storeDir $ fromString $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
@@ -242,7 +243,8 @@ hashDerivationModulo
               (HM.lookup path cache)
           )
           (Map.toList inputDrvs)
-    pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 $ unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
+    let serialized = unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
+    pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 serialized
 
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} =
