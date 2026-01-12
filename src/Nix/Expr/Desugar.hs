@@ -84,8 +84,15 @@ desugarBindings binds =
           grouped :: HashMap VarName BindingGroup
           grouped = foldr insertPathBinding (foldr insertSingleKey HM.empty singleKeyBinds) pathBinds
 
-          -- Emit merged bindings
-          emitted = HM.toList grouped >>= uncurry emitGroup
+          -- Track first-seen order of keys (preserves original binding order)
+          -- Using ordNub to remove duplicates while preserving order
+          keyOrder :: [VarName]
+          keyOrder = ordNub $ fmap (\(k, _, _) -> k) singleKeyBinds
+                          <> fmap (\(k, _, _, _) -> k) pathBinds
+
+          -- Emit merged bindings in original order (not HM.toList which is non-deterministic)
+          emitted = keyOrder >>= \k ->
+            maybe [] (emitGroup k) (HM.lookup k grouped)
         in
           -- Combine: other bindings (inherit, dynamic) + emitted static bindings
           otherBinds <> emitted
