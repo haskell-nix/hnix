@@ -27,7 +27,10 @@ module Nix.EvalStats
 import           Nix.Prelude
 import qualified Data.HashMap.Strict as HM
 import qualified Data.List as List
-import           Text.Printf (printf)
+import qualified Data.Aeson as A
+import qualified Data.Aeson.KeyMap as AKM
+import qualified Data.Aeson.Key as AK
+import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified GHC.Clock as Clock
 
 -- | Statistics for a single expression type
@@ -325,124 +328,98 @@ recordStoreAdd stats elapsedNs = liftIO $ do
   modifyIORef' (statsIOTime stats) (+ elapsedNs)
 {-# INLINABLE recordStoreAdd #-}
 
--- | Print statistics summary to stdout
+-- | Print statistics summary to stdout as JSON
 printEvalStats :: MonadIO m => EvalStats -> m ()
 printEvalStats stats = liftIO $ do
-  putStrLn "\n===== Evaluation Statistics ====="
-
   -- Expression stats
   exprMap <- readIORef (statsExprs stats)
-  unless (HM.null exprMap) $ do
-    putStrLn "\n-- Expression Evaluation (sorted by exclusive time) --"
-    putStrLn $ printf "%-16s %10s %14s %14s %10s"
-      ("Type" :: String) ("Count" :: String) ("Excl (ms)" :: String) ("Incl (ms)" :: String) ("Avg Excl" :: String)
-    putStrLn $ replicate 68 '-'
-    -- Sort by exclusive time (descending)
-    let sorted = List.sortOn (negate . exprExclTimeNs . snd) $ HM.toList exprMap
-        totalCount = sum $ map (exprCount . snd) sorted
-        totalExcl = sum $ map (exprExclTimeNs . snd) sorted
-        totalIncl = sum $ map (exprTimeNs . snd) sorted
-    forM_ sorted $ \(name, ExprStats count inclNs exclNs) -> do
-      let exclMs = fromIntegral exclNs / 1e6 :: Double
-          inclMs = fromIntegral inclNs / 1e6 :: Double
-          avgExclUs = if count > 0 then fromIntegral exclNs / fromIntegral count / 1e3 else 0 :: Double
-      putStrLn $ printf "%-16s %10d %14.1f %14.1f %10.2f" (toString name) count exclMs inclMs avgExclUs
-    putStrLn $ replicate 68 '-'
-    putStrLn $ printf "%-16s %10d %14.1f %14.1f"
-      ("TOTAL" :: String) totalCount
-      (fromIntegral totalExcl / 1e6 :: Double)
-      (fromIntegral totalIncl / 1e6 :: Double)
+  let exprList = List.sortOn (negate . exprExclTimeNs . snd) $ HM.toList exprMap
+      exprJson = A.object
+        [ "byType" A..= A.object
+            [ AK.fromText name A..= A.object
+                [ "count" A..= exprCount s
+                , "exclusiveTimeNs" A..= exprExclTimeNs s
+                , "inclusiveTimeNs" A..= exprTimeNs s
+                ]
+            | (name, s) <- exprList
+            ]
+        , "total" A..= A.object
+            [ "count" A..= sum (map (exprCount . snd) exprList)
+            , "exclusiveTimeNs" A..= sum (map (exprExclTimeNs . snd) exprList)
+            , "inclusiveTimeNs" A..= sum (map (exprTimeNs . snd) exprList)
+            ]
+        ]
 
   -- Thunk stats
   thunks <- readIORef (statsThunks stats)
-  when (thunkForced thunks > 0 || thunkCreated thunks > 0) $ do
-    putStrLn "\n-- Thunk Operations --"
-    putStrLn $ printf "Created:     %12d" (thunkCreated thunks)
-    putStrLn $ printf "Forced:      %12d" (thunkForced thunks)
-    putStrLn $ printf "  Cache hit: %12d (%.1f%%)"
-      (thunkHit thunks)
-      (if thunkForced thunks > 0
-        then 100 * fromIntegral (thunkHit thunks) / fromIntegral (thunkForced thunks) :: Double
-        else 0)
-    putStrLn $ printf "  Computed:  %12d (%.1f%%)"
-      (thunkMiss thunks)
-      (if thunkForced thunks > 0
-        then 100 * fromIntegral (thunkMiss thunks) / fromIntegral (thunkForced thunks) :: Double
-        else 0)
-    putStrLn $ printf "Cache hit time: %9.1f ms (avg %.2f us)"
-      (fromIntegral (thunkHitTimeNs thunks) / 1e6 :: Double)
-      (if thunkHit thunks > 0
-        then fromIntegral (thunkHitTimeNs thunks) / fromIntegral (thunkHit thunks) / 1e3 :: Double
-        else 0)
-    putStrLn $ printf "Compute time: %11.1f ms (avg %.2f us)"
-      (fromIntegral (thunkTimeNs thunks) / 1e6 :: Double)
-      (if thunkMiss thunks > 0
-        then fromIntegral (thunkTimeNs thunks) / fromIntegral (thunkMiss thunks) / 1e3 :: Double
-        else 0)
+  let thunkJson = A.object
+        [ "created" A..= thunkCreated thunks
+        , "forced" A..= thunkForced thunks
+        , "cacheHits" A..= thunkHit thunks
+        , "cacheMisses" A..= thunkMiss thunks
+        , "cacheHitTimeNs" A..= thunkHitTimeNs thunks
+        , "computeTimeNs" A..= thunkTimeNs thunks
+        ]
 
   -- Builtin stats
   builtinMap <- readIORef (statsBuiltins stats)
-  unless (HM.null builtinMap) $ do
-    putStrLn "\n-- Builtin Functions --"
-    putStrLn $ printf "%-30s %12s %12s %12s" ("Name" :: String) ("Count" :: String) ("Time (ms)" :: String) ("Avg (us)" :: String)
-    putStrLn $ replicate 70 '-'
-    let sorted = List.sortOn (negate . builtinTimeNs . snd) $ HM.toList builtinMap
-        totalCount = sum $ map (builtinCount . snd) sorted
-        totalTime = sum $ map (builtinTimeNs . snd) sorted
-    -- Only show top 20 builtins by time
-    forM_ (take 20 sorted) $ \(name, BuiltinStats count timeNs) -> do
-      let timeMs = fromIntegral timeNs / 1e6 :: Double
-          avgUs = if count > 0 then fromIntegral timeNs / fromIntegral count / 1e3 else 0 :: Double
-      putStrLn $ printf "%-30s %12d %12.1f %12.2f" (toString name) count timeMs avgUs
-    when (length sorted > 20) $
-      putStrLn $ printf "... and %d more builtins" (length sorted - 20)
-    putStrLn $ replicate 70 '-'
-    putStrLn $ printf "%-30s %12d %12.1f" ("TOTAL" :: String) totalCount (fromIntegral totalTime / 1e6 :: Double)
+  let builtinList = List.sortOn (negate . builtinTimeNs . snd) $ HM.toList builtinMap
+      builtinJson = A.object
+        [ "byName" A..= A.object
+            [ AK.fromText name A..= A.object
+                [ "count" A..= builtinCount s
+                , "timeNs" A..= builtinTimeNs s
+                ]
+            | (name, s) <- builtinList
+            ]
+        , "total" A..= A.object
+            [ "count" A..= sum (map (builtinCount . snd) builtinList)
+            , "timeNs" A..= sum (map (builtinTimeNs . snd) builtinList)
+            ]
+        ]
 
   -- Scope stats
   scopes <- readIORef (statsScopes stats)
-  when (scopeLookups scopes > 0) $ do
-    putStrLn "\n-- Scope Lookups --"
-    putStrLn $ printf "Total lookups:     %12d" (scopeLookups scopes)
-    putStrLn $ printf "  Lexical hits:    %12d (%.1f%%)"
-      (scopeHits scopes)
-      (100 * fromIntegral (scopeHits scopes) / fromIntegral (scopeLookups scopes) :: Double)
-    putStrLn $ printf "  Dynamic hits:    %12d (%.1f%%)"
-      (scopeDynamicHits scopes)
-      (100 * fromIntegral (scopeDynamicHits scopes) / fromIntegral (scopeLookups scopes) :: Double)
-    putStrLn $ printf "  Misses:          %12d (%.1f%%)"
-      (scopeMisses scopes)
-      (100 * fromIntegral (scopeMisses scopes) / fromIntegral (scopeLookups scopes) :: Double)
-    putStrLn $ printf "Avg scope depth:   %12.1f"
-      (fromIntegral (scopeTotalDepth scopes) / fromIntegral (scopeLookups scopes) :: Double)
-    putStrLn $ printf "Avg scopes searched: %10.1f"
-      (fromIntegral (scopeTotalSearched scopes) / fromIntegral (scopeLookups scopes) :: Double)
-    putStrLn $ printf "Max scope depth:   %12d" (scopeMaxDepth scopes)
-    putStrLn $ printf "Total time:        %12.1f ms" (fromIntegral (scopeTimeNs scopes) / 1e6 :: Double)
-    putStrLn $ printf "Avg time per lookup: %10.2f us"
-      (fromIntegral (scopeTimeNs scopes) / fromIntegral (scopeLookups scopes) / 1e3 :: Double)
+  let scopeJson = A.object
+        [ "totalLookups" A..= scopeLookups scopes
+        , "lexicalHits" A..= scopeHits scopes
+        , "dynamicHits" A..= scopeDynamicHits scopes
+        , "misses" A..= scopeMisses scopes
+        , "totalDepth" A..= scopeTotalDepth scopes
+        , "totalSearched" A..= scopeTotalSearched scopes
+        , "maxDepth" A..= scopeMaxDepth scopes
+        , "timeNs" A..= scopeTimeNs scopes
+        ]
 
   -- IO stats
   ioStats <- readIORef (statsIO stats)
-  let totalIOOps = ioFileReads ioStats + ioHttpFetches ioStats + ioStoreAdds ioStats
-  when (totalIOOps > 0) $ do
-    putStrLn "\n-- IO Operations --"
-    putStrLn $ printf "File reads:        %12d (%12.1f ms)"
-      (ioFileReads ioStats)
-      (fromIntegral (ioFileReadTimeNs ioStats) / 1e6 :: Double)
-    when (ioDrvReads ioStats > 0) $
-      putStrLn $ printf "  .drv files:      %12d (%12.1f ms)"
-        (ioDrvReads ioStats)
-        (fromIntegral (ioDrvReadTimeNs ioStats) / 1e6 :: Double)
-    putStrLn $ printf "HTTP fetches:      %12d (%12.1f ms)"
-      (ioHttpFetches ioStats)
-      (fromIntegral (ioHttpTimeNs ioStats) / 1e6 :: Double)
-    putStrLn $ printf "Store adds:        %12d (%12.1f ms)"
-      (ioStoreAdds ioStats)
-      (fromIntegral (ioStoreAddTimeNs ioStats) / 1e6 :: Double)
-    let totalIOTimeNs = ioFileReadTimeNs ioStats + ioHttpTimeNs ioStats + ioStoreAddTimeNs ioStats
-    putStrLn $ printf "Total IO time:     %12s %12.1f ms"
-      ("" :: String)
-      (fromIntegral totalIOTimeNs / 1e6 :: Double)
+  let ioJson = A.object
+        [ "fileReads" A..= A.object
+            [ "count" A..= ioFileReads ioStats
+            , "timeNs" A..= ioFileReadTimeNs ioStats
+            ]
+        , "drvReads" A..= A.object
+            [ "count" A..= ioDrvReads ioStats
+            , "timeNs" A..= ioDrvReadTimeNs ioStats
+            ]
+        , "httpFetches" A..= A.object
+            [ "count" A..= ioHttpFetches ioStats
+            , "timeNs" A..= ioHttpTimeNs ioStats
+            ]
+        , "storeAdds" A..= A.object
+            [ "count" A..= ioStoreAdds ioStats
+            , "timeNs" A..= ioStoreAddTimeNs ioStats
+            ]
+        , "totalTimeNs" A..= (ioFileReadTimeNs ioStats + ioHttpTimeNs ioStats + ioStoreAddTimeNs ioStats)
+        ]
 
-  putStrLn "\n================================="
+  -- Combined JSON output
+  let fullJson = A.object
+        [ "expressions" A..= exprJson
+        , "thunks" A..= thunkJson
+        , "builtins" A..= builtinJson
+        , "scopes" A..= scopeJson
+        , "io" A..= ioJson
+        ]
+
+  BL.putStrLn $ A.encode fullJson
