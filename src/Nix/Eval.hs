@@ -159,7 +159,7 @@ eval (NSet r binds) =
 
 eval (NLet binds body    ) =
   do
-    (attrSet, _) <- evalBinds True binds
+    (attrSet, _) <- evalBinds True $ desugarBinds (eval . NSet mempty) binds
     pushScope (coerce attrSet) body
 
 eval (NIf cond t f       ) =
