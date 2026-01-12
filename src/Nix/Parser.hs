@@ -62,7 +62,10 @@ import           Data.Char                      ( isAlpha
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
+import           Data.Foldable                  ( minimum )
+import           Data.List                      ( sortBy )
 import           Data.List.Extra                ( groupSort )
+import           Data.Ord                       ( comparing )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
@@ -389,8 +392,122 @@ nixList =
 
 -- ** { } set
 
+-- | Merge duplicate attribute bindings when both are attrsets (like Nix).
+-- Throws parse error for non-mergeable duplicates.
+--
+-- For example:
+--   { a.x = 1; a = { y = 2; }; }  ->  { a = { x = 1; y = 2; }; }
+--   { a.x = 1; a = 2; }           ->  error: attribute 'a' already defined
+mergeBindings :: [Binding NExprLoc] -> Parser [Binding NExprLoc]
+mergeBindings binds = do
+  let -- Tag each binding with its index to preserve order
+      indexed = zip [0::Int ..] binds
+      -- Separate static-key bindings (that might need merging) from others
+      (staticBinds, otherBinds) = partitionBindings indexed
+      -- Group static bindings by top-level key
+      grouped = groupByTopKey staticBinds
+  -- Process each group (merge if needed)
+  mergedWithIdx <- concat <$> traverse (uncurry mergeGroup) (HM.toList grouped)
+  -- Combine with other bindings and sort by original index to preserve order
+  let allBindings = mergedWithIdx <> otherBinds
+  pure $ map snd $ sortBy (comparing fst) allBindings
+ where
+  -- Partition into static key bindings and others (dynamic keys, inherits)
+  -- Keep the original index for ordering
+  partitionBindings :: [(Int, Binding NExprLoc)]
+                    -> ([(Int, VarName, [NKeyName NExprLoc], NExprLoc, NSourcePos)], [(Int, Binding NExprLoc)])
+  partitionBindings = foldr go ([], [])
+   where
+    go (idx, b) (statics, others) = case b of
+      NamedVar (StaticKey k :| rest) val pos -> ((idx, k, rest, val, pos) : statics, others)
+      _ -> (statics, (idx, b) : others)
+
+  -- Group static bindings by their top-level key, keeping indices
+  groupByTopKey :: [(Int, VarName, [NKeyName NExprLoc], NExprLoc, NSourcePos)]
+                -> HM.HashMap VarName [(Int, [NKeyName NExprLoc], NExprLoc, NSourcePos)]
+  groupByTopKey = HM.fromListWith (<>) . fmap (\(idx, k, rest, val, pos) -> (k, [(idx, rest, val, pos)]))
+
+  -- Merge a group of bindings with the same top-level key
+  -- Returns bindings paired with their minimum index (for ordering)
+  mergeGroup :: VarName -> [(Int, [NKeyName NExprLoc], NExprLoc, NSourcePos)] -> Parser [(Int, Binding NExprLoc)]
+  mergeGroup key [(idx, rest, val, pos)] =
+    -- Single binding: reconstruct it
+    pure [(idx, NamedVar (StaticKey key :| rest) val pos)]
+  mergeGroup key bindings
+    -- Error: multiple direct non-attrset bindings (e.g., { a = 1; a = 2; })
+    | (p1:_:_) <- directNonAttrsetPositions =
+        fail $ "attribute '" <> toString (varNameText key) <> "' already defined at " <> show p1
+    -- Error: direct non-attrset mixed with nested paths (e.g., { a.b = 1; a = 2; })
+    | (pos:_) <- directNonAttrsetPositions
+    , any hasNestedPath bindings =
+        fail $ "attribute '" <> toString (varNameText key) <> "' already defined at " <> show pos
+    -- Merge: at least one direct attrset (e.g., { a = { x = 1; }; a.y = 2; })
+    | any isDirectAttrset bindings = do
+        merged <- mergeMultiple key bindings
+        -- Use minimum index for the merged binding's position in output
+        let minIdx = minimum $ map (\(idx, _, _, _) -> idx) bindings
+        pure [(minIdx, merged)]
+    -- No merge: all are nested paths (e.g., { a.b = 1; a.c = 2; })
+    | otherwise =
+        pure [(idx, NamedVar (StaticKey key :| rest) val pos) | (idx, rest, val, pos) <- bindings]
+   where
+    isDirectAttrset (_, [], val, _) = case unFix val of
+      AnnF _ (NSet _ _) -> True
+      _ -> False
+    isDirectAttrset _ = False
+
+    directNonAttrsetPositions :: [NSourcePos]
+    directNonAttrsetPositions =
+      [ pos | (_, [], val, pos) <- bindings
+      , case unFix val of
+          AnnF _ (NSet _ _) -> False
+          _ -> True
+      ]
+
+    hasNestedPath :: (Int, [NKeyName NExprLoc], NExprLoc, NSourcePos) -> Bool
+    hasNestedPath (_, rest, _, _) = not (null rest)
+
+  -- Merge multiple bindings for the same key
+  mergeMultiple :: VarName -> [(Int, [NKeyName NExprLoc], NExprLoc, NSourcePos)] -> Parser (Binding NExprLoc)
+  mergeMultiple key bindings = do
+    -- Collect all nested bindings (strip indices, they were only for ordering)
+    let bindingsNoIdx = [(rest, val, pos) | (_, rest, val, pos) <- bindings]
+    nestedBinds <- traverse (extractNestedBinding key) bindingsNoIdx
+    let allBindings = concat nestedBinds
+        -- Use the first position for the merged binding
+        firstPos = case bindingsNoIdx of
+          ((_, _, pos) : _) -> pos
+          [] -> error "mergeMultiple: impossible empty list"
+    -- Recursively merge the collected bindings (handles nested conflicts)
+    mergedInner <- mergeBindings allBindings
+    -- Construct the merged NSet
+    let mergedSet = mkNSet mempty mergedInner  -- Use NonRecursive; rec is applied at outer level
+    pure $ NamedVar (one $ StaticKey key) mergedSet firstPos
+
+  -- Extract bindings from a single entry (either nested path or direct NSet)
+  extractNestedBinding :: VarName -> ([NKeyName NExprLoc], NExprLoc, NSourcePos) -> Parser [Binding NExprLoc]
+  extractNestedBinding key ([], val, pos) =
+    -- Direct binding: value must be an NSet to merge
+    case unFix val of
+      AnnF _ (NSet _ innerBinds) -> pure innerBinds
+      _ -> fail $ "attribute '" <> toString (varNameText key) <> "' already defined at " <> show pos
+  extractNestedBinding _key (rest, val, pos) =
+    -- Nested path: convert to a binding
+    pure [NamedVar (fromList rest) val pos]
+
+  -- Helper to construct an NSet with source span
+  mkNSet :: Recursivity -> [Binding NExprLoc] -> NExprLoc
+  mkNSet rec binds' =
+    -- Use a dummy source span; this will be overwritten by annotation
+    Fix $ AnnF dummySpan $ NSet rec binds'
+
+  dummySpan :: SrcSpan
+  dummySpan = SrcSpan (toNSourcePos dummyPos) (toNSourcePos dummyPos)
+   where
+    dummyPos = SourcePos "" (mkPos 1) (mkPos 1)
+
 nixBinders :: Parser [Binding NExprLoc]
-nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
+nixBinders = mergeBindings =<< (inherit <|> namedVar) `endBy` symbol ';' where
   inherit =
     do
       -- We can't use 'reserved' here because it would consume the whitespace
