@@ -32,7 +32,7 @@ import           Nix.Exec                       ( MonadNix
                                                 , evalExprLoc
                                                 )
 import           Nix.Context                    ( askEvalStats )
-import           Nix.EvalStats                  ( recordHttpFetch, recordStoreAdd )
+import           Nix.EvalStats                  ( recordHttpFetch, recordStoreAdd, recordFileRead )
 import qualified GHC.Clock                     as Clock
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -1291,11 +1291,24 @@ defaultImportPath path =
                   modify $ first $ HM.insert path expr
                   pure expr
               )
-              =<< parseNixFileLoc path
+              =<< parseNixFileLocWithTiming path
             )
             pure  -- return expr
             . HM.lookup path
           ) =<< gets fst
+ where
+  -- Parse a file with timing instrumentation for eval-stats
+  parseNixFileLocWithTiming :: MonadNix e t f m => Path -> m (Result NExprLoc)
+  parseNixFileLocWithTiming p = do
+    mstats <- askEvalStats
+    case mstats of
+      Nothing -> parseNixFileLoc p
+      Just stats -> do
+        start <- liftIO Clock.getMonotonicTimeNSec
+        result <- parseNixFileLoc p
+        end <- liftIO Clock.getMonotonicTimeNSec
+        recordFileRead stats (end - start)
+        pure result
 
 defaultPathToDefaultNix :: MonadNix e t f m => Path -> m Path
 defaultPathToDefaultNix = pathToDefaultNixFile

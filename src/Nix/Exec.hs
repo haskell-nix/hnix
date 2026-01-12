@@ -36,7 +36,7 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Context                    ( askEvalStats )
-import           Nix.EvalStats                  ( EvalStats(..), withExprTiming )
+import           Nix.EvalStats                  ( EvalStats(..), withExprTiming, withBuiltinTiming )
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
@@ -361,7 +361,11 @@ callFunc fun arg =
       NVBuiltin name f    ->
         do
           span <- askSpan
-          withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
+          mstats <- askEvalStats
+          withFrame Info ((Calling @m @(NValue t f m)) name span) $
+            case mstats of
+              Nothing -> f arg
+              Just stats -> withBuiltinTiming stats (varNameText name) (f arg)
       NVClosure _params f -> f arg
       (NVSet _ m) | Just f <- HM.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') f

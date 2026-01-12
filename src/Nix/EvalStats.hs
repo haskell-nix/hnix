@@ -1,4 +1,5 @@
-{-# LANGUAGE StrictData #-}
+{-# LANGUAGE Strict #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- | Statistics collection for evaluation profiling
 module Nix.EvalStats
@@ -14,8 +15,9 @@ module Nix.EvalStats
   , withExprTiming
   , recordThunkForce
   , recordThunkCreate
-  , recordBuiltin
+  , withBuiltinTiming
   , recordScopeLookup
+  , recordFileRead
   , recordDrvRead
   , recordHttpFetch
   , recordStoreAdd
@@ -30,9 +32,9 @@ import qualified GHC.Clock as Clock
 
 -- | Statistics for a single expression type
 data ExprStats = ExprStats
-  { exprCount      :: !Word64  -- ^ Number of evaluations
-  , exprTimeNs     :: !Word64  -- ^ Total (inclusive) time in nanoseconds
-  , exprExclTimeNs :: !Word64  -- ^ Exclusive time (excluding children) in nanoseconds
+  { exprCount      :: Word64  -- ^ Number of evaluations
+  , exprTimeNs     :: Word64  -- ^ Total (inclusive) time in nanoseconds
+  , exprExclTimeNs :: Word64  -- ^ Exclusive time (excluding children) in nanoseconds
   } deriving (Show, Eq)
 
 instance Semigroup ExprStats where
@@ -43,12 +45,12 @@ instance Monoid ExprStats where
 
 -- | Statistics for thunk operations
 data ThunkStats = ThunkStats
-  { thunkCreated   :: !Word64  -- ^ Number of thunks created
-  , thunkForced    :: !Word64  -- ^ Number of force operations
-  , thunkHit       :: !Word64  -- ^ Cache hits (already computed)
-  , thunkMiss      :: !Word64  -- ^ Cache misses (needed computation)
-  , thunkTimeNs    :: !Word64  -- ^ Time spent in thunk computation (misses only)
-  , thunkHitTimeNs :: !Word64  -- ^ Time spent in cache hits (overhead only)
+  { thunkCreated   :: Word64  -- ^ Number of thunks created
+  , thunkForced    :: Word64  -- ^ Number of force operations
+  , thunkHit       :: Word64  -- ^ Cache hits (already computed)
+  , thunkMiss      :: Word64  -- ^ Cache misses (needed computation)
+  , thunkTimeNs    :: Word64  -- ^ Time spent in thunk computation (misses only)
+  , thunkHitTimeNs :: Word64  -- ^ Time spent in cache hits (overhead only)
   } deriving (Show, Eq)
 
 instance Semigroup ThunkStats where
@@ -60,8 +62,8 @@ instance Monoid ThunkStats where
 
 -- | Statistics for a single builtin function
 data BuiltinStats = BuiltinStats
-  { builtinCount  :: !Word64  -- ^ Number of calls
-  , builtinTimeNs :: !Word64  -- ^ Total time in nanoseconds
+  { builtinCount  :: Word64  -- ^ Number of calls
+  , builtinTimeNs :: Word64  -- ^ Total time in nanoseconds
   } deriving (Show, Eq)
 
 instance Semigroup BuiltinStats where
@@ -72,14 +74,14 @@ instance Monoid BuiltinStats where
 
 -- | Statistics for scope lookups
 data ScopeStats = ScopeStats
-  { scopeLookups       :: !Word64  -- ^ Total number of lookups
-  , scopeHits          :: !Word64  -- ^ Found in lexical scope
-  , scopeDynamicHits   :: !Word64  -- ^ Found in dynamic (with) scope
-  , scopeMisses        :: !Word64  -- ^ Not found
-  , scopeTotalDepth    :: !Word64  -- ^ Sum of scope depths at lookup time
-  , scopeTotalSearched :: !Word64  -- ^ Sum of scopes searched before finding
-  , scopeMaxDepth      :: !Word64  -- ^ Maximum scope depth seen
-  , scopeTimeNs        :: !Word64  -- ^ Total time spent in lookups
+  { scopeLookups       :: Word64  -- ^ Total number of lookups
+  , scopeHits          :: Word64  -- ^ Found in lexical scope
+  , scopeDynamicHits   :: Word64  -- ^ Found in dynamic (with) scope
+  , scopeMisses        :: Word64  -- ^ Not found
+  , scopeTotalDepth    :: Word64  -- ^ Sum of scope depths at lookup time
+  , scopeTotalSearched :: Word64  -- ^ Sum of scopes searched before finding
+  , scopeMaxDepth      :: Word64  -- ^ Maximum scope depth seen
+  , scopeTimeNs        :: Word64  -- ^ Total time spent in lookups
   } deriving (Show, Eq)
 
 instance Semigroup ScopeStats where
@@ -91,14 +93,14 @@ instance Monoid ScopeStats where
 
 -- | Statistics for IO operations (file reads, HTTP fetches, store operations)
 data IOStats = IOStats
-  { ioFileReads      :: !Word64  -- ^ Number of file reads
-  , ioFileReadTimeNs :: !Word64  -- ^ Total time in file reads (nanoseconds)
-  , ioDrvReads       :: !Word64  -- ^ Number of .drv file reads specifically
-  , ioDrvReadTimeNs  :: !Word64  -- ^ Time in .drv file reads (nanoseconds)
-  , ioHttpFetches    :: !Word64  -- ^ Number of HTTP fetches
-  , ioHttpTimeNs     :: !Word64  -- ^ Time in HTTP operations (nanoseconds)
-  , ioStoreAdds      :: !Word64  -- ^ Number of store add operations
-  , ioStoreAddTimeNs :: !Word64  -- ^ Time in store add operations (nanoseconds)
+  { ioFileReads      :: Word64  -- ^ Number of file reads
+  , ioFileReadTimeNs :: Word64  -- ^ Total time in file reads (nanoseconds)
+  , ioDrvReads       :: Word64  -- ^ Number of .drv file reads specifically
+  , ioDrvReadTimeNs  :: Word64  -- ^ Time in .drv file reads (nanoseconds)
+  , ioHttpFetches    :: Word64  -- ^ Number of HTTP fetches
+  , ioHttpTimeNs     :: Word64  -- ^ Time in HTTP operations (nanoseconds)
+  , ioStoreAdds      :: Word64  -- ^ Number of store add operations
+  , ioStoreAddTimeNs :: Word64  -- ^ Time in store add operations (nanoseconds)
   } deriving (Show, Eq)
 
 instance Semigroup IOStats where
@@ -110,13 +112,15 @@ instance Monoid IOStats where
 
 -- | All evaluation statistics
 data EvalStats = EvalStats
-  { statsExprs     :: !(IORef (HashMap Text ExprStats))
-  , statsThunks    :: !(IORef ThunkStats)
-  , statsBuiltins  :: !(IORef (HashMap Text BuiltinStats))
-  , statsScopes    :: !(IORef ScopeStats)
-  , statsChildTime :: !(IORef Word64)  -- ^ Accumulated child time for exclusive timing
-  , statsIO        :: !(IORef IOStats) -- ^ Aggregate IO statistics
-  , statsIOTime    :: !(IORef Word64)  -- ^ Accumulated IO time for exclusive timing (like statsChildTime)
+  { statsExprs     :: IORef (HashMap Text ExprStats)
+  , statsThunks    :: IORef ThunkStats
+  , statsBuiltins  :: IORef (HashMap Text BuiltinStats)
+  , statsScopes    :: IORef ScopeStats
+  , statsChildTime :: IORef Word64  -- ^ Accumulated child time for exclusive timing
+  , statsIO        :: IORef IOStats -- ^ Aggregate IO statistics
+  , statsIOTime    :: IORef Word64  -- ^ Accumulated IO time for exclusive timing (like statsChildTime)
+  , statsThunkChildTime :: IORef Word64  -- ^ Accumulated child thunk time for exclusive thunk timing
+  , statsBuiltinChildTime :: IORef Word64  -- ^ Accumulated child builtin time for exclusive builtin timing
   }
 
 -- | Create a new empty stats collector
@@ -128,6 +132,8 @@ newEvalStats = liftIO $ EvalStats
   <*> newIORef mempty
   <*> newIORef 0
   <*> newIORef mempty
+  <*> newIORef 0
+  <*> newIORef 0
   <*> newIORef 0
 
 -- | Record an expression evaluation with exclusive timing
@@ -198,18 +204,49 @@ recordThunkForce stats hit elapsedNs = liftIO $
              , thunkTimeNs = thunkTimeNs s + elapsedNs }
 {-# INLINABLE recordThunkForce #-}
 
--- | Record a builtin function call with timing
-recordBuiltin :: MonadIO m => EvalStats -> Text -> Word64 -> m ()
-recordBuiltin stats name elapsedNs = liftIO $
+-- | Record a builtin function call with exclusive timing
+recordBuiltinExclusive :: MonadIO m => EvalStats -> Text -> Word64 -> m ()
+recordBuiltinExclusive stats name exclNs = liftIO $
   modifyIORef' (statsBuiltins stats) $
-    HM.insertWith (<>) name (BuiltinStats 1 elapsedNs)
-{-# INLINABLE recordBuiltin #-}
+    HM.insertWith (<>) name (BuiltinStats 1 exclNs)
+{-# INLINABLE recordBuiltinExclusive #-}
+
+-- | Execute a builtin with timing, tracking exclusive time (excluding nested builtins)
+--   Returns the result and adds the total time to parent's child builtin time
+withBuiltinTiming :: MonadIO m => EvalStats -> Text -> m a -> m a
+withBuiltinTiming stats name action = do
+  -- Save parent's accumulated child builtin time and reset for our children
+  parentChildTime <- liftIO $ readIORef (statsBuiltinChildTime stats)
+  liftIO $ writeIORef (statsBuiltinChildTime stats) 0
+
+  -- Time the action
+  start <- liftIO Clock.getMonotonicTimeNSec
+  result <- action
+  end <- liftIO Clock.getMonotonicTimeNSec
+
+  -- Get time spent in child builtins
+  ourChildTime <- liftIO $ readIORef (statsBuiltinChildTime stats)
+
+  let totalTime = end - start
+      -- Exclusive time excludes child builtins
+      exclTime = if totalTime > ourChildTime
+                   then totalTime - ourChildTime
+                   else 0
+
+  -- Record our stats with exclusive time
+  recordBuiltinExclusive stats name exclTime
+
+  -- Add our total time to parent's child builtin time accumulator
+  liftIO $ writeIORef (statsBuiltinChildTime stats) (parentChildTime + totalTime)
+
+  pure result
+{-# INLINABLE withBuiltinTiming #-}
 
 -- | Result of a scope lookup for profiling
 data ScopeLookupResult
-  = ScopeLexicalHit !Int !Int   -- ^ Found in lexical scope: depth, scopes searched
-  | ScopeDynamicHit !Int !Int   -- ^ Found in dynamic scope: depth, scopes searched
-  | ScopeMiss !Int              -- ^ Not found: depth searched
+  = ScopeLexicalHit Int Int   -- ^ Found in lexical scope: depth, scopes searched
+  | ScopeDynamicHit Int Int   -- ^ Found in dynamic scope: depth, scopes searched
+  | ScopeMiss Int             -- ^ Not found: depth searched
 
 -- | Record a scope lookup
 recordScopeLookup :: MonadIO m => EvalStats -> ScopeLookupResult -> Word64 -> m ()
@@ -241,6 +278,17 @@ recordScopeLookup stats result elapsedNs = liftIO $
         , scopeTimeNs = scopeTimeNs s + elapsedNs
         }
 {-# INLINABLE recordScopeLookup #-}
+
+-- | Record a general file read (e.g., .nix files during import)
+--   Also updates the IO time accumulator so this time is excluded from expression exclusive time
+recordFileRead :: MonadIO m => EvalStats -> Word64 -> m ()
+recordFileRead stats elapsedNs = liftIO $ do
+  modifyIORef' (statsIO stats) $ \s -> s
+    { ioFileReads = ioFileReads s + 1
+    , ioFileReadTimeNs = ioFileReadTimeNs s + elapsedNs
+    }
+  modifyIORef' (statsIOTime stats) (+ elapsedNs)
+{-# INLINABLE recordFileRead #-}
 
 -- | Record a .drv file read
 --   Also updates the IO time accumulator so this time is excluded from expression exclusive time

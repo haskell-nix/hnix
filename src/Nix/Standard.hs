@@ -239,6 +239,10 @@ instance
         let CitedP _ innerThunk = coerce t :: CitedStdThunk m
         wasComputed <- isComputed innerThunk
 
+        -- Save parent's accumulated child thunk time and reset for our children
+        parentThunkChildTime <- liftIO $ readIORef (statsThunkChildTime stats)
+        liftIO $ writeIORef (statsThunkChildTime stats) 0
+
         -- Save IO time before forcing (to exclude IO from pure compute time)
         ioTimeBefore <- liftIO $ readIORef (statsIOTime stats)
 
@@ -250,12 +254,21 @@ instance
         ioTimeAfter <- liftIO $ readIORef (statsIOTime stats)
         let ioTimeDuring = ioTimeAfter - ioTimeBefore
 
-        let elapsed = end - start
-            -- For cache misses, compute time excludes IO that happened during forcing
-            pureElapsed = if elapsed > ioTimeDuring then elapsed - ioTimeDuring else 0
+        -- Get time spent in child thunk forces
+        ourThunkChildTime <- liftIO $ readIORef (statsThunkChildTime stats)
 
-        -- For hits, record full elapsed (it's just overhead); for misses, record pure time
-        recordThunkForce stats wasComputed (if wasComputed then elapsed else pureElapsed)
+        let elapsed = end - start
+            -- For cache misses: exclusive time = total - child thunks - IO
+            exclTime = if elapsed > ourThunkChildTime + ioTimeDuring
+                         then elapsed - ourThunkChildTime - ioTimeDuring
+                         else 0
+
+        -- For hits, record full elapsed (it's just overhead); for misses, record exclusive time
+        recordThunkForce stats wasComputed (if wasComputed then elapsed else exclTime)
+
+        -- Add our total time to parent's child thunk time accumulator
+        liftIO $ writeIORef (statsThunkChildTime stats) (parentThunkChildTime + elapsed)
+
         pure result
   {-# INLINABLE force #-}
 
