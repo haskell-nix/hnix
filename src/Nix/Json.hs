@@ -59,10 +59,9 @@ toJSON = \case
   NVStr      ns         -> A.toJSON <$> extractNixString ns
   NVList l -> A.Array <$> traverse intoJson l
   NVSet _ m ->
-    maybe
-      (A.Object <$> traverse intoJson kmap)
-      intoJson
-      (lkup "outPath" kmap)
+    case lkup "outPath" kmap of
+      Just outPath -> intoJson outPath
+      Nothing      -> A.Object <$> traverse intoJson kmap
    where
 #if MIN_VERSION_aeson(2,0,0)
     lkup = AKM.lookup

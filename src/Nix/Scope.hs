@@ -3,7 +3,6 @@
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language Strict #-}
 
 module Nix.Scope where
 
@@ -164,25 +163,21 @@ lookupVarReader k =
   do
     mres <- asks $ scopeLookup k . lexicalScopes @m . view hasLens
 
-    maybe
-      (do
+    case mres of
+      Just res -> pure $ pure res
+      Nothing -> do
         ws <- asks $ dynamicScopes . view hasLens
 
         foldr
           (\ weakscope rest ->
             do
               mres' <- HM.lookup k . coerce @(Scope a) <$> weakscope
-
-              maybe
-                rest
-                (pure . pure)
-                mres'
+              case mres' of
+                Just res -> pure $ pure res
+                Nothing -> rest
           )
           (pure Nothing)
           ws
-      )
-      (pure . pure)
-      mres
 
 withScopes
   :: Scoped a m

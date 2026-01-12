@@ -78,18 +78,17 @@ renderLocation (SrcSpan (NSourcePos file (coerce -> begLine) (coerce -> begCol))
   | file == file' && file == "<string>" && begLine == endLine =
     pure $ "In raw input string at position " <> pretty (unPos begCol)
 
-  | file /= "<string>" && file == file' =
-    bool
-      (pure msg)
-      (do
+  | file /= "<string>" && file == file' = do
+    fileExists <- doesFileExist file
+    if fileExists
+      then do
         txt <- sourceContext file begLine begCol endLine endCol msg
         pure $
           vsep
             [ "In file " <> errorContext file begLine begCol endLine endCol <> ":"
             , txt
             ]
-      )
-      =<< doesFileExist file
+      else pure msg
 renderLocation (SrcSpan beg end) msg = fail $ "Don't know how to render range from " <> show beg <>" to " <> show end <>" for fail: " <> show msg
 
 errorContext :: Path -> Pos -> Pos -> Pos -> Pos -> Doc a

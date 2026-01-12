@@ -1,9 +1,9 @@
 {-# language CPP #-}
 {-# language DataKinds #-}
 {-# language ExistentialQuantification #-}
+{-# language GADTs #-}
 {-# language NamedFieldPuns #-}
 {-# language RecordWildCards #-}
-{-# language Strict #-}
 {-# language TypeApplications #-}
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
@@ -137,8 +137,9 @@ _parseBuiltinFetchurlConfig drv = do
   let envMap = env drv
 
   -- URL is required
-  url <- maybe (Left "builtin:fetchurl: missing 'url' in environment") Right
-    $ Map.lookup "url" envMap
+  url <- case Map.lookup "url" envMap of
+    Nothing -> Left "builtin:fetchurl: missing 'url' in environment"
+    Just v -> Right v
 
   when (Text.null url) $
     Left "builtin:fetchurl: 'url' is empty"
@@ -224,8 +225,8 @@ hashDerivationModulo
       Map.fromList <$>
         traverse
           (\(path, outs) ->
-            maybe
-              (do
+            case HM.lookup path cache of
+              Nothing -> do
                 -- Time the .drv file read (this is IO that should be excluded from pure eval time)
                 start <- liftIO Clock.getMonotonicTimeNSec
                 drv' <- readDerivation $ coerce $ toString path
@@ -238,9 +239,7 @@ hashDerivationModulo
                 let hashBytes = convert digestValue :: ByteString
                 let hash = decodeUtf8 (convertToBase Base16 hashBytes :: ByteString)
                 pure (hash, outs)
-              )
-              (\ hash -> pure (hash, outs))
-              (HM.lookup path cache)
+              Just hash -> pure (hash, outs)
           )
           (Map.toList inputDrvs)
     let serialized = unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
@@ -271,16 +270,14 @@ unparseDrv Derivation{..} =
   where
     produceOutputInfo (outputName, outputPath) =
       parens $ (s <$>) $ ([outputName, outputPath] <>) $
-        maybe
-          [mempty, mempty]
-          (\digest ->
+        case mFixed of
+          Nothing -> [mempty, mempty]
+          Just digest ->
             let algoText = hashDigestAlgoText digest
                 hashText = hashDigestText digest
                 modePrefix = if hashMode == Recursive then "r:" else mempty
                 hashType = modePrefix <> algoText
             in [hashType, hashText]
-          )
-          mFixed
     parens :: [Text] -> Text
     parens ts = Text.concat ["(", Text.intercalate "," ts, ")"]
 
@@ -300,10 +297,9 @@ unparseDrv Derivation{..} =
 readDerivation :: (Framed e m, MonadFile m) => Path -> m Derivation
 readDerivation path = do
   content <- readFile path
-  either
-    (\ err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err)
-    pure
-    (parse derivationParser (coerce path) content)
+  case parse derivationParser (coerce path) content of
+    Left err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err
+    Right drv -> pure drv
 
 derivationParser :: Parsec () Text Derivation
 derivationParser = do
@@ -482,7 +478,10 @@ _unpackAndAddToStore
   -> m StorePath
 _unpackAndAddToStore cfg archivePath = do
   -- Read the archive content
-  archiveBytes <- either throwError pure =<< readStoreFile (coerce archivePath)
+  archiveBytesRes <- readStoreFile (coerce archivePath)
+  archiveBytes <- case archiveBytesRes of
+    Left err -> throwError err
+    Right bytes -> pure bytes
 
   -- Create temp directory for unpacking
   tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
@@ -497,13 +496,13 @@ _unpackAndAddToStore cfg archivePath = do
   liftIO $ Directory.createDirectory unpackDir
 
   -- Try to unpack (supporting .tar, .tar.gz, .tar.bz2, .tar.xz via tar auto-detection)
-  (exitCode, _out, err) <- liftIO $
+  (exitCode, _out, tarErr) <- liftIO $
     readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
 
   when (exitCode /= ExitSuccess) $ do
     liftIO $ Directory.removeDirectoryRecursive tmpDir
     throwError $ ErrorCall $
-      "builtin:fetchurl: failed to unpack archive: " <> err
+      "builtin:fetchurl: failed to unpack archive: " <> tarErr
 
   -- Pick the root directory (single directory -> descend into it)
   rootDir <- liftIO $ _pickUnpackRoot unpackDir
@@ -518,7 +517,9 @@ _unpackAndAddToStore cfg archivePath = do
   -- Cleanup temp directory
   liftIO $ Directory.removeDirectoryRecursive tmpDir
 
-  either throwError pure result
+  case result of
+    Left storeErr -> throwError storeErr
+    Right v -> pure v
 
 -- | Pick the root of an unpacked archive
 -- If there's a single directory inside, descend into it (common pattern for tarballs)
@@ -703,36 +704,42 @@ buildDerivationWithContext drvAttrs = do
       outputs     <- getAttrOr "outputs"       (one "out") $ traverse (extractNoCtx <=< fromValue')
 
       mFixedOutput <-
-        maybe
-          (pure Nothing)
-          (\ hash -> do
+        case mHash of
+          Nothing -> pure Nothing
+          Just hash -> do
             when (outputs /= one "out") $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
             -- mkNamedDigest returns Either String (DSum HashAlgo Digest)
             -- Note: Empty outputHashAlgo should be treated as missing (infer from hash)
             -- This handles SRI hashes like "sha256-..." where outputHashAlgo is ""
             let mHashAlgo' = mHashAlgo >>= \a -> if Text.null a then Nothing else Just a
-            digest <- lift $ either (throwError . ErrorCall) pure $
-              maybe (inferHashDigest hash) (`Store.mkNamedDigest` hash) mHashAlgo'
-            pure $ Just digest)
-          mHash
+            digest <- lift $
+              case mHashAlgo' of
+                Nothing ->
+                  case inferHashDigest hash of
+                    Left err -> throwError $ ErrorCall err
+                    Right digest -> pure digest
+                Just algo ->
+                  case Store.mkNamedDigest algo hash of
+                    Left err -> throwError $ ErrorCall err
+                    Right digest -> pure digest
+            pure $ Just digest
 
       -- filter out null values if needed.
       attrs <-
         lift $
-          bool
-            (pure drvAttrs)
-            (HM.mapMaybe id <$>
-              traverse
-                (fmap
-                  (\case
-                    NVConstant NNull -> Nothing
-                    _value           -> Just _value
+          if ignoreNulls
+            then
+              HM.mapMaybe id <$>
+                traverse
+                  (fmap
+                    (\case
+                      NVConstant NNull -> Nothing
+                      _value           -> Just _value
+                    )
+                    . demand
                   )
-                  . demand
-                )
-                drvAttrs
-            )
-            ignoreNulls
+                  drvAttrs
+            else pure drvAttrs
 
       env <- if useJson
         then do
@@ -769,8 +776,16 @@ buildDerivationWithContext drvAttrs = do
       Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $
                    f =<< fromValue' v
 
-    getAttrOr n = getAttrOr' n . pure
+    getAttrOr
+      :: forall v a
+       . (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m)))
+      => Text -> a -> (v -> WithStringContextT m a) -> WithStringContextT m a
+    getAttrOr n d f = getAttrOr' n (pure d) f
 
+    getAttr
+      :: forall v a
+       . (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m)))
+      => Text -> (v -> WithStringContextT m a) -> WithStringContextT m a
     getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found.")
 
     getAttrRaw :: Text -> WithStringContextT m (NValue t f m)
@@ -811,10 +826,10 @@ buildDerivationWithContext drvAttrs = do
 
     extractNoCtx :: MonadNix e t f m => NixString -> WithStringContextT m Text
     extractNoCtx ns =
-      maybe
-        (lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context.")
-        pure
-        (getStringNoContext ns)
+      case getStringNoContext ns of
+        Nothing ->
+          lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context."
+        Just v -> pure v
 
     assertNonNull :: MonadNix e t f m => Text -> WithStringContextT m Text
     assertNonNull t = do

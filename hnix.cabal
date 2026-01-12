@@ -328,6 +328,11 @@ flag profiling
   manual: True
   default: False
 
+flag strict
+  description: Enable Strict language extension globally (for performance testing)
+  manual: True
+  default: True
+
 common shared
   default-language: Haskell2010
   default-extensions:
@@ -372,6 +377,9 @@ common shared
   if flag(optimize)
     default-extensions:
       ApplicativeDo
+  if flag(strict)
+    default-extensions:
+      Strict
 
 library
   import: shared

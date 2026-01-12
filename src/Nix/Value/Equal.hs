@@ -73,13 +73,15 @@ isDerivationM
   -> AttrSet t
   -> m Bool
 isDerivationM f m =
-  maybe
-    False
-    -- (2019-03-18):
-    -- We should probably really make sure the context is empty here
-    -- but the C++ implementation ignores it.
-    ((==) "derivation" . ignoreContext)
-    . join <$> traverse f (HM.lookup "type" m)
+  do
+    mtype <- traverse f (HM.lookup "type" m)
+    case join mtype of
+      Nothing -> pure False
+      Just ty ->
+        -- (2019-03-18):
+        -- We should probably really make sure the context is empty here
+        -- but the C++ implementation ignores it.
+        pure $ (==) "derivation" . ignoreContext $ ty
 
 
 isDerivation
@@ -138,10 +140,14 @@ compareAttrSetsM
   -> AttrSet t
   -> m Bool
 compareAttrSetsM f eq lm rm =
-  bool
-    compareAttrs
-    (fromMaybe compareAttrs equalOutPaths)
-    =<< areDerivations
+  do
+    are <- areDerivations
+    if are
+      then
+        case equalOutPaths of
+          Nothing -> compareAttrs
+          Just v -> v
+      else compareAttrs
  where
   areDerivations = on (liftA2 (&&)) (isDerivationM f              ) lm rm
   equalOutPaths  = on (liftA2   eq) (HM.lookup "outPath") lm rm
@@ -197,10 +203,9 @@ thunkEqM lt rt =
 
     let
       unsafePtrEq =
-        bool
-          (valueEqM lv rv)
-          (pure True)
-          $ on (==) thunkId lt rt
+        if on (==) thunkId lt rt
+          then pure True
+          else valueEqM lv rv
 
     case (lv, rv) of
       (NVClosure _ _, NVClosure _ _) -> unsafePtrEq

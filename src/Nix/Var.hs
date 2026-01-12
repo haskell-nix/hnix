@@ -29,7 +29,6 @@ instance GEq (STRef s) where
 -- | Simply a helper function
 gEqual :: Eq a => a -> b -> Maybe c
 gEqual a b =
-  bool
-    Nothing
-    (pure $ unsafeCoerce Refl)
-    (a == unsafeCoerce b)
+  if a == unsafeCoerce b
+    then pure $ unsafeCoerce Refl
+    else Nothing

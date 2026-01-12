@@ -54,10 +54,9 @@ coerceToString
   -> NValue t f m
   -> m NixString
 coerceToString call ctsm clevel =
-  bool
-    (coerceAnyToNixString call ctsm)
-    (coerceStringlikeToNixString ctsm)
-    (clevel == CoerceStringlike)
+  if clevel == CoerceStringlike
+    then coerceStringlikeToNixString ctsm
+    else coerceAnyToNixString call ctsm
 
 coerceAnyToNixString
   :: forall e t f m
@@ -93,10 +92,10 @@ coerceAnyToNixString call ctsm = go
           NVList l ->
             nixStringUnwords . V.toList <$> V.mapM go l
           v@(NVSet _ s) ->
-            fromMaybe
-              (err v)
-              $ continueOnKey (`call` v) "__toString"
-              <|> continueOnKey pure "outPath"
+            case continueOnKey (`call` v) "__toString"
+                 <|> continueOnKey pure "outPath" of
+              Just result -> result
+              Nothing     -> err v
            where
             continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
             continueOnKey f = fmap (go <=< f) . (`HM.lookup` s)
@@ -132,11 +131,10 @@ coerceStringlikeToNixString ctsm =
 -- | Convert @Path@ into @NixString@.
 -- With an additional option to store the resolved path into Nix Store.
 coercePathToNixString :: (MonadStore m, Framed e m, Has e Options) => CopyToStoreMode -> Path -> m NixString
-coercePathToNixString =
-  bool
-    (pure . mkNixStringWithoutContext . fromString . coerce)
-    ((storePathToNixString <$>) . addPath)
-    . (CopyToStore ==)
+coercePathToNixString mode path =
+  if mode == CopyToStore
+    then storePathToNixString <$> addPath path
+    else pure $ mkNixStringWithoutContext $ fromString $ coerce path
  where
   storePathToNixString :: StorePath -> NixString
   storePathToNixString (fromString . coerce -> sp) =

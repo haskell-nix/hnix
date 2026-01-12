@@ -1,13 +1,11 @@
 {-# language CPP #-}
 {-# language DataKinds #-}
+{-# language GADTs #-}
 {-# language PackageImports #-}
-{-# language Strict #-}
 
 module Nix.Effects.Basic where
 
-import           Nix.Prelude             hiding ( head
-                                                )
-import           Relude.Unsafe                  ( head )
+import           Nix.Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad                  ( foldM )
 import qualified Control.Monad.State           as State
@@ -73,23 +71,21 @@ defaultToAbsolutePath :: forall e t f m . MonadNix e t f m => Path -> m Path
 defaultToAbsolutePath origPath =
   do
     origPathExpanded <- expandHomePath origPath
-    fmap
-      removeDotDotIndirections
-      . canonicalizePath
-        =<< bool
-            (fmap
-              (<///> origPathExpanded)
-              $ maybe
-                  getCurrentDirectory
-                  ( (\case
-                      NVPath s -> pure $ takeDirectory s
-                      val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
-                    ) <=< demand
-                  )
-                  =<< lookupVar "__cur_file"
-            )
-            (pure origPathExpanded)
-            (isAbsolute origPathExpanded)
+    basePath <-
+      if isAbsolute origPathExpanded
+        then pure origPathExpanded
+        else do
+          mCurFile <- lookupVar "__cur_file"
+          dir <-
+            case mCurFile of
+              Nothing -> getCurrentDirectory
+              Just v ->
+                ( \case
+                    NVPath s -> pure $ takeDirectory s
+                    val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
+                ) =<< demand v
+          pure (dir <///> origPathExpanded)
+    fmap removeDotDotIndirections $ canonicalizePath basePath
 
 expandHomePath :: MonadFile m => Path -> m Path
 expandHomePath (coerce -> ('~' : xs)) = (<> coerce xs) <$> getHomeDirectory
@@ -114,22 +110,22 @@ x <///> y
  where
   joinByLargestOverlap :: Path -> Path -> Path
   joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) =
-    joinPath $ head
-      [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
+    case [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ] of
+      (best : _) -> joinPath best
+      [] -> joinPath (xs <> ys)
 
 defaultFindEnvPath :: MonadNix e t f m => String -> m Path
 defaultFindEnvPath = findEnvPathM . coerce
 
 findEnvPathM :: forall e t f m . MonadNix e t f m => Path -> m Path
 findEnvPathM name =
-  maybe
-    (fail "impossible")
-    (\ v ->
-      do
+  do
+    mres <- lookupVar "__nixPath"
+    case mres of
+      Nothing -> fail "impossible"
+      Just v -> do
         l <- fromValue @(Vector (NValue t f m)) =<< demand v
         findPathBy nixFilePath l name
-    )
-    =<< lookupVar "__nixPath"
 
  where
   nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)
@@ -138,10 +134,9 @@ findEnvPathM name =
       absPath <- toAbsolutePath @t @f path
       isDir   <- doesDirectoryExist absPath
       absFile <-
-        bool
-          (pure absPath)
-          (toAbsolutePath @t @f $ absPath </> "default.nix")
-          isDir
+        if isDir
+          then toAbsolutePath @t @f $ absPath </> "default.nix"
+          else pure absPath
 
       (pure absFile `whenTrue`) <$> doesFileExist absFile
 
@@ -153,40 +148,37 @@ findPathBy
   -> Path
   -> m Path
 findPathBy finder ls name =
-  maybe
-    (throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
-    pure
-    =<< foldM fun mempty ls
+  do
+    mres <- foldM fun mempty ls
+    case mres of
+      Nothing ->
+        throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)"
+      Just p -> pure p
  where
   fun
     :: MonadNix e t f m
     => Maybe Path
     -> NValue t f m
     -> m (Maybe Path)
-  fun =
-    maybe
-      (\ nv ->
-        do
-          (s :: HashMap VarName (NValue t f m)) <- fromValue =<< demand nv
-          p <- resolvePath s
-          path <- fromValue =<< demand p
+  fun mp nv =
+    case mp of
+      Just p -> pure $ pure p
+      Nothing -> do
+        (s :: HashMap VarName (NValue t f m)) <- fromValue =<< demand nv
+        p <- resolvePath s
+        path <- fromValue =<< demand p
 
-          maybe
-            (tryPath path mempty)
-            (\ nv' ->
-              do
-                mns <- fromValueMay @NixString =<< demand nv'
-                tryPath path $
-                  whenJust
-                    (\ nsPfx ->
-                      let pfx = ignoreContext nsPfx in
-                      pure $ coerce $ toString pfx `whenFalse` Text.null pfx
-                    )
-                    mns
-            )
-            (HM.lookup "prefix" s)
-      )
-      (const . pure . pure)
+        case HM.lookup "prefix" s of
+          Nothing -> tryPath path mempty
+          Just nv' -> do
+            mns <- fromValueMay @NixString =<< demand nv'
+            tryPath path $
+              whenJust
+                (\ nsPfx ->
+                  let pfx = ignoreContext nsPfx in
+                  pure $ coerce $ toString pfx `whenFalse` Text.null pfx
+                )
+                mns
 
   tryPath :: Path -> Maybe Path -> m (Maybe Path)
   tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
@@ -195,14 +187,13 @@ findPathBy finder ls name =
 
   resolvePath :: HashMap VarName (NValue t f m) -> m (NValue t f m)
   resolvePath s =
-    maybe
-      (maybe
-        (throwError $ ErrorCall $ "__nixPath must be a list of attr sets with 'path' elements, but received: " <> show s)
-        (defer . fetchTarball)
-        (HM.lookup "uri" s)
-      )
-      pure
-      (HM.lookup "path" s)
+    case HM.lookup "path" s of
+      Just v -> pure v
+      Nothing ->
+        case HM.lookup "uri" s of
+          Just uriVal -> defer . fetchTarball $ uriVal
+          Nothing ->
+            throwError $ ErrorCall $ "__nixPath must be a list of attr sets with 'path' elements, but received: " <> show s
 
 fetchTarball
   :: forall e t f m
@@ -212,7 +203,9 @@ fetchTarball
 fetchTarball =
   \case
     NVSet _ s -> do
-      urlVal <- maybe (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute") pure (HM.lookup "url" s)
+      urlVal <- case HM.lookup "url" s of
+        Nothing -> throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
+        Just v -> pure v
       url <- fromValue =<< demand urlVal
       mShaVal <- traverse (fromValue <=< demand) (HM.lookup "sha256" s <|> HM.lookup "hash" s)
       mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
@@ -226,7 +219,10 @@ fetchTarball =
     opts <- askOptions
     mstats <- askEvalStats
     let defaultName = "source"
-    let name0 = fromMaybe defaultName mName
+    let name0 =
+          case mName of
+            Nothing -> defaultName
+            Just v -> v
     let name = if Text.null name0 then baseNameOf uri else name0
 
     storeName <- case Store.mkStorePathName name of
@@ -236,10 +232,16 @@ fetchTarball =
 
     -- Instrument getURL for IO timing
     start <- liftIO Clock.getMonotonicTimeNSec
-    tarPath <- either throwError pure =<< getURL uri
+    tarPathRes <- getURL uri
+    tarPath <- case tarPathRes of
+      Left err -> throwError err
+      Right v -> pure v
     end <- liftIO Clock.getMonotonicTimeNSec
     for_ mstats $ \stats -> recordHttpFetch stats (end - start)
-    tarBytes <- either throwError pure =<< readStoreFile (coerce tarPath)
+    tarBytesRes <- readStoreFile (coerce tarPath)
+    tarBytes <- case tarBytesRes of
+      Left err -> throwError err
+      Right bytes -> pure bytes
 
     tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
     tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-fetchTarball"
@@ -247,9 +249,9 @@ fetchTarball =
     liftIO $ B.writeFile tarFile tarBytes
     let unpackDir = tmpDir FP.</> "unpack"
     liftIO $ Directory.createDirectory unpackDir
-    (exitCode, _out, err) <- liftIO $ readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
+    (exitCode, _out, tarErr) <- liftIO $ readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
     when (exitCode /= ExitSuccess) $
-      throwError $ ErrorCall $ "builtins.fetchTarball: failed to unpack " <> show uri <> ": " <> err
+      throwError $ ErrorCall $ "builtins.fetchTarball: failed to unpack " <> show uri <> ": " <> tarErr
 
     rootDir <- liftIO $ pickRoot unpackDir
 
@@ -287,7 +289,9 @@ fetchTarball =
     res <- addToStore name (NarFile $ coerce rootDir) True False
     storeEnd <- liftIO Clock.getMonotonicTimeNSec
     for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
-    storePath <- either throwError pure res
+    storePath <- case res of
+      Left storeErr -> throwError storeErr
+      Right v -> pure v
     liftIO $ Directory.removeDirectoryRecursive tmpDir
     toValue storePath
 
@@ -365,10 +369,9 @@ fetchGit =
     NVSet _ s -> fetchGitFromSet mode s
     NVPath p -> fetchGitFromUrl mode (toText p)
     NVStr ns ->
-      maybe
-        (throwError $ ErrorCall "builtins.fetchGit: unsupported arguments to url")
-        (fetchGitFromUrl mode)
-        (getStringNoContext ns)
+      case getStringNoContext ns of
+        Nothing -> throwError $ ErrorCall "builtins.fetchGit: unsupported arguments to url"
+        Just url -> fetchGitFromUrl mode url
     v -> throwError $ ErrorCall $ "builtins.fetchGit: Expected URI or set, got " <> show v
   <=< demand
 
@@ -387,7 +390,9 @@ fetchTree =
   in
   \case
     NVSet _ s -> do
-      typeVal <- maybe (throwError $ ErrorCall "builtins.fetchTree: missing type") pure (HM.lookup "type" s)
+      typeVal <- case HM.lookup "type" s of
+        Nothing -> throwError $ ErrorCall "builtins.fetchTree: missing type"
+        Just v -> pure v
       typ <- fromValue =<< demand typeVal
       if typ == ("git" :: Text)
         then fetchGitFromSet mode s
@@ -431,7 +436,9 @@ fetchGitFromSet
   -> AttrSet (NValue t f m)
   -> m (NValue t f m)
 fetchGitFromSet mode s = do
-  urlVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: Missing url attribute") pure (HM.lookup "url" s)
+  urlVal <- case HM.lookup "url" s of
+    Nothing -> throwError $ ErrorCall "builtins.fetchGit: Missing url attribute"
+    Just v -> pure v
   url <- extractUrlLike =<< demand urlVal
   mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
   when (not (fgAllowName mode) && isJust mNameVal) $
@@ -449,16 +456,29 @@ fetchGitFromSet mode s = do
   mPublicKeyVal <- traverse (fromValue <=< demand) (HM.lookup "publicKey" s)
   mPublicKeysVal <- traverse (fromValue @[NValue t f m] <=< demand) (HM.lookup "publicKeys" s)
 
-  pubKeys <- parsePublicKeys (fromMaybe "ssh-ed25519" mKeyTypeVal) mPublicKeyVal mPublicKeysVal
+  let keyType =
+        case mKeyTypeVal of
+          Nothing -> "ssh-ed25519"
+          Just v -> v
+  pubKeys <- parsePublicKeys keyType mPublicKeyVal mPublicKeysVal
 
-  let name = fromMaybe "source" (nonEmptyText mNameVal)
-  let submodules = fromMaybe False mSubVal
+  let name =
+        case nonEmptyText mNameVal of
+          Nothing -> "source"
+          Just v -> v
+  let submodules =
+        case mSubVal of
+          Nothing -> False
+          Just v -> v
   let exportIgnore = case mExportIgnoreVal of
         Just v -> v
         Nothing ->
           fgDefaultExportIgnore mode && not submodules
 
-  let verifyCommitFlag = fromMaybe (not (null pubKeys)) mVerifyCommitVal
+  let verifyCommitFlag =
+        case mVerifyCommitVal of
+          Nothing -> not (null pubKeys)
+          Just v -> v
 
   let args = FetchGitArgs
         { fgUrl = stripGitPrefix url
@@ -466,10 +486,19 @@ fetchGitFromSet mode s = do
         , fgRev = nonEmptyText mRevVal
         , fgRef = nonEmptyText mRefVal
         , fgSubmodules = submodules
-        , fgShallow = fromMaybe (fgDefaultShallow mode) mShallowVal
+        , fgShallow =
+            case mShallowVal of
+              Nothing -> fgDefaultShallow mode
+              Just v -> v
         , fgExportIgnore = exportIgnore
-        , fgAllRefs = fromMaybe False mAllRefsVal
-        , fgLfs = fromMaybe False mLfsVal
+        , fgAllRefs =
+            case mAllRefsVal of
+              Nothing -> False
+              Just v -> v
+        , fgLfs =
+            case mLfsVal of
+              Nothing -> False
+              Just v -> v
         , fgNarHash = nonEmptyText mNarHashVal
         , fgVerifyCommit = verifyCommitFlag
         , fgPublicKeys = pubKeys
@@ -514,7 +543,10 @@ buildFetchGitAttrs mode args res = do
       then do
         revVal <- (toValue revText :: m (NValue t f m))
         shortRevVal <- (toValue (Text.take 7 revText) :: m (NValue t f m))
-        let revCountText = fromMaybe (0 :: Integer) revCountValText
+        let revCountText =
+              case revCountValText of
+                Nothing -> 0 :: Integer
+                Just v -> v
         revCountVal <- (toValue revCountText :: m (NValue t f m))
         pure [("rev", revVal), ("shortRev", shortRevVal), ("revCount", revCountVal)]
       else case fgrRevInfo res of
@@ -609,7 +641,9 @@ fetchGitWorkingTree args path = do
   res <- addToStore storeName (NarFile $ coerce tmpDir) True False
   storeEnd <- liftIO Clock.getMonotonicTimeNSec
   for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
-  storePath <- either throwError pure res
+  storePath <- case res of
+    Left err -> throwError err
+    Right v -> pure v
   liftIO $ Directory.removeDirectoryRecursive tmpDir
 
   let dirtyRev = (\r -> r <> "-dirty") <$> mHeadRev
@@ -633,7 +667,10 @@ fetchGitWorkingTree args path = do
     Nothing -> pure 0
     Just rev -> do
       secs <- gitLastModified repoRootFp rev
-      pure $ fromMaybe 0 secs
+      pure $
+        case secs of
+          Nothing -> 0
+          Just v -> v
 
   pure FetchGitResult
     { fgrStorePath = storePath
@@ -664,9 +701,9 @@ fetchGitFromLocalRepo args path = do
       runGitArchive repoRootFp rev tarFile
       let unpackDir = tmpDir FP.</> "unpack"
       liftIO $ Directory.createDirectory unpackDir
-      (exitCode, _out, err) <- liftIO $ readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
+      (exitCode, _out, tarErr) <- liftIO $ readProcessWithExitCode "tar" ["-xf", tarFile, "-C", unpackDir] ""
       when (exitCode /= ExitSuccess) $
-        throwError $ ErrorCall $ "builtins.fetchGit: failed to unpack archive: " <> err
+        throwError $ ErrorCall $ "builtins.fetchGit: failed to unpack archive: " <> tarErr
       narHash <- liftIO $ computeNarHashSRI unpackDir
       storeName <- mkStoreName "builtins.fetchGit" (fgName args)
       -- Instrument addToStore for IO timing
@@ -674,14 +711,19 @@ fetchGitFromLocalRepo args path = do
       res <- addToStore storeName (NarFile $ coerce unpackDir) True False
       storeEnd <- liftIO Clock.getMonotonicTimeNSec
       for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
-      storePath <- either throwError pure res
+      storePath <- case res of
+        Left storeErr -> throwError storeErr
+        Right v -> pure v
       liftIO $ Directory.removeDirectoryRecursive tmpDir
 
       when (fgVerifyCommit args) $
         verifyCommit repoRootFp rev (fgPublicKeys args)
 
       info <- gitRevInfo repoRootFp rev (not (fgShallow args))
-      lastMod <- maybe 0 id <$> pure (riLastModSecs info)
+      lastMod <- pure $
+        case riLastModSecs info of
+          Nothing -> 0
+          Just v -> v
       pure FetchGitResult
         { fgrStorePath = storePath
         , fgrRevInfo = Just info
@@ -733,7 +775,10 @@ fetchGitCloneRepo args cloneUrl = do
     verifyCommit repoDir rev (fgPublicKeys args)
 
   info <- gitRevInfo repoDir rev (not (fgShallow args))
-  let lastMod = fromMaybe 0 (riLastModSecs info)
+  let lastMod =
+        case riLastModSecs info of
+          Nothing -> 0
+          Just v -> v
 
   contentDir <- if fgExportIgnore args
     then do
@@ -757,7 +802,9 @@ fetchGitCloneRepo args cloneUrl = do
   res <- addToStore storeName (NarFile $ coerce contentDir) True False
   storeEnd <- liftIO Clock.getMonotonicTimeNSec
   for_ mstats $ \stats -> recordStoreAdd stats (storeEnd - storeStart)
-  storePath <- either throwError pure res
+  storePath <- case res of
+    Left err -> throwError err
+    Right v -> pure v
   liftIO $ Directory.removeDirectoryRecursive tmpDir
   pure FetchGitResult
     { fgrStorePath = storePath
@@ -793,10 +840,16 @@ getDefaultRef url _shallow = do
   case mPath of
     Just path -> do
       mRef <- runGitInMaybe path ["symbolic-ref", "--quiet", "--short", "HEAD"]
-      pure $ fromMaybe "master" mRef
+      pure $
+        case mRef of
+          Nothing -> "master"
+          Just ref -> ref
     Nothing -> do
       mRef <- gitLsRemoteHead url
-      pure $ fromMaybe "master" mRef
+      pure $
+        case mRef of
+          Nothing -> "master"
+          Just ref -> ref
 
 gitLsRemoteHead
   :: forall e t f m
@@ -1046,8 +1099,10 @@ verifyCommit repo rev publicKeys = do
   tmpBase <- liftIO Temp.getCanonicalTemporaryDirectory
   tmpDir <- liftIO $ Temp.createTempDirectory tmpBase "hnix-fetchGit-keys"
   let keyFile = tmpDir FP.</> "allowed_signers"
-  allowed <- either (throwError . ErrorCall . ("builtins.fetchGit: " <>)) pure $
-    buildAllowedSigners publicKeys
+  allowed <-
+    case buildAllowedSigners publicKeys of
+      Left err -> throwError $ ErrorCall $ "builtins.fetchGit: " <> err
+      Right v -> pure v
   liftIO $ BS.writeFile keyFile (TE.encodeUtf8 allowed)
   (exitCode, out, _err) <- liftIO $
     readProcessWithExitCode "git"
@@ -1062,8 +1117,10 @@ verifyCommit repo rev publicKeys = do
   case exitCode of
     ExitSuccess -> do
       let output = Text.pack out
-      fingerprints <- either (throwError . ErrorCall . ("builtins.fetchGit: " <>)) pure $
-        traverse computeKeyFingerprint publicKeys
+      fingerprints <-
+        case traverse computeKeyFingerprint publicKeys of
+          Left err -> throwError $ ErrorCall $ "builtins.fetchGit: " <> err
+          Right v -> pure v
       if any (\fp -> Text.isInfixOf ("SHA256:" <> fp) output) fingerprints
         then pure ()
         else throwError $ ErrorCall $ "builtins.fetchGit: commit signature verification failed"
@@ -1102,7 +1159,10 @@ parsePublicKeys
   -> Maybe [NValue t f m]
   -> m [PublicKey]
 parsePublicKeys defaultType mKey mKeysList = do
-  let single = maybe [] (\k -> [PublicKey defaultType k]) mKey
+  let single =
+        case mKey of
+          Nothing -> []
+          Just k -> [PublicKey defaultType k]
   keysFromList <- case mKeysList of
     Nothing -> pure []
     Just vals -> traverse parseEntry vals
@@ -1112,10 +1172,14 @@ parsePublicKeys defaultType mKey mKeysList = do
     v <- demand val
     case v of
       NVSet _ attrs -> do
-        keyVal <- maybe (throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'") pure (HM.lookup "key" attrs)
+        keyVal <- case HM.lookup "key" attrs of
+          Nothing -> throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'"
+          Just keyVal' -> pure keyVal'
         keyText <- fromValue =<< demand keyVal
         let typeVal = HM.lookup "type" attrs
-        typ <- maybe (pure defaultType) (\tv -> fromValue =<< demand tv) typeVal
+        typ <- case typeVal of
+          Nothing -> pure defaultType
+          Just tv -> fromValue =<< demand tv
         pure $ PublicKey typ keyText
       _ ->
         throwError $ ErrorCall $ "builtins.fetchGit: publicKeys entry must be a set"
@@ -1127,10 +1191,9 @@ extractUrlLike
   -> m Text
 extractUrlLike = \case
   NVStr ns ->
-    maybe
-      (throwError $ ErrorCall "builtins.fetchGit: unsupported arguments to url")
-      pure
-      (getStringNoContext ns)
+    case getStringNoContext ns of
+      Nothing -> throwError $ ErrorCall "builtins.fetchGit: unsupported arguments to url"
+      Just v -> pure v
   NVPath p -> pure $ toText p
   v -> throwError $ ErrorCall $ "builtins.fetchGit: Expected URI string, got " <> show v
 
@@ -1152,7 +1215,10 @@ nonEmptyText = \case
   other -> other
 
 stripGitPrefix :: Text -> Text
-stripGitPrefix url = fromMaybe url (Text.stripPrefix "git+" url)
+stripGitPrefix url =
+  case Text.stripPrefix "git+" url of
+    Nothing -> url
+    Just v -> v
 
 classifyGitLocation
   :: forall e t f m
@@ -1285,20 +1351,20 @@ defaultImportPath path =
     withFrame
       Info
       (ErrorCall $ "While importing file " <> show path)
-      $ evalExprLoc =<<
-          (maybe
-            (either
-              (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
-              (\ expr ->
-                do
-                  modify $ first $ HM.insert path expr
-                  pure expr
-              )
-              =<< parseNixFileLocWithTiming path
-            )
-            pure  -- return expr
-            . HM.lookup path
-          ) =<< gets fst
+      $ do
+          cache <- gets fst
+          expr <-
+            case HM.lookup path cache of
+              Just cached -> pure cached
+              Nothing -> do
+                parseRes <- parseNixFileLocWithTiming path
+                case parseRes of
+                  Left err ->
+                    throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err]
+                  Right parsed -> do
+                    modify $ first $ HM.insert path parsed
+                    pure parsed
+          evalExprLoc expr
  where
   -- Parse a file with timing instrumentation for eval-stats
   parseNixFileLocWithTiming :: MonadNix e t f m => Path -> m (Result NExprLoc)

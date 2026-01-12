@@ -1,6 +1,5 @@
 {-# language ConstraintKinds #-}
 {-# language UndecidableInstances #-}
-{-# language Strict #-}
 {-# options_ghc -Wno-unused-do-bind #-}
 
 -- | Basic thunk implementation for lazy evaluation with memoization.
@@ -16,8 +15,8 @@
 --
 -- === Strict Extension is Critical
 -- Without strict evaluation, thunks accumulate inside the IORef, causing
--- space leaks. This module uses @{-# language Strict #-}@ to ensure all
--- bindings and data fields are strict by default.
+-- space leaks. The @Strict@ extension (controlled by the @strict@ cabal flag)
+-- ensures all bindings and data fields are strict by default.
 --
 -- === atomicModifyRef vs readRef for Cache Hits
 -- Attempted optimization: use 'readRef' for cache hits (64.7% of forces),

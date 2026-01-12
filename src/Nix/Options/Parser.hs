@@ -39,10 +39,9 @@ argPair =
   option $
     do
       s <- str
-      maybe
-        (errorWithoutStackTrace "Format of --arg/--argstr in hnix is: name=expr")
-        (pure . second Text.tail . (`Text.splitAt` s))
-        (Text.findIndex (== '=') s)
+      case Text.findIndex (== '=') s of
+        Nothing -> errorWithoutStackTrace "Format of --arg/--argstr in hnix is: name=expr"
+        Just i  -> pure $ second Text.tail $ Text.splitAt i s
 
 nixOptions :: UTCTime -> Parser Options
 nixOptions current =
@@ -52,10 +51,9 @@ nixOptions current =
 
         (do
           a <- str
-          bool
-            (fail "Argument to -v/--verbose must be a number")
-            (pure $ decodeVerbosity $ read a)
-            (all isDigit a)
+          if all isDigit a
+            then pure $ decodeVerbosity $ read a
+            else fail "Argument to -v/--verbose must be a number"
         )
 
         (  short 'v'

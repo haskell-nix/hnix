@@ -84,10 +84,9 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
   normtype (TList a ) = TList $ normtype <$> a
   normtype (TMany ts) = TMany $ normtype <$> ts
   normtype (TVar  a ) =
-    maybe
-      (error "type variable not in signature")
-      TVar
-      (List.lookup a ord)
+    case List.lookup a ord of
+      Nothing -> error "type variable not in signature"
+      Just v  -> TVar v
 
 generalize :: Set.Set TVar -> Type -> Scheme
 generalize free t = Forall as t
@@ -319,10 +318,9 @@ instance Monad m => MonadCatch (InferT s m) where
     catchError m $
       \case
         EvaluationError e ->
-          maybe
-            (error $ "Exception was not an exception: " <> show e)
-            h
-            (fromException $ toException e)
+          case fromException $ toException e of
+            Nothing -> error $ "Exception was not an exception: " <> show e
+            Just ex -> h ex
         err -> error $ "Unexpected error: " <> show err
 
 -- instance MonadThunkId m => MonadThunkId (InferT s m) where

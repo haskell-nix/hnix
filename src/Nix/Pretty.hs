@@ -88,21 +88,16 @@ needsParens
   -> Bool
 needsParens mode host sub =
   getOpPrecedence host > getOpPrecedence sub
-  || bool
-    False
-    ( NAssoc /=  getOpAssoc      host
-      && on (==) getOpAssoc      host sub
-      && on (==) getOpPrecedence host sub
-    )
-    (ProcessAllWrap == mode)
+  || (ProcessAllWrap == mode &&
+      NAssoc /= getOpAssoc host &&
+      on (==) getOpAssoc host sub &&
+      on (==) getOpPrecedence host sub)
 
 maybeWrapDoc :: WrapMode -> NOperatorDef -> NixDoc ann -> Doc ann
 maybeWrapDoc mode host sub =
-  bool
-    parens
-    id
-    (needsParens mode host (rootOp sub))
-    (getDoc sub)
+  if needsParens mode host (rootOp sub)
+    then parens (getDoc sub)
+    else getDoc sub
 
 -- | Determine if to return doc wraped into parens,
 -- according the given operator.
@@ -116,10 +111,9 @@ precedenceWrap = maybeWrapDoc PrecedenceWrap
 -- "${./abc}"
 wrapPath :: NOperatorDef -> NixDoc ann -> Doc ann
 wrapPath op sub =
-  bool
-    (wrap op sub)
-    (dquotes $ antiquote sub)
-    (wasPath sub)
+  if wasPath sub
+    then dquotes $ antiquote sub
+    else wrap op sub
 
 -- | Handle Output representation of the string escape codes.
 prettyString :: NString (NixDoc ann) -> Doc ann
@@ -224,15 +218,11 @@ prettyBind (Inherit s ns _p) =
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey key) =
-  bool
-    "\"\""
-    (bool
-      id
-      dquotes
-      (HS.member key reservedNames)
-      (prettyVarName key)
-    )
-    (not $ Text.null $ varNameText key)
+  if Text.null $ varNameText key
+    then "\"\""
+    else if HS.member key reservedNames
+      then dquotes (prettyVarName key)
+      else prettyVarName key
 prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
@@ -310,11 +300,9 @@ exprFNixDoc = \case
 
     pickWrapMode :: NAssoc -> NixDoc ann -> Doc ann
     pickWrapMode x =
-      bool
-        wrap
-        precedenceWrap
-        (getOpAssoc opDef /= x)
-        opDef
+      if getOpAssoc opDef /= x
+        then precedenceWrap opDef
+        else wrap opDef
   NUnary op r1 ->
     mkNixDoc
       opDef $
@@ -347,10 +335,9 @@ exprFNixDoc = \case
           "../" -> "../."
           ".."  -> "../."
           path  ->
-            bool
-              ("./" <> path)
-              path
-              (any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"])
+            if any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"]
+              then path
+              else "./" <> path
   NPath p ->
     pathExpr $ prettyPathString $ normalizePathString p
   NSym name -> simpleExpr $ prettyVarName name
@@ -412,9 +399,9 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
 prettyNValue v =
-  fromMaybe
-    (prettyNix $ valueToExpr v)
-    (derivationDoc v)
+  case derivationDoc v of
+    Just doc -> doc
+    Nothing  -> prettyNix $ valueToExpr v
 
 -- | Detect derivations and render them as @\<derivation path\>@ instead of
 -- recursively printing all attributes.

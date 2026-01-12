@@ -167,16 +167,14 @@ renderExpr _level longLabel shortLabel e@(Ann _ x) =
       concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
 
       chatty =
-        bool
-          (pretty $ PS.ppShow expr)
-          (prettyNix expr)
-          (verbosity == Chatty)
+        if verbosity == Chatty
+          then prettyNix expr
+          else pretty $ PS.ppShow expr
 
     pure $
-      bool
-        (pretty shortLabel <> fillSep [": ", concise])
-        (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
-        (verbosity >= Chatty)
+      if verbosity >= Chatty
+        then vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"]
+        else pretty shortLabel <> fillSep [": ", concise]
 
 renderValueFrame
   :: forall e t f m ann
@@ -196,10 +194,9 @@ renderValueFrame level = fmap one . \case
     $ fold [desc, pretty (describeValue x), " to ", pretty (describeValue y)]
    where
     desc =
-      bool
-        "While coercing "
-        "Cannot coerce "
-        (level <= Error)
+      if level <= Error
+        then "Cannot coerce "
+        else "While coercing "
 
   CoercionToJson v ->
     ("CoercionToJson " <>) <$> dumbRenderValue v
@@ -221,11 +218,8 @@ renderValue
 renderValue _level _longLabel _shortLabel v =
   do
     opts <- askOptions
-    bool
-      prettyNValue
-      prettyNValueProv
-      (isValues opts)
-      <$> removeEffects v
+    let render = if isValues opts then prettyNValueProv else prettyNValue
+    render <$> removeEffects v
 
 dumbRenderValue
   :: forall e t f m ann

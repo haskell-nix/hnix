@@ -22,6 +22,7 @@ import           Nix.Options                   ( Options )
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
+import           Nix.FileType                 ( FileType(..) )
 import           Nix.Frames
 import           Nix.String
 import           Nix.Value
@@ -97,11 +98,11 @@ fromMayToValue
   => ValueType
   -> NValue' t f m (NValue t f m)
   -> m a
-fromMayToValue t v =
-  maybe
-    (throwError $ Expectation @t @f @m t (Free v))
-    pure
-    =<< fromValueMay v
+fromMayToValue t v = do
+  result <- fromValueMay v
+  case result of
+    Nothing -> throwError $ Expectation @t @f @m t (Free v)
+    Just x  -> pure x
 
 fromMayToDeeperValue
   :: forall t f m a e m1
@@ -111,11 +112,11 @@ fromMayToDeeperValue
   => ValueType
   -> Deeper (NValue' t f m (NValue t f m))
   -> m (m1 a)
-fromMayToDeeperValue t v =
-  maybe
-    (throwError $ Expectation @t @f @m t $ Free $ (coerce :: CoerceDeeperToNValue' t f m) v)
-    pure
-    =<< fromValueMay v
+fromMayToDeeperValue t v = do
+  result <- fromValueMay v
+  case result of
+    Nothing -> throwError $ Expectation @t @f @m t $ Free $ (coerce :: CoerceDeeperToNValue' t f m) v
+    Just x  -> pure x
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
@@ -420,6 +421,18 @@ instance Convertible e t f m
   toValue = pure . NVPath'
 
 instance Convertible e t f m
+  => ToValue FileType m (NValue' t f m (NValue t f m)) where
+  toValue = pure . NVStr' . mkNixStringWithoutContext . fileTypeToText
+   where
+    fileTypeToText :: FileType -> Text
+    fileTypeToText ft =
+      case ft of
+        FileTypeRegular   -> "regular"
+        FileTypeDirectory -> "directory"
+        FileTypeSymlink   -> "symlink"
+        FileTypeUnknown   -> "unknown"
+
+instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
   toValue = toValue @Path . coerce
 
@@ -477,10 +490,9 @@ instance Convertible e t f m
   toValue nlcv = do
     let
       g f =
-        bool
-          (pure Nothing)
-          (pure <$> toValue True)
-          (f nlcv)
+        if f nlcv
+          then pure <$> toValue True
+          else pure Nothing
     path <- g nlcvPath
     allOutputs <- g nlcvAllOutputs
     outputs <- do

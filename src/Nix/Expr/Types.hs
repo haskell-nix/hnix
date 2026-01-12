@@ -5,7 +5,6 @@
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language RankNTypes #-}
-{-# language Strict #-}
 {-# language TemplateHaskell #-}
 {-# language TemplateHaskellQuotes #-}
 {-# language TypeFamilies #-}
@@ -867,18 +866,22 @@ ekey keys pos f e@(Fix x)
             ks
     in
     case vals of
-      ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
+      ((v, []      ) : _) ->
+        f (pure v) <&> \case
+          Nothing -> e
+          Just v' -> v'
       ((v, r : rest) : _) -> ekey (r :| rest) pos f v
 
       _                   ->
-        maybe
-          e
-          (\ v ->
+        f Nothing <&> \case
+          Nothing -> e
+          Just v ->
             let entry = NamedVar (StaticKey <$> keys) v pos in
             Fix $ toNExpr ( NSet mempty $ one entry <> xs, ann )
-          )
-        <$> f Nothing
-ekey _ _ f e = fromMaybe e <$> f Nothing
+ekey _ _ f e =
+  f Nothing <&> \case
+    Nothing -> e
+    Just v -> v
 
 
 getFreeVars :: NExpr -> Set VarName

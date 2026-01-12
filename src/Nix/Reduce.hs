@@ -85,7 +85,10 @@ staticImport pann path =
     mfile <- asks fst
     path'  <- liftIO $ pathToDefaultNixFile path
     path'' <- liftIO $ pathToDefaultNixFile =<< coerce canonicalizePath
-      (maybe id ((</>) . takeDirectory) mfile path')
+      (case mfile of
+        Nothing -> path'
+        Just f -> takeDirectory f </> path'
+      )
 
     let
       importIt :: m NExprLoc
@@ -93,9 +96,9 @@ staticImport pann path =
         liftIO $ putStrLn $ "Importing file " <> coerce path''
 
         eres <- liftIO $ parseNixFileLoc path''
-        either
-          (\ err -> fail $ "Parse failed: " <> show err)
-          (\ x -> do
+        case eres of
+          Left err -> fail $ "Parse failed: " <> show err
+          Right x -> do
             let
               pos  = join (NSourcePos "Reduce.hs") $ (coerce . mkPos) 1
               span = join SrcSpan pos
@@ -112,14 +115,11 @@ staticImport pann path =
                 x'' <- foldFix reduce x'
                 modify $ first $ HM.insert path'' x''
                 pure x''
-          )
-          eres
 
     imports <- gets fst
-    maybe
-      importIt
-      pure
-      (HM.lookup path'' imports)
+    case HM.lookup path'' imports of
+      Nothing -> importIt
+      Just v -> pure v
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
@@ -148,7 +148,11 @@ reduce
 -- | Reduce the variable to its value if defined.
 --   Leave it as it is otherwise.
 reduce (NSymAnnF ann var) =
-  fromMaybe (NSymAnn ann var) <$> lookupVar var
+  do
+    m <- lookupVar var
+    case m of
+      Nothing -> pure $ NSymAnn ann var
+      Just v -> pure v
 
 -- | Reduce binary and integer negation.
 reduce (NUnaryAnnF uann op arg) =
@@ -231,16 +235,14 @@ reduce base@(NSelectAnnF _ _ _ attrs)
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
 reduce e@(NSetAnnF ann r binds) =
-  bool
+  if r == NonRecursive
+    then
+      if usesInherit
+        then mExprLoc
+        else reduceLayer e
     -- Encountering a 'rec set' construction eliminates any hope of inlining
     -- definitions.
-    mExprLoc
-    (bool
-      (reduceLayer e)
-      mExprLoc
-      usesInherit
-    )
-    (r == NonRecursive)
+    else mExprLoc
  where
   mExprLoc :: m NExprLoc
   mExprLoc =
@@ -301,7 +303,7 @@ reduce (NLetAnnF ann binds body) =
 --   the condition is a boolean constant.
 reduce e@(NIfAnnF _ b t f) =
   (\case
-    NConstantAnn _ (NBool b') -> bool f t b'
+    NConstantAnn _ (NBool b') -> if b' then t else f
     _                         -> reduceLayer e
   ) =<< b
 
@@ -351,10 +353,11 @@ pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
 pruneTree opts =
   foldFixM $
     \(FlaggedF (b, Compose x)) ->
-      bool
-        Nothing
-        (annUnitToAnn <$> traverse prune x)
-        <$> liftIO (readIORef b)
+      do
+        keep <- liftIO (readIORef b)
+        if keep
+          then pure $ annUnitToAnn <$> traverse prune x
+          else pure Nothing
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
   prune = \case
@@ -364,17 +367,19 @@ pruneTree opts =
     NAbs params (Just body) -> pure $ NAbs (pruneParams params) body
 
     NList l -> pure $ NList $
-      bool
-        (fromMaybe annNNull <$>)
-        catMaybes
-        (isReduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
-        l
+      if isReduceLists opts
+        then catMaybes l  -- Reduce list members that aren't used; breaks if elemAt is used
+        else fmap (\case
+          Nothing -> annNNull
+          Just v -> v
+        ) l
     NSet recur binds -> pure $ NSet recur $
-      bool
-        (fromMaybe annNNull <<$>>)
-        (mapMaybe sequenceA)
-        (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
-        binds
+      if isReduceSets opts
+        then mapMaybe sequenceA binds  -- Reduce set members that aren't used; breaks if hasAttr is used
+        else fmap (fmap (\case
+          Nothing -> annNNull
+          Just v -> v
+        )) binds
 
     NLet binds (Just body@(Ann _ x)) ->
       pure $
@@ -447,10 +452,18 @@ pruneTree opts =
     -- Transform Maybe (Maybe NExprLoc) -> Maybe NExprLoc
     reduceValue :: Maybe (Maybe NExprLoc) -> Maybe NExprLoc
     reduceValue =
-      bool
-        (fmap (fromMaybe annNNull))  -- False: unwrap nested Maybe
-        (pure . maybe annNNull (fromMaybe annNNull))  -- True: reduce set members
-        (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
+      if isReduceSets opts
+        then (pure . \case  -- True: reduce set members
+          Nothing -> annNNull
+          Just mv ->
+            case mv of
+              Nothing -> annNNull
+              Just v -> v
+        )
+        else (fmap (\case  -- False: unwrap nested Maybe
+          Nothing -> annNNull
+          Just v -> v
+        ))
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _                 Nothing  _  ) = Nothing
@@ -472,7 +485,9 @@ reducingEvalExpr eval mpath expr =
       pure <$> foldFix (addEvalFlags eval) expr'
     opts <- askOptions
     expr''          <- pruneTree opts expr'
-    pure (fromMaybe annNNull expr'', eres)
+    pure (case expr'' of
+      Nothing -> annNNull
+      Just v -> v, eres)
  where
   addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 

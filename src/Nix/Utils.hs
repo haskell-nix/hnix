@@ -1,6 +1,5 @@
 {-# language CPP #-}
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language Strict #-}
 
 -- | This is a module of custom "Prelude" code.
 -- It is for import for projects other then @HNix@.
@@ -141,7 +140,9 @@ iterateN
   -> a
 iterateN n f x =
   -- It is hard to read - yes. It is a non-recursive momoized action - yes.
-  fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n
+  if n == 0
+    then x
+    else iterateN (pred n) f (f x)
 
 nestM
   :: Monad m
@@ -185,17 +186,18 @@ lifted f k =
 
 whenTrue :: (Monoid a)
   => a -> Bool -> a
-whenTrue =
-  bool
-    mempty
+whenTrue ~x b =
+  if b
+    then x
+    else mempty
 {-# INLINABLE whenTrue #-}
 
 whenFalse :: (Monoid a)
   => a  -> Bool  -> a
-whenFalse f =
-  bool
-    f
-    mempty
+whenFalse ~f b =
+  if b
+    then mempty
+    else f
 {-# INLINABLE whenFalse #-}
 
 whenJust
@@ -203,9 +205,10 @@ whenJust
   => (a -> b)
   -> Maybe a
   -> b
-whenJust =
-  maybe
-    mempty
+whenJust f =
+  \case
+    Nothing -> mempty
+    Just a -> f a
 {-# INLINABLE whenJust #-}
 
 isPresent :: Foldable t => t a -> Bool
@@ -215,20 +218,18 @@ isPresent = not . null
 
 -- | 'maybe'-like eliminator, for foldable empty/inhabited structures.
 handlePresence :: Foldable t => b -> (t a -> b) -> t a -> b
-handlePresence d f t =
-  bool
-    d
-    (f t)
-    (isPresent t)
+handlePresence ~d f t =
+  if isPresent t
+    then f t
+    else d
 {-# INLINABLE handlePresence #-}
 
 whenText
   :: a -> (Text -> a) -> Text -> a
-whenText e f t =
-  bool
-    e
-    (f t)
-    (not $ Text.null t)
+whenText ~e f t =
+  if Text.null t
+    then e
+    else f t
 
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b

@@ -6,24 +6,39 @@ This guide provides essential context for working with HNix - a Haskell implemen
 
 ### Essential Development Workflow
 ```bash
-# Enter development environment
-nix-shell
+# Standard iterative build (preferred)
+nix develop ".?submodules=1#" --command cabal build
 
-# Build the project
-cabal v2-configure
-cabal v2-build
+# Build without strict (for performance comparison)
+nix develop ".?submodules=1#" --command cabal build -f-strict
 
 # Run a single test
-cabal v2-test --test-options="--pattern '/Parser/basic literals/'"
+nix develop ".?submodules=1#" --command cabal test --test-options="--pattern '/Parser/basic literals/'"
 
 # Interactive REPL for exploration
-cabal v2-repl
+nix develop ".?submodules=1#" --command cabal repl
 > :load Nix.Eval
 > :type evalExprLoc
 
 # Quick evaluation test
-cabal v2-run hnix -- --eval --expr '1 + 1'
+nix develop ".?submodules=1#" --command cabal run hnix -- --eval --expr '1 + 1'
 ```
+
+### Output Handling Rules
+
+**IMPORTANT:** Never redirect stdout or stderr with nix or cabal commands, and never pipe them into `head` or `tail`. Instead:
+
+```bash
+# BAD - Don't do this
+nix develop ".?submodules=1#" --command cabal build 2>&1 | head -50
+cabal build > output.txt 2>&1
+
+# GOOD - Run commands directly
+nix develop ".?submodules=1#" --command cabal build
+# If output is needed, read build logs from dist-newstyle/ or use cabal's --builddir
+```
+
+This avoids issues with buffering, signal handling, and incomplete output from terminated processes.
 
 ### Testing Commands
 ```bash
@@ -230,6 +245,103 @@ cabal v2-run hnix -- --eval --expr 'import <nixpkgs> {}' \
 2. Use `HashMap` instead of association lists
 3. Cache frequently computed values
 4. Specialize polymorphic functions with `{-# SPECIALIZE #-}`
+
+## Strict Language Extension
+
+### Overview
+
+HNix uses the `Strict` language extension across all modules to prevent space leaks from lazy accumulation. This is controlled by the `strict` cabal flag (enabled by default).
+
+```bash
+# Build with strictness (default)
+nix develop ".?submodules=1#" --command cabal build
+
+# Build without strictness (for comparison)
+nix develop ".?submodules=1#" --command cabal build -f-strict
+```
+
+### Why Strict?
+
+Benchmarks show Strict provides **16% less memory** in production and **2.8x less memory** when debugging with `--eval-stats`. See [doc/strict-benchmarks.md](doc/strict-benchmarks.md) for detailed analysis.
+
+### Critical: Avoid `bool`, `maybe`, `either`, `fromMaybe`
+
+With `Strict` enabled, function arguments are evaluated before the function body. This breaks short-circuiting for branching combinators:
+
+```haskell
+-- BAD: Both branches evaluated under Strict!
+bool expensiveComputation cheapResult condition
+
+-- GOOD: Only matching branch evaluated
+if condition then cheapResult else expensiveComputation
+
+-- BAD: Both branches evaluated under Strict!
+maybe defaultValue transform mVal
+
+-- GOOD: Only matching branch evaluated
+case mVal of
+  Nothing -> defaultValue
+  Just v  -> transform v
+
+-- BAD: Both branches evaluated under Strict!
+either handleError handleSuccess result
+
+-- GOOD: Only matching branch evaluated
+case result of
+  Left err -> handleError err
+  Right ok -> handleSuccess ok
+```
+
+### Why This Matters
+
+Under Strict, `bool falseCase trueCase condition` evaluates:
+1. `falseCase` (to WHNF)
+2. `trueCase` (to WHNF)
+3. `condition`
+4. Returns the appropriate case
+
+This causes:
+- **Wasted computation** - both branches always run
+- **Side effects** - IO/monadic effects in both branches execute
+- **Space leaks** - thunks from unused branch still allocated
+
+### High-Risk Patterns to Audit
+
+Files with `bool`/`maybe`/`either` usage that may need conversion:
+
+| File | Risk | Pattern |
+|------|------|---------|
+| `src/Nix/Normal.hs` | HIGH | `bool` with expensive thunk forcing |
+| `src/Nix/String/Coerce.hs` | HIGH | `bool` with `addPath` store operation |
+| `src/Nix/Render/Frame.hs` | MEDIUM | `bool` with pretty-printing |
+| `src/Nix/Render.hs` | MEDIUM | `bool` with file reading |
+| `src/Nix/Pretty.hs` | LOW | Multiple `bool` usages |
+| `src/Nix/Convert.hs` | LOW | `maybe` usages |
+
+### Safe Patterns
+
+These patterns ARE safe with Strict:
+
+```haskell
+-- Pattern matching - naturally lazy in alternatives
+case expr of
+  Constructor1 -> ...
+  Constructor2 -> ...
+
+-- Guards - only matching guard evaluates
+foo x
+  | condition1 = result1
+  | condition2 = result2
+  | otherwise  = result3
+
+-- Monadic bind short-circuits on failure
+do
+  result <- mayFail
+  expensiveOperation result  -- Only runs if mayFail succeeds
+
+-- Singleton bool dispatch (compile-time elimination)
+ifSBool STrue thenBranch elseBranch  -- elseBranch eliminated at compile time
+```
 
 ## Module Organization & Dependencies
 

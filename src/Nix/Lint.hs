@@ -12,7 +12,6 @@
 module Nix.Lint where
 
 import           Nix.Prelude
-import           Relude.Unsafe                 as Unsafe ( head )
 import           Control.Exception              ( throw )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad                  ( foldM )
@@ -335,10 +334,9 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
 
   attrMissing ks ms =
     evalError @(Symbolic m) . ErrorCall . toString $
-      maybe
-        ("Inheriting unknown attribute: " <> attr)
-        (\ s ->  "Could not look up attribute " <> attr <> " in " <> show s)
-        ms
+      case ms of
+        Nothing -> "Inheriting unknown attribute: " <> attr
+        Just s  -> "Could not look up attribute " <> attr <> " in " <> show s
    where
     attr = Text.intercalate "." $ NE.toList $ fmap varNameText ks
 
@@ -485,7 +483,9 @@ lintApp context fun arg =
               xs
 
         y <- everyPossible
-        (Unsafe.head args, ) <$> foldM (unify context) y ys
+        case args of
+          [] -> throwError $ ErrorCall "lintApp: empty argument list"
+          (arg0 : _) -> (arg0, ) <$> foldM (unify context) y ys
   ) =<< unpackSymbolic fun
 
 -- | Lint monad using DefaultCfg (linting doesn't need stats/provenance/tracing).

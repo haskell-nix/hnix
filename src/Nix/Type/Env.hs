@@ -79,4 +79,3 @@ fromList xs = coerce $ HM.fromList xs
 
 toList :: Env -> [(VarName, [Scheme])]
 toList (TypeEnv env) = HM.toList env
-

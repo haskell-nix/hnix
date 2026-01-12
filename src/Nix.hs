@@ -155,10 +155,9 @@ processResult
 processResult h val =
   do
     opts <- askOptions
-    maybe
-      (h val)
-      (\ (fmap mkVarName . Text.splitOn "." -> keys) -> processKeys keys val)
-      (getAttr opts)
+    case getAttr opts of
+      Nothing -> h val
+      Just (fmap mkVarName . Text.splitOn "." -> keys) -> processKeys keys val
  where
   processKeys :: [VarName] -> NValue t f m -> m a
   processKeys kys v =
@@ -170,10 +169,9 @@ processResult h val =
           case (k, v') of
             (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ xs V.! n
             (_,         NVSet _ xs) ->
-              maybe
-                (errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''.")
-                (processKeys ks)
-                (HM.lookup k xs)
+              case HM.lookup k xs of
+                Nothing -> errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''."
+                Just x  -> processKeys ks x
             (_, _) -> errorWithoutStackTrace $ "Expected a set or list for selector '" <> show k <> "', but got: " <> show v
       )
       kys

@@ -1,7 +1,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language RankNTypes #-}
-{-# language Strict #-}
 
 
 module Nix.Eval where
@@ -110,10 +109,9 @@ eval (NSym "__curPos") = evalCurPos
 eval (NSym var       ) =
   do
     mVal <- lookupVar var
-    maybe
-      (freeVariable var)
-      (evaledSym var <=< demand)
-      mVal
+    case mVal of
+      Nothing -> freeVariable var
+      Just v -> evaledSym var =<< demand v
 
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
@@ -135,10 +133,15 @@ eval (NBinary op   larg rarg) =
 
 eval (NSelect alt aset attr) =
   do
-    let useAltOrReportMissing (s, ks) = fromMaybe (attrMissing ks $ pure s) alt
+    let useAltOrReportMissing (s, ks) =
+          case alt of
+            Nothing -> attrMissing ks $ pure s
+            Just v -> v
 
     eAttr <- evalSelect aset attr
-    either useAltOrReportMissing id (coerce eAttr)
+    case coerce eAttr of
+      Left miss -> useAltOrReportMissing miss
+      Right v -> v
 
 eval (NHasAttr aset attr) =
   do
@@ -232,19 +235,15 @@ attrSetAlter ks' pos m' p' val =
     -> m (PositionSet, AttrSet (m v))
   go _ _ [] = evalError @v $ ErrorCall "invalid selector with no components"
   go p m (k : ks) =
-    bool
-      (pure $ insertVal val)
-      (maybe
-        (recurse mempty mempty)
-        (\x ->
-          do
+    if isPresent ks
+      then
+        case HM.lookup k m of
+          Nothing -> recurse mempty mempty
+          Just x -> do
             --  2021-10-12: NOTE: swapping sourcewide into (PositionSet, AttrSet) would optimize code and remove this `swap`
             (swap -> (sp, st)) <- fromValue @(AttrSet v, PositionSet) =<< x
             recurse sp $ demand <$> st
-        )
-        ((`HM.lookup` m) k)
-      )
-      (isPresent ks)
+      else pure $ insertVal val
    where
     insertVal :: m v -> (PositionSet, AttrSet (m v))
     insertVal v =
@@ -280,12 +279,11 @@ desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
     updateBindingInformation
       :: AttrSet (NSourcePos, [Binding r])
       -> AttrSet (NSourcePos, [Binding r])
-    updateBindingInformation =
-      HM.insert x
-        =<< maybe
-            (mkBindingSingleton oldPosition)
-            (\ (foundPosition, newBindings) -> second (<> newBindings) $ mkBindingSingleton foundPosition)
-            . HM.lookup x
+    updateBindingInformation m =
+      case HM.lookup x m of
+        Nothing -> HM.insert x (mkBindingSingleton oldPosition) m
+        Just (foundPosition, newBindings) ->
+          HM.insert x (second (<> newBindings) $ mkBindingSingleton foundPosition) m
     mkBindingSingleton :: NSourcePos -> (NSourcePos, [Binding r])
     mkBindingSingleton np = (np , one $ bindValAt np)
      where
@@ -296,15 +294,13 @@ desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
   findBinding
     :: Either VarName (Binding r)
     -> State (AttrSet (NSourcePos, [Binding r])) (Binding r)
-  findBinding =
-    either
-      (\ x ->
-        maybe
-          (error $ "No binding " <> show x)
-          (\ (p, v) -> pure $ NamedVar (one $ StaticKey x) (embed v) p)
-          =<< gets (HM.lookup x)
-      )
-      pure
+  findBinding = \case
+    Left x -> do
+      mres <- gets (HM.lookup x)
+      case mres of
+        Nothing -> error $ "No binding " <> show x
+        Just (p, v) -> pure $ NamedVar (one $ StaticKey x) (embed v) p
+    Right b -> pure b
 
 evalBinds
   :: forall v m
@@ -329,11 +325,9 @@ evalBinds isRecursive binds =
     do
       (coerce -> scope, p) <- foldM insert mempty bindings
       res <-
-        bool
-          (traverse mkThunk)
-          (loebM . fmap encapsulate)
-          isRecursive
-          scope
+        if isRecursive
+          then loebM . fmap encapsulate $ scope
+          else traverse mkThunk scope
 
       pure (coerce res, p)
 
@@ -353,7 +347,9 @@ evalBinds isRecursive binds =
       pure $
         (\ (k, v) ->
           ( one k
-          , fromMaybe pos $ HM.lookup k p'
+          , case HM.lookup k p' of
+              Nothing -> pos
+              Just p2 -> p2
           , demand v
           )
         ) <$> HM.toList o'
@@ -365,26 +361,24 @@ evalBinds isRecursive binds =
       ([], _, _) -> mempty
       result     -> one result
     ) <$> processAttrSetKeys pathExpr
-
    where
     processAttrSetKeys :: NAttrPath (m v) -> m ([VarName], NSourcePos, m v)
     processAttrSetKeys (h :| t) =
-      maybe
-        -- Empty attrset - return a stub.
-        (pure (mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty) )
-        (\ k ->
-          handlePresence
-            -- No more keys in the attrset - return the result
-            (pure ( one k, pos, finalValue ) )
-            -- There are unprocessed keys in attrset - recurse appending the results
-            (\ (x : xs) ->
-              do
+      do
+        mk <- evalSetterKeyName h
+        case mk of
+          -- Empty attrset - return a stub.
+          Nothing -> pure (mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty)
+          Just k ->
+            handlePresence
+              -- No more keys in the attrset - return the result
+              (pure (one k, pos, finalValue))
+              -- There are unprocessed keys in attrset - recurse appending the results
+              (\ (x : xs) -> do
                 (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
-                pure ( k : restOfPath, pos, v )
-            )
-            t
-        )
-        =<< evalSetterKeyName h
+                pure (k : restOfPath, pos, v)
+              )
+              t
 
   applyBindToAdt scopes (Inherit ms names pos) =
     pure $ processScope <$> names
@@ -395,18 +389,16 @@ evalBinds isRecursive binds =
     processScope var =
       ( one var
       , pos
-      , maybe
-          (attrMissing (one var) Nothing)
-          demand
-          =<< maybe
-              (withScopes scopes $ lookupVar var)
-              (\ s ->
-                do
-                  (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
-
-                  clearScopes $ pushScope @v scope $ lookupVar var
-              )
-              ms
+      , do
+          scopeVal <-
+            case ms of
+              Nothing -> withScopes scopes $ lookupVar var
+              Just s -> do
+                (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
+                clearScopes $ pushScope @v scope $ lookupVar var
+          case scopeVal of
+            Nothing -> attrMissing (one var) Nothing
+            Just v -> demand v
       )
 
   moveOverridesLast = uncurry (<>) . partition
@@ -431,19 +423,19 @@ evalSelect aset attr =
  where
   extract :: NonEmpty VarName -> v -> m (Either (v, NonEmpty VarName) (m v))
   extract path@(k :| ks) x =
-    maybe
-      left
-      (maybe
-        left
-        (handlePresence
-          (pure . pure)
-          (\ (y : ys) -> (extract (y :| ys) =<<))
-          ks
-          . demand
-        )
-        . HM.lookup k . fst
-      )
-      =<< fromValueMay @(AttrSet v, PositionSet) x
+    do
+      mset <- fromValueMay @(AttrSet v, PositionSet) x
+      case mset of
+        Nothing -> left
+        Just (attrs, _) ->
+          case HM.lookup k attrs of
+            Nothing -> left
+            Just v ->
+              handlePresence
+                (pure . pure)
+                (\ (y : ys) -> (extract (y :| ys) =<<))
+                ks
+                (demand v)
    where
     left :: m (Either (v, NonEmpty VarName) b)
     left = pure $ Left (x, path)
@@ -455,11 +447,11 @@ evalGetterKeyName
    . (MonadEval v m, FromValue NixString m v)
   => NKeyName (m v)
   -> m VarName
-evalGetterKeyName =
-  maybe
-    (evalError @v $ ErrorCall "value is null while a string was expected")
-    pure
-    <=< evalSetterKeyName
+evalGetterKeyName key = do
+  mk <- evalSetterKeyName key
+  case mk of
+    Nothing -> evalError @v $ ErrorCall "value is null while a string was expected"
+    Just v -> pure v
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
@@ -504,10 +496,9 @@ buildArgument params arg =
       (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
       let
         inject =
-          maybe
-            id
-            (`HM.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
-            mname
+          case mname of
+            Nothing -> id
+            Just name -> HM.insert name (const argThunk) -- why insert into const? Thunk value getting magic point?
       loebM $
         inject $
           HM.mapMaybe

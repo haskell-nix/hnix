@@ -196,11 +196,9 @@ antiquotedIsHungryForTrailingSpaces hungry = Antiquoted <$> (antiStart *> nixExp
 
   antiEnd :: Parser Char
   antiEnd = label "}" $
-    bool
-      id
-      lexeme
-      hungry
-      (char '}')
+    if hungry
+      then lexeme (char '}')
+      else char '}'
 
 antiquotedLexeme :: Parser (Antiquoted v NExprLoc)
 antiquotedLexeme = antiquotedIsHungryForTrailingSpaces True
@@ -327,10 +325,9 @@ indented =
               c <- char '\\' *> escapeCode
 
               pure $
-                bool
-                  EscapedNewline
-                  (Plain $ one c)
-                  ('\n' /= c)
+                if c /= '\n'
+                  then Plain $ one c
+                  else EscapedNewline
 
   -- | Enclosed into indented quatation "'' <expr> ''"
   inIndentedQuotation :: Parser a -> Parser a

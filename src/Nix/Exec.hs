@@ -8,7 +8,6 @@
 {-# language PartialTypeSignatures #-}
 {-# language RankNTypes #-}
 {-# language StandaloneDeriving #-}
-{-# language Strict #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
@@ -231,10 +230,9 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
 
   attrMissing ks ms =
     evalError @(NValue t f m) $ ErrorCall $ toString $
-      maybe
-        ("Inheriting unknown attribute: " <> attr)
-        (\ s -> "Could not look up attribute " <> attr <> " in " <> show (prettyNValue s))
-        ms
+      case ms of
+        Nothing -> "Inheriting unknown attribute: " <> attr
+        Just s -> "Could not look up attribute " <> attr <> " in " <> show (prettyNValue s)
        where
         attr = Text.intercalate "." $ NE.toList $ fmap varNameText ks
 
@@ -265,17 +263,17 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
     (\scope span -> pure $ mkNVConstantWithProvenance scope span c)
     (pure $ NVConstant c)
 
-  evalString =
-    maybe
-      (nverr $ ErrorCall "Failed to assemble string")
-      (\ ns -> case singProv @(CtxCfg e) of
-        STrue -> do
-          scope <- askScopes
-          span  <- askSpan
-          pure $ mkNVStrWithProvenance scope span ns
-        SFalse -> pure $ NVStr ns
-      )
-      <=< assembleString
+  evalString str =
+    do
+      mns <- assembleString str
+      case mns of
+        Nothing -> nverr $ ErrorCall "Failed to assemble string"
+        Just ns -> case singProv @(CtxCfg e) of
+          STrue -> do
+            scope <- askScopes
+            span  <- askSpan
+            pure $ mkNVStrWithProvenance scope span ns
+          SFalse -> pure $ NVStr ns
 
   evalLiteralPath p = do
     realPath <- toAbsolutePath @t @f @m p
@@ -283,10 +281,12 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
       (\scope span -> pure $ mkNVPathWithProvenance scope span p realPath)
       (pure $ NVPath realPath)
 
-  evalPath =
-    maybe
-      (nverr $ ErrorCall "Failed to assemble path")
-      (\ ns -> do
+  evalPath str =
+    do
+      mns <- assembleString str
+      case mns of
+        Nothing -> nverr $ ErrorCall "Failed to assemble path"
+        Just ns -> do
           let litText = ignoreContext ns
           let litPath = fromString (toString litText)
           real <- toAbsolutePath @t @f @m litPath
@@ -296,8 +296,6 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
               span  <- askSpan
               pure $ addProvenance (Provenance scope . NPathAnnF span $ DoubleQuoted $ one $ Plain litText) $ NVPath real
             SFalse -> pure $ NVPath real
-      )
-      <=< assembleString
 
   evalEnvPath p = do
     realPath <- findEnvPath @t @f @m (coerce p)
@@ -327,23 +325,26 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
         span  <- askSpan
         let
           fun x y = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y)
-          falseVal = (fun Nothing =<< pure) <$> fVal
-          trueVal = (flip fun Nothing =<< pure) <$> tVal
-        bool falseVal trueVal bl
-      SFalse -> bool fVal tVal bl
+        if bl
+          then do
+            tv <- tVal
+            pure $ fun (pure tv) Nothing tv
+          else do
+            fv <- fVal
+            pure $ fun Nothing (pure fv) fv
+      SFalse -> if bl then tVal else fVal
 
   evalAssert c body = do
     span <- askSpan
     b :: Bool <- fromValue c
-    bool
-      (nverr $ Assertion span c)
-      (case singProv @(CtxCfg e) of
-        STrue -> do
-          scope <- askScopes
-          join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body
-        SFalse -> body
-      )
-      b
+    if b
+      then
+        case singProv @(CtxCfg e) of
+          STrue -> do
+            scope <- askScopes
+            join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body
+          SFalse -> body
+      else nverr $ Assertion span c
 
   evalApp f x = do
     result <- callFunc f =<< defer x
@@ -450,9 +451,21 @@ execBinaryOp' op lval rarg =
   case op of
     NEq   -> helperEq id
     NNEq  -> helperEq not
-    NOr   -> helperLogic flip True
-    NAnd  -> helperLogic id   False
-    NImpl -> helperLogic id   True
+    NOr   -> do
+      bl <- fromValue lval
+      if bl
+        then wrapBool Nothing True
+        else evalRight
+    NAnd  -> do
+      bl <- fromValue lval
+      if bl
+        then evalRight
+        else wrapBool Nothing False
+    NImpl -> do
+      bl <- fromValue lval
+      if bl
+        then evalRight
+        else wrapBool Nothing True
     _     ->
       do
         rval  <- rarg
@@ -467,15 +480,10 @@ execBinaryOp' op lval rarg =
     eq <- valueEqM lval rval
     wrapBool (pure rval) $ flag eq
 
-  helperLogic flp flag =
-    flp bool
-      (wrapBool Nothing flag)
-      (do
-          rval <- rarg
-          x <- fromValue rval
-          wrapBool (pure rval) x
-      )
-      =<< fromValue lval
+  evalRight = do
+    rval <- rarg
+    x <- fromValue rval
+    wrapBool (pure rval) x
 
   -- | Zero-cost bool wrapper: adds provenance when enabled, identity when disabled.
   wrapBool :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
@@ -524,10 +532,10 @@ execBinaryOpForced' op lval rval =
           wrapResult . NVStr . (ls <>) =<<
             coercePathToNixString CopyToStore p
         (NVPath ls, NVStr rs) ->
-          maybe
-            (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
-            (\ rs2 -> wrapResult . NVPath =<< toAbsolutePath @t @f (ls <> coerce (toString rs2)))
-            (getStringNoContext rs)
+          case getStringNoContext rs of
+            Nothing ->
+              throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path." -- data/nix/src/libexpr/eval.cc:1412
+            Just rs2 -> wrapResult . NVPath =<< toAbsolutePath @t @f (ls <> coerce (toString rs2))
         (NVPath ls, NVPath rs) -> wrapResult . NVPath =<< toAbsolutePath @t @f (ls <> rs)
 
         (ls@NVSet{}, NVStr rs) ->
@@ -591,10 +599,9 @@ fromStringNoContext
   => NixString
   -> m Text
 fromStringNoContext ns =
-  maybe
-    (throwError $ ErrorCall $ "expected string with no context, but got " <> show ns)
-    pure
-    (getStringNoContext ns)
+  case getStringNoContext ns of
+    Nothing -> throwError $ ErrorCall $ "expected string with no context, but got " <> show ns
+    Just v -> pure v
 
 addTracing
   ::( MonadNix e t f m
@@ -614,10 +621,9 @@ addTracing k v = do
       opts <- askOptions
       let
         rendered =
-          bool
-            (prettyNix $ Fix $ Fix (NSym "?") <$ x)
-            (pretty $ PS.ppShow $ void x)
-            (getVerbosity opts >= Chatty)
+          if getVerbosity opts >= Chatty
+            then pretty $ PS.ppShow $ void x
+            else prettyNix $ Fix $ Fix (NSym "?") <$ x
         msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span $ msg rendered <> " ...\n"
       putStr $ show loc
@@ -793,7 +799,11 @@ evalExprLocT = case singTrace @(CtxCfg e) of
 {-# INLINABLE evalExprLocT #-}
 
 exec :: (MonadNix e t f m, MonadInstantiate m, HasProvCfg (CtxCfg e)) => Vector Text -> m (NValue t f m)
-exec args = either throwError evalExprLoc =<< exec' args
+exec args = do
+  res <- exec' args
+  case res of
+    Left err -> throwError err
+    Right expr -> evalExprLoc expr
 
 -- | Type-parameterized version of 'exec' with compile-time feature dispatch.
 -- Uses 'CtxCfg e' from the environment for all config dispatch, ensuring
@@ -803,13 +813,21 @@ execT
    . (MonadNix e t f m, MonadInstantiate m, HasEvalCfg e)
   => Vector Text
   -> m (NValue t f m)
-execT args = either throwError evalExprLocT =<< exec' args
+execT args = do
+  res <- exec' args
+  case res of
+    Left err -> throwError err
+    Right expr -> evalExprLocT expr
 {-# INLINABLE execT #-}
 
 -- Please, delete `nix` from the name
 nixInstantiateExpr
   :: (MonadNix e t f m, MonadInstantiate m, HasProvCfg (CtxCfg e)) => Text -> m (NValue t f m)
-nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
+nixInstantiateExpr s = do
+  res <- instantiateExpr s
+  case res of
+    Left err -> throwError err
+    Right expr -> evalExprLoc expr
 
 -- | Type-parameterized version of 'nixInstantiateExpr' with compile-time feature dispatch.
 -- Uses 'CtxCfg e' from the environment for all config dispatch, ensuring
@@ -819,5 +837,9 @@ nixInstantiateExprT
    . (MonadNix e t f m, MonadInstantiate m, HasEvalCfg e)
   => Text
   -> m (NValue t f m)
-nixInstantiateExprT s = either throwError evalExprLocT =<< instantiateExpr s
+nixInstantiateExprT s = do
+  res <- instantiateExpr s
+  case res of
+    Left err -> throwError err
+    Right expr -> evalExprLocT expr
 {-# INLINABLE nixInstantiateExprT #-}

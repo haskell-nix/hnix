@@ -1,5 +1,4 @@
 {-# language DeriveAnyClass #-}
-{-# language Strict #-}
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-signatures #-}

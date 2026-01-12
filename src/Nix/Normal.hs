@@ -49,17 +49,16 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
        )
     -> t
     -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
-  go k tnk  =
-    bool
-      (do
+  go k tnk  = do
+    alreadySeen <- seen tnk
+    if alreadySeen
+      then pure $ pure tnk
+      else do
         i <- ask
         when (i > maxDepth) $ fail $ "Exceeded maximum normalization depth of " <> show maxDepth <> " levels."
         (lifted . lifted)
           (=<< force tnk)
           (local (+1) . k)
-      )
-      (pure $ pure tnk)
-      =<< seen tnk
    where
     seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
     seen t =
@@ -98,17 +97,16 @@ normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
        )
     -> t
     -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
-  go k tnk  =
-    bool
-      (do
+  go k tnk  = do
+    alreadySeen <- seen tnk
+    if alreadySeen
+      then pure $ pure tnk
+      else do
         i <- ask
         when (i > maxDepth) $ fail $ "Exceeded maximum normalization depth of " <> show maxDepth <> " levels."
         (lifted . lifted)
           (f tnk)
           (local (+1) . k)
-      )
-      (pure $ pure tnk)
-      =<< seen tnk
    where
     seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
     seen t =

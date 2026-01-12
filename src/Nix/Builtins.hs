@@ -9,7 +9,6 @@
 {-# language PartialTypeSignatures #-}
 {-# language PatternSynonyms #-}
 {-# language QuasiQuotes #-}
-{-# language Strict #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
 
@@ -202,17 +201,15 @@ foldNixPath z f =
   do
     mres <- lookupVar "__includes"
     dirs <-
-      maybe
-        stub
-        ((fromValue . Deeper) <=< demand)
-        mres
+      case mres of
+        Nothing -> stub
+        Just v -> (fromValue . Deeper) =<< demand v
     mPath    <- getEnvVar "NIX_PATH"
     mDataDir <- getEnvVar "NIX_DATA_DIR"
     dataDir  <-
-      maybe
-        getDataDir
-        (pure . coerce . toString)
-        mDataDir
+      case mDataDir of
+        Nothing -> getDataDir
+        Just v -> pure . coerce . toString $ v
 
     foldrM
       fun
@@ -225,10 +222,9 @@ foldNixPath z f =
   fromInclude :: Text -> (Text, NixPathEntryType)
   fromInclude x =
     (x, ) $
-      bool
-        PathEntryPath
-        PathEntryURI
-        ("://" `Text.isInfixOf` x)
+      if "://" `Text.isInfixOf` x
+        then PathEntryURI
+        else PathEntryPath
 
   fun :: (Text, NixPathEntryType) -> r -> m r
   fun (x, ty) rest =
@@ -239,10 +235,9 @@ foldNixPath z f =
 
 attrsetGet :: MonadNix e t f m => VarName -> AttrSet (NValue t f m) -> m (NValue t f m)
 attrsetGet k s =
-  maybe
-    (throwError $ ErrorCall $ toString @Text $ "Attribute '" <> varNameText k <> "' required")
-    pure
-    (HM.lookup k s)
+  case HM.lookup k s of
+    Nothing -> throwError $ ErrorCall $ toString @Text $ "Attribute '" <> varNameText k <> "' required"
+    Just v -> pure v
 
 data VersionComponent
   = VersionComponentPre -- ^ The string "pre"
@@ -261,13 +256,11 @@ splitVersion :: Text -> [VersionComponent]
 splitVersion s =
   (\ (x, xs) -> if
     | isRight eDigitsPart ->
-        either
-          (\ e -> error $ "splitVersion: did hit impossible: '" <> fromString e <> "' while parsing '" <> s <> "'.")
-          (\ res ->
+        case eDigitsPart of
+          Left e -> error $ "splitVersion: did hit impossible: '" <> fromString e <> "' while parsing '" <> s <> "'."
+          Right res ->
             one (VersionComponentNumber $ fst res)
             <> splitVersion (snd res)
-          )
-          eDigitsPart
 
     | x `elem` separators -> splitVersion xs
 
@@ -309,10 +302,9 @@ splitDrvName s =
   pieces = Text.splitOn sep s
   isFirstVersionPiece :: Text -> Bool
   isFirstVersionPiece p =
-    maybe
-      False
-      (isDigit . fst)
-      (Text.uncons p)
+    case Text.uncons p of
+      Nothing -> False
+      Just (c, _) -> isDigit c
   -- Like 'break', but always puts the first item into the first result
   -- list
   breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
@@ -344,10 +336,9 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = NVList (V.fromList $ f <$> captures)
   f :: (ByteString, (Int, b)) -> NValue t f m
   f (a, (s, _))  =
-    bool
-      NVNull
-      (thunkStr a)
-      (s >= 0)
+    if s >= 0
+      then thunkStr a
+      else NVNull
 
 thunkStr :: NVConstraint f => ByteString -> NValue t f m
 thunkStr s = mkNVStrWithoutContext $ decodeUtf8 s
@@ -376,15 +367,6 @@ absolutePathFromValue =
     NVPath path -> pure path
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
 
-
-instance Convertible e t f m => ToValue FileType m (NValue t f m) where
-  toValue =
-    toValue . mkNixStringWithoutContext .
-      \case
-        FileTypeRegular   -> "regular" :: Text
-        FileTypeDirectory -> "directory"
-        FileTypeSymlink   -> "symlink"
-        FileTypeUnknown   -> "unknown"
 
 -- ** Builtin functions
 
@@ -542,10 +524,9 @@ unsafeGetAttrPosNix nvX nvY =
 
     case (x, y) of
       (NVStr ns, NVSet apos _) ->
-        maybe
-          (pure NVNull)
-          toValue
-          (HM.lookup @VarName (mkVarName $ ignoreContext ns) apos)
+        case HM.lookup @VarName (mkVarName $ ignoreContext ns) apos of
+          Nothing -> pure NVNull
+          Just v -> toValue v
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
 
 -- | Get the length of a list.
@@ -660,10 +641,9 @@ foldl'Nix f z xs = do
 headNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
 headNix nv = do
   v <- fromValue @(V.Vector (NValue t f m)) nv
-  maybe
-    (throwError $ ErrorCall "builtins.head: empty list")
-    pure
-    (nlHead v)
+  case nlHead v of
+    Nothing -> throwError $ ErrorCall "builtins.head: empty list"
+    Just a -> pure a
 
 -- | Get all elements after the first.
 --
@@ -671,10 +651,9 @@ headNix nv = do
 tailNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tailNix nv = do
   v <- fromValue @(V.Vector (NValue t f m)) nv
-  maybe
-    (throwError $ ErrorCall "builtins.tail: empty list")
-    (pure . NVList)
-    (nlTail v)
+  case nlTail v of
+    Nothing -> throwError $ ErrorCall "builtins.tail: empty list"
+    Just t -> pure $ NVList t
 
 splitVersionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersionNix v =
@@ -749,10 +728,9 @@ matchNix pat str =
       s  = ignoreContext ns
       re = makeRegex p :: Regex
       mkMatch t =
-        bool
-          (pure NVNull)
-          (toValue $ mkNixStringWithoutContext t)
-          (not $ Text.null t)
+        if Text.null t
+          then pure NVNull
+          else toValue $ mkNixStringWithoutContext t
 
     case matchOnceText re s of
       Just ("", sarr, "") ->
@@ -792,16 +770,14 @@ splitNix pat str =
 substringNix :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substringNix start len str =
   Prim $
-    bool
-      (throwError $ ErrorCall $ "builtins.substring: negative start position: " <> show start)
-      (pure $ modifyNixContents (take . Text.drop start) str)
-      (start >= 0)
+    if start >= 0
+      then pure $ modifyNixContents (take . Text.drop start) str
+      else throwError $ ErrorCall $ "builtins.substring: negative start position: " <> show start
  where
   take =
-    bool
-      id  --NOTE: negative values of 'len' are OK, and mean "take everything"
-      (Text.take len)
-      (len >= 0)
+    if len >= 0
+      then Text.take len
+      else id  --NOTE: negative values of 'len' are OK, and mean "take everything"
 
 attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -988,10 +964,9 @@ attrGetOr
   -> AttrSet (NValue t f m)
   -> m a
 attrGetOr fallback fun name attrs =
-  maybe
-    (pure fallback)
-    (fun <=< fromValue)
-    (HM.lookup name attrs)
+  case HM.lookup name attrs of
+    Nothing -> pure fallback
+    Just v -> fun =<< fromValue v
 
 
 --  NOTE: It is a part of the implementation taken from:
@@ -1040,7 +1015,9 @@ filterSourceNix filterFun nvpath = do
 
   -- Add temp directory to store
   res <- addToStore name (NarFile tmpDirPath) True False
-  storePath <- either throwError pure res
+  storePath <- case res of
+    Left err -> throwError err
+    Right v -> pure v
   let s = mkVarName . toText . coerce @StorePath @String $ storePath
 
   -- Clean up temp directory
@@ -1142,11 +1119,11 @@ elemNix x = inHaskM (anyMNix $ valueEqM x)
   anyMNix p =
     handlePresence
       (pure False)
-      (\ (x : xss) ->
-        bool
-          (anyMNix p xss)
-          (pure True)
-          =<< p x
+      (\ (x : xss) -> do
+        ok <- p x
+        if ok
+          then pure True
+          else anyMNix p xss
       )
 
 -- | Get the element at a given index.
@@ -1160,10 +1137,9 @@ elemAtNix
 elemAtNix xs n = do
   n' <- fromValue @Int n
   v <- fromValue @(V.Vector (NValue t f m)) xs
-  maybe
-    (throwError $ ErrorCall $ "builtins.elemAt: Index " <> show n' <> " too large for list of length " <> show (nlLength v))
-    pure
-    (nlIndex v n')
+  case nlIndex v n' of
+    Nothing -> throwError $ ErrorCall $ "builtins.elemAt: Index " <> show n' <> " too large for list of length " <> show (nlLength v)
+    Just v' -> pure v'
 
 -- | Generate a list by applying function to indices 0..n-1.
 -- Uses V.generateM to build Vector directly without intermediate list allocation.
@@ -1208,8 +1184,9 @@ genericClosureNix c =
               v <- demand t
               k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
 
-              bool
-                (do
+              if S.member (WValue k) ks
+                then go ks ts
+                else do
                   checkComparable k $
                     handlePresence
                       k
@@ -1219,9 +1196,6 @@ genericClosureNix c =
                   -- Get operator result as Vector, convert to list for worklist
                   opResult <- fromValue @(V.Vector (NValue t f m)) =<< callFunc op v
                   (<<$>>) (v :) . go (S.insert (WValue k) ks) $ ts <> V.toList opResult
-                )
-                (go ks ts)
-                (S.member (WValue k) ks)
 
         -- Convert result list to Vector
         (NVList . V.fromList) . snd <$> go mempty (V.toList ssVec)
@@ -1255,65 +1229,62 @@ replaceStringsNix tfrom tto ts =
       --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
       --  Then the solution would've been elegant, but the Nix bug prevents elegant implementation.
       go ctx input output =
-        maybe
-            -- Passively pass the chars
-          passOneChar
-          replace
-          maybePrefixMatch
+        case maybePrefixMatch of
+          -- Passively pass the chars
+          Nothing -> passOneChar
+          Just match -> replace match
+        where
+          -- When prefix matched something - returns (match, replacement, remainder)
+          maybePrefixMatch :: Maybe (Text, NixString, Text)
+          maybePrefixMatch =
+            formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
+            where
+              formMatchReplaceTailInfo (m, r) =
+                (m, r, Text.drop (Text.length m) input)
 
-       where
-        -- When prefix matched something - returns (match, replacement, remainder)
-        maybePrefixMatch :: Maybe (Text, NixString, Text)
-        maybePrefixMatch = formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
-         where
-          formMatchReplaceTailInfo (m, r) = (m, r, Text.drop (Text.length m) input)
+              fromKeysToValsMap = zip (ignoreContext <$> fromKeys) toVals
 
-          fromKeysToValsMap = zip (ignoreContext <$> fromKeys) toVals
+          -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
+          passOneChar =
+            case Text.uncons input of
+              Nothing -> finish ctx output  -- The base case - there is no chars left to process -> finish
+              Just (c, i) -> go ctx i (output <> Builder.singleton c) -- If there are chars - pass one char & continue
 
-        -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
-        passOneChar =
-          maybe
-            (finish ctx output)  -- The base case - there is no chars left to process -> finish
-            (\(c, i) -> go ctx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
-            (Text.uncons input)  -- chip first char
+          --  2021-02-18: NOTE: rly?: toStrict . toLazyText
+          --  Maybe `text-builder`, `text-show`?
+          finish ctx output = mkNixString ctx (toStrict $ Builder.toLazyText output)
 
-        --  2021-02-18: NOTE: rly?: toStrict . toLazyText
-        --  Maybe `text-builder`, `text-show`?
-        finish ctx output = mkNixString ctx (toStrict $ Builder.toLazyText output)
+          replace (key, replacementNS, unprocessedInput) =
+            replaceWithNixBug unprocessedInput updatedOutput
+            where
+              replaceWithNixBug =
+                if isNixBugCase
+                  -- Allowing match on "" is a inherited bug of Nix,
+                  -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
+                  --
+                  -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
+                  -- " H e l l o   w o r l d "
+                  -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
+                  -- "iHie ioi iwioirilidi"
+                  --  2021-02-18: NOTE: There is no tests for this
+                  then bugPassOneChar  -- augmented recursion
+                  else go updatedCtx  -- tail recursion
 
-        replace (key, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
+              isNixBugCase = key == mempty
 
-         where
-          replaceWithNixBug =
-            bool
-              (go updatedCtx)  -- tail recursion
-              -- Allowing match on "" is a inherited bug of Nix,
-              -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
-              --
-              -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
-              -- " H e l l o   w o r l d "
-              -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
-              -- "iHie ioi iwioirilidi"
-              --  2021-02-18: NOTE: There is no tests for this
-              bugPassOneChar  -- augmented recursion
-              isNixBugCase
+              updatedOutput  = output <> replacement
+              updatedCtx     = ctx <> replacementCtx
 
-          isNixBugCase = key == mempty
+              replacement    = Builder.fromText $ ignoreContext replacementNS
+              replacementCtx = getStringContext replacementNS
 
-          updatedOutput  = output <> replacement
-          updatedCtx     = ctx <> replacementCtx
-
-          replacement    = Builder.fromText $ ignoreContext replacementNS
-          replacementCtx = getStringContext replacementNS
-
-          -- The bug modifies the content => bug demands `pass` to be a real function =>
-          -- `go` calls `pass` function && `pass` calls `go` function
-          -- => mutual recusion case, so placed separately.
-          bugPassOneChar input output =
-            maybe
-              (finish updatedCtx output)  -- The base case - there is no chars left to process -> finish
-              (\(c, i) -> go updatedCtx i $ output <> Builder.singleton c) -- If there are chars - pass one char & continue
-              (Text.uncons input)  -- chip first char
+              -- The bug modifies the content => bug demands `pass` to be a real function =>
+              -- `go` calls `pass` function && `pass` calls `go` function
+              -- => mutual recusion case, so placed separately.
+              bugPassOneChar input output =
+                case Text.uncons input of
+                  Nothing -> finish updatedCtx output  -- The base case - there is no chars left to process -> finish
+                  Just (c, i) -> go updatedCtx i $ output <> Builder.singleton c -- If there are chars - pass one char & continue
 
     toValue $ go (getStringContext string) (ignoreContext string) mempty
 
@@ -1546,19 +1517,17 @@ scopedImportNix asetArg pathArg =
 
     path  <- pathToDefaultNix @t @f @m p
     path' <-
-      maybe
-        (do
-          traceM "No known current directory"
-          pure path
-        )
-        (\ res ->
-          do
+      do
+        mres <- lookupVar "__cur_file"
+        case mres of
+          Nothing -> do
+            traceM "No known current directory"
+            pure path
+          Just res -> do
             p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
             pure $ takeDirectory p' </> path
-        )
-        =<< lookupVar "__cur_file"
 
     clearScopes @(NValue t f m)
       $ withNixContext (pure path')
@@ -1579,14 +1548,15 @@ sortNix comp =
   inHaskM (sortByM cmp)
  where
   cmp :: NValue t f m -> NValue t f m -> m Ordering
-  cmp a b =
-    bool
-      (fmap
-         (bool EQ GT)
-         (compare b a)
-      )
-      (pure LT)
-      =<< compare a b
+  cmp a b = do
+    ab <- compare a b
+    if ab
+      then pure LT
+      else do
+        ba <- compare b a
+        if ba
+          then pure GT
+          else pure EQ
    where
     compare :: NValue t f m -> NValue t f m -> m Bool
     compare a2 a1 = fromValue =<< (`callFunc` a1) =<< callFunc comp a2
@@ -1801,7 +1771,10 @@ convertHashNix nv =
         =<< demand
         =<< attrsetGet "toHashFormat" attrs
 
-    toFormat <- either throwError pure $ parseHashFormat toHashFormatText
+    toFormat <-
+      case parseHashFormat toHashFormatText of
+        Left err -> throwError err
+        Right v -> pure v
 
     (algo, bytes) <- parseInputHash mAlgo hashText
 
@@ -1968,7 +1941,9 @@ readFileNix nvpath = do
     if isStorePath opts path
       then do
         res <- readStoreFile path
-        bytes <- either throwError pure res
+        bytes <- case res of
+          Left err -> throwError err
+          Right v -> pure v
         pure $ decodeUtf8 bytes
       else
         Nix.Render.readFile path
@@ -1984,7 +1959,9 @@ readFileTypeNix nvpath =
       if isStorePath opts path
         then do
           res <- readStoreFileType path
-          either throwError pure res
+          case res of
+            Left err -> throwError err
+            Right v -> pure v
         else fileTypeFromStatus <$> getSymbolicLinkStatus path
 
     toValue t
@@ -2032,7 +2009,9 @@ readDirNix nvpath =
       if isStorePath opts path
         then do
           res <- readStoreDir path
-          entries <- either throwError pure res
+          entries <- case res of
+            Left err -> throwError err
+            Right v -> pure v
           pure $
             (\(p, t) -> (mkVarName $ fromString $ coerce p, t)) <$> entries
         else do
@@ -2089,11 +2068,9 @@ fromJSONNix nvjson =
     j <- demand nvjson
     jText <- fromStringNoContext =<< fromValue j
 
-    either
-      (\ jsonError -> throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError)
-      jsonToNValue
-      -- do we really need to marshall Text -> ByteString -> Aeson.Value (that is a Text)
-      (A.eitherDecodeStrict' @A.Value $ encodeUtf8 jText)
+    case A.eitherDecodeStrict' @A.Value $ encodeUtf8 jText of
+      Left jsonError -> throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError
+      Right value -> jsonToNValue value
 
  where
   jsonToNValue :: (A.Value -> m (NValue t f m))
@@ -2112,10 +2089,9 @@ fromJSONNix nvjson =
       A.Number n ->
         pure $
           NVConstant $
-            either
-              NFloat
-              NInt
-              (floatingOrInteger n)
+            case floatingOrInteger n of
+              Left f -> NFloat f
+              Right i -> NInt i
       A.Bool   b -> pure $ NVBool b
       A.Null     -> pure NVNull
    where
@@ -2259,13 +2235,20 @@ fetchurlNix =
   (\case
     NVSet _ s -> do
       let mUrlsVal = HM.lookup "urls" s <|> HM.lookup "url" s
-      urlsVal <- maybe (throwError $ ErrorCall "builtins.fetchurl: missing url(s)") pure mUrlsVal
+      urlsVal <- case mUrlsVal of
+        Nothing -> throwError $ ErrorCall "builtins.fetchurl: missing url(s)"
+        Just v -> pure v
       urls <- extractUrls =<< demand urlsVal
       mHashVal <- traverse (fromValue <=< demand) (HM.lookup "hash" s)
       mShaVal <- traverse (fromValue <=< demand) (HM.lookup "sha256" s)
       mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
       mExecVal <- traverse (fromValue <=< demand) (HM.lookup "executable" s)
-      fetchUrls mHashVal mShaVal mNameVal (fromMaybe False mExecVal) urls
+      fetchUrls mHashVal mShaVal mNameVal
+        (case mExecVal of
+          Nothing -> False
+          Just v -> v
+        )
+        urls
     v@NVStr{} -> fetchUrls Nothing Nothing Nothing False =<< extractUrls v
     v@NVList{} -> fetchUrls Nothing Nothing Nothing False =<< extractUrls v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
@@ -2286,7 +2269,10 @@ fetchurlNix =
     let defaultName = case urls of
           (u:_) -> baseNameOf u
           [] -> "source"
-    let name = fromMaybe defaultName mName
+    let name =
+          case mName of
+            Nothing -> defaultName
+            Just v -> v
 
     storeName <- case Store.mkStorePathName name of
       Left err ->
@@ -2300,15 +2286,13 @@ fetchurlNix =
 
     mDigest <- case (mHash, mSha) of
       (Just h, _) ->
-        either
-          (throwError . ErrorCall . ("builtins.fetchurl: " <>))
-          (pure . Just)
-          (mkDigestFromHash h)
+        case mkDigestFromHash h of
+          Left err -> throwError $ ErrorCall $ "builtins.fetchurl: " <> err
+          Right d -> pure $ Just d
       (Nothing, Just sha) ->
-        either
-          (throwError . ErrorCall . ("builtins.fetchurl: " <>))
-          (pure . Just)
-          (StoreHash.mkNamedDigest "sha256" sha)
+        case StoreHash.mkNamedDigest "sha256" sha of
+          Left err -> throwError $ ErrorCall $ "builtins.fetchurl: " <> err
+          Right d -> pure $ Just d
       _ -> pure Nothing
 
     let ingestionMethod =
@@ -2378,20 +2362,18 @@ fetchurlNix =
   extractUrls :: NValue t f m -> m [Text]
   extractUrls = \case
     NVStr ns ->
-      maybe
-        (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
-        (pure . pure)
-        (getStringNoContext ns)
+      case getStringNoContext ns of
+        Nothing -> throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url"
+        Just v -> pure $ pure v
     NVList vs -> V.toList <$> V.mapM (extractUrl <=< demand) vs
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or list of URIs, got " <> show v
 
   extractUrl :: NValue t f m -> m Text
   extractUrl = \case
     NVStr ns ->
-      maybe
-        (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
-        pure
-        (getStringNoContext ns)
+      case getStringNoContext ns of
+        Nothing -> throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url"
+        Just v -> pure v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI string, got " <> show v
 
   nonEmptyText :: Maybe Text -> Maybe Text
@@ -2483,24 +2465,19 @@ appendContextNix tx ty =
                       let
                         getK :: VarName -> m Bool
                         getK k =
-                          maybe
-                            (pure False)
-                            (fromValue <=< demand)
-                            $ HM.lookup k atts
+                          case HM.lookup k atts of
+                            Nothing -> pure False
+                            Just v -> fromValue =<< demand v
 
                         getOutputs :: m [Text]
                         getOutputs =
-                          maybe
-                            stub
-                            (\ touts ->
-                              do
-                                outs <- demand touts
-
-                                case outs of
-                                  NVList vs -> V.toList <$> V.mapM (fmap ignoreContext . fromValue) vs
-                                  _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
-                            )
-                            (HM.lookup "outputs" atts)
+                          case HM.lookup "outputs" atts of
+                            Nothing -> stub
+                            Just touts -> do
+                              outs <- demand touts
+                              case outs of
+                                NVList vs -> V.toList <$> V.mapM (fmap ignoreContext . fromValue) vs
+                                _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
 
                       path <- getK "path"
                       allOutputs <- getK "allOutputs"
@@ -2752,15 +2729,11 @@ withNixContext mpath action =
       (one ("__includes", NVList $ V.fromList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
       (pushScopes
         base $
-        maybe
-          id
-          (\ path act ->
-            do
-              traceM $ "Setting __cur_file = " <> show path
-              pushScope (one ("__cur_file", NVPath path)) act
-          )
-          mpath
-          action
+        case mpath of
+          Nothing -> action
+          Just path -> do
+            traceM $ "Setting __cur_file = " <> show path
+            pushScope (one ("__cur_file", NVPath path)) action
       )
 
 builtins

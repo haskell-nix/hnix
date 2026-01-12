@@ -62,9 +62,8 @@ atomText (NFloat f) = showNixFloat f
  where
   showNixFloat :: Float -> Text
   showNixFloat x =
-    bool
-      (show x)
-      (show (truncate x :: Int))
-      (x `mod'` 1 == 0)
+    if x `mod'` 1 == 0
+      then show (truncate x :: Int)
+      else show x
 atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"

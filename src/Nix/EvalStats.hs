@@ -1,4 +1,3 @@
-{-# LANGUAGE Strict #-}
 {-# LANGUAGE DeriveGeneric #-}
 
 -- | Statistics collection for evaluation profiling

@@ -1,6 +1,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language PatternSynonyms #-}
-{-# language Strict #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeApplications #-}
 {-# language UndecidableInstances #-}
 
 module Nix.Cited.Basic
@@ -88,28 +89,24 @@ instance
   thunk mv =
     do
       opts <- askOptions
+      mt <- thunk @t mv
+      if isThunks opts
+        then do
+          frames <- askFrames
 
-      bool
-        (cite mempty)
-        (\ mt ->
-          do
-            frames <- askFrames
+          -- Gather the current evaluation context at the time of thunk
+          -- creation, and record it along with the thunk.
+          let
+            fun :: SomeException -> [Provenance m (NValue u f m)]
+            fun (fromException -> Just (EvaluatingExpr scope (Ann s e))) =
+              one $ Provenance scope $ AnnF s (Nothing <$ e)
+            fun _ = mempty
 
-            -- Gather the current evaluation context at the time of thunk
-            -- creation, and record it along with the thunk.
-            let
-              fun :: SomeException -> [Provenance m (NValue u f m)]
-              fun (fromException -> Just (EvaluatingExpr scope (Ann s e))) =
-                one $ Provenance scope $ AnnF s (Nothing <$ e)
-              fun _ = mempty
+            ps :: [Provenance m (NValue u f m)]
+            ps = foldMap (fun . frame) (framesToList frames)
 
-              ps :: [Provenance m (NValue u f m)]
-              ps = foldMap (fun . frame) (framesToList frames)
-
-            cite ps mt
-        )
-        (isThunks opts)
-        (thunk mv)
+          cite ps (pure mt)
+        else cite mempty (pure mt)
 
   thunkId :: Cited u f m t -> ThunkId m
   thunkId (CitedP _ t) = thunkId @_ @m t
