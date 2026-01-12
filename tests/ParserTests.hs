@@ -212,10 +212,8 @@ case_set_inherit_direct =
 case_inherit_selector_syntax_mistakes =
   mistakes
     "{ inherit a.x; }"
-    -- A rare quirk of Nix that is proper to fix then to support (see git commit history)
-    -- (old parser test result was):
-    -- mkNonRecSet [inherit [DynamicKey (Plain (DoubleQuoted [Plain "a"]))]],
-    "{ inherit \"a\"; }"
+    -- Note: { inherit "a"; } is valid Nix syntax (quoted strings allowed for reserved keywords)
+    -- so it's not included here as a "mistake"
 
 
 -- ** Lists

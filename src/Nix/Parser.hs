@@ -517,8 +517,16 @@ nixBinders = mergeBindings =<< (inherit <|> namedVar) `endBy` symbol ';' where
       x <- whiteSpace *> optional scope
       label "inherited binding" $
         liftA2 (Inherit x)
-          (many identifier)
+          (many inheritedIdentifier)
           (pure (toNSourcePos p))
+  -- | Parse an identifier for inherit - either a regular identifier or a quoted string
+  -- (for reserved keywords like "or"). Quoted strings must be static (no interpolation).
+  inheritedIdentifier = identifier <|> quotedIdentifier
+  quotedIdentifier = lexeme $ do
+    str <- doubleQuoted
+    case str of
+      DoubleQuoted [Plain t] -> pure $ mkVarName t
+      _ -> fail "dynamic attributes not allowed in inherit"
   namedVar =
     do
       p <- getSourcePos
