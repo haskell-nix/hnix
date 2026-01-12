@@ -426,32 +426,3 @@ infix 1 $->
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
 infixr 1 ==>
-
-
--- * Under deprecation
-
--- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use `mkOp`
--- Put an unary operator.
-mkOper :: NUnaryOp -> NExpr -> NExpr
-mkOper = mkOp
-
--- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use `mkOp2`
--- | Put a binary operator.
-mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkOper2 = mkOp2
-
--- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use `mkOp2`
--- | Nix binary operator builder.
-mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkBinop = mkOp2
-
--- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use:
---   * `mkParamSet` is for closed sets;
---   * `mkVariadicSet` is for variadic;
---   * `mkGeneralParamSet` a general constructor.
-mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (HM.fromList [(mkVarName k, v) | (k, v) <- params])

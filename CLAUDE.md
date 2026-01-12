@@ -81,7 +81,7 @@ hnix --reduce bug.nix --eval --expr 'import ./bug.nix'
 ### Core Expression Types
 ```haskell
 -- The functor (non-recursive structure)
-data NExprF r  -- 18 constructors: NConstant, NStr, NSym, NList, etc.
+data NExprF r  -- 19 constructors: NConstant, NStr, NSym, NList, NSet, NLiteralPath, NPath, NEnvPath, NApp, NUnary, NBinary, NSelect, NHasAttr, NAbs, NLet, NIf, NWith, NAssert, NSynHole
 
 -- Fixed point gives recursion
 type NExpr = Fix NExprF
@@ -92,7 +92,7 @@ type NExprLoc = Fix (AnnF SrcSpan NExprF)
 
 ### Using ADI for Custom Behavior
 
-The `adi` function (`src/Nix/Utils.hs:345`) enables behavior injection:
+The `adi` function (`src/Nix/Utils.hs:321`) enables behavior injection:
 
 ```haskell
 -- Example: Add tracing to evaluation
@@ -135,9 +135,13 @@ class MonadEval v m where
   evalExprLoc :: NExprLoc -> m v  -- Evaluate expression
   evalError :: Doc v -> m a        -- Report error
 
-class MonadThunk t m a | t -> m a where
-  thunk :: m a -> m t              -- Create thunk
-  force :: t -> m a                -- Force evaluation
+class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
+  thunkId  :: t -> ThunkId m        -- Return thunk ID
+  thunk    :: m a -> m t            -- Create thunk
+  query    :: m a -> t -> m a       -- Non-blocking query
+  force    :: t -> m a              -- Force evaluation
+  forceEff :: t -> m a              -- Force with effects
+  further  :: t -> m t              -- Modify thunk action
 
 class (MonadEval v m, MonadThunk t m v) => MonadNix e t f m
 ```
@@ -161,21 +165,29 @@ instance MonadMyEffect (MyNix m) where
 
 ### Adding Built-ins
 
-1. Add to `src/Nix/Builtins.hs`:
+1. Add to `src/Nix/Builtins.hs` in `builtinsList`:
 ```haskell
-builtinsList :: [(Text, BuiltinType)]
-builtinsList =
-  [ ("myBuiltin", arity2 myBuiltinImpl)
-  -- ...
-  ]
+-- builtinsList uses helper functions based on arity:
+-- add0: No arguments (constants)
+-- add:  Single argument
+-- add2: Two arguments
+-- add3: Three arguments
+-- add': Use ToBuiltin typeclass for automatic conversion
 
-myBuiltinImpl :: MonadNix e t f m => NValue t f m -> NValue t f m -> m (NValue t f m)
-myBuiltinImpl arg1 arg2 = do
+builtinsList :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => m [Builtin (NValue t f m)]
+builtinsList =
+  sequenceA
+    [ add  Normal "myBuiltin" myBuiltinImpl
+    , add2 Normal "myBinary"  myBinaryImpl
+    -- ...
+    ]
+
+myBuiltinImpl :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+myBuiltinImpl arg = do
   -- Force evaluation if needed
-  str <- fromStringNoContext =<< fromValue arg1
-  num <- fromValue arg2
+  str <- fromStringNoContext =<< fromValue arg
   -- Perform operation
-  pure $ nvStr $ makeNixString (str <> show num)
+  pure $ nvStr $ mkNixStringWithoutContext (str <> "!")
 ```
 
 2. Test in `tests/EvalTests.hs`

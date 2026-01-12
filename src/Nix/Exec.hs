@@ -662,11 +662,11 @@ addTiming thresholdMs k v@(AnnF span x) = do
   when (elapsedMs >= max 0 thresholdMs) $ do
     let headTag = Text.pack (show (toConstr (void x)))
     let msg =
-          Text.pack "timing "
+          "timing "
             <> Text.pack (show elapsedMs)
-            <> Text.pack "ms "
+            <> "ms "
             <> headTag
-            <> Text.pack "\n"
+            <> "\n"
     loc <- renderLocation span (pretty msg)
     putStr $ show loc
   pure res

@@ -6,9 +6,7 @@ module Nix.Type.Env
   , lookup
   , remove
   , extend
-  , extends
   , merge
-  , mergeEnvs
   , singleton
   , keys
   , fromList
@@ -53,9 +51,6 @@ extend env (x, s) = coerce (HM.insert x s) env
 remove :: Env -> VarName -> Env
 remove env var = TypeEnv $ HM.delete var $ coerce env
 
-extends :: Env -> [(VarName, [Scheme])] -> Env
-extends env xs = fromList xs <> coerce env
-
 lookup :: VarName -> Env -> Maybe [Scheme]
 lookup key tys = HM.lookup key $ coerce tys
 
@@ -64,9 +59,6 @@ merge a b = TypeEnv $ coerce a <> coerce b
 
 mergeRight :: Env -> Env -> Env
 mergeRight = flip merge
-
-mergeEnvs :: [Env] -> Env
-mergeEnvs = foldl' (<>) mempty
 
 singleton :: VarName -> Scheme -> Env
 singleton = curry one

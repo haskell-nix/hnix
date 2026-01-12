@@ -183,7 +183,7 @@ renderValueFrame
   -> ValueFrame t f m
   -> m [Doc ann]
 renderValueFrame level = fmap one . \case
-  ForcingThunk    _t -> pure "ForcingThunk" -- jww (2019-03-18): NYI
+  ForcingThunk    _t -> pure "ForcingThunk" -- TODO: Render thunk details (e.g., thunk ID or origin)
   ConcerningValue _v -> pure "ConcerningValue"
   Comparison     _ _ -> pure "Comparing"
   Addition       _ _ -> pure "Adding"

@@ -238,25 +238,6 @@ merge context = go
     rest :: m [NTypeF m (Symbolic m)]
     rest = go xs ys
 
-{-
-    mergeFunctions pl nl fl pr fr xs ys = do
-        m <- sequenceA $ HM.intersectionWith
-            (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
-                    (Nothing, Nothing) -> stub
-                    (_, Nothing) -> stub
-                    (Nothing, _) -> stub
-                    (Just i'', Just j'') ->
-                        pure . pure <$> unify context i'' j'')
-            (pure <$> pl) (pure <$> pr)
-        let Just m' = sequenceA $ HM.filter isJust m
-        if HM.null m'
-            then go xs ys
-            else do
-                g <- unify context fl fr
-                (TClosure (ParamSet m' False nl) g :)
-                    <$> go xs ys
--}
-
 -- | Result @== NMany []@ -> @unify@ fails.
 unify
   :: forall e m a
@@ -426,7 +407,6 @@ lintBinaryOp op lsym rarg =
         NOr     -> one $ TConstant $ one TBool
         NImpl   -> one $ TConstant $ one TBool
 
-        -- jww (2018-04-01): NYI: Allow Path + Str
         NPlus   -> [TConstant $ one TInt, TStr, TPath]
         NMinus  -> one $ TConstant $ one TInt
         NMult   -> one $ TConstant $ one TInt

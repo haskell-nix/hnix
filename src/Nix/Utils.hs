@@ -10,8 +10,6 @@ module Nix.Utils
   , dup
   , both
   , mapPair
-  , iterateN
-  , nestM
   , applyAll
   , traverse2
   , lifted
@@ -68,7 +66,6 @@ import           Relude                  hiding ( pass
 import           Data.Binary                    ( Binary )
 import           Data.Data                      ( Data )
 import           Codec.Serialise                ( Serialise )
-import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix(..) )
 import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
@@ -131,29 +128,6 @@ both f (x,y) = (f x, f y)
 mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
 mapPair ~(f,g) ~(a,b) = (f a, g b)
 {-# INLINABLE mapPair #-}
-
-iterateN
-  :: forall a
-   . Int -- ^ Recursively apply 'Int' times
-  -> (a -> a) -- ^ the function
-  -> a -- ^ starting from argument
-  -> a
-iterateN n f x =
-  -- It is hard to read - yes. It is a non-recursive momoized action - yes.
-  if n == 0
-    then x
-    else iterateN (pred n) f (f x)
-
-nestM
-  :: Monad m
-  => Int -- ^ Recursively apply 'Int' times
-  -> (a -> m a) -- ^ function (Kleisli arrow).
-  -> a -- ^ to value
-  -> m a -- ^ & join layers of 'm'
-nestM 0 _ x = pure x
-nestM n f x =
-  foldM (const . f) x $ replicate @() n mempty -- fuses. But also, can it be fix join?
-{-# INLINABLE nestM #-}
 
 -- | In `foldr` order apply functions.
 applyAll :: Foldable t => t (a -> a) -> a -> a

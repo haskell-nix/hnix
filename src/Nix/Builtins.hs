@@ -47,6 +47,8 @@ import           Data.Fix                       ( foldFix )
 import qualified Data.HashSet                  as HS
 import qualified Data.HashMap.Strict           as HM
 import           Data.Scientific
+import qualified Data.Sequence                 as Seq
+import           Data.Sequence                  ( ViewL(..), (><) )
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
 import           Data.Text.Read                 ( decimal )
@@ -863,7 +865,7 @@ zipAttrsWithNix f nvSets =
     defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in zipAttrsWith:\n") $ do
       runFunForKey <- callFunc f $ mkNVStrWithoutContext (varNameText key)
       -- Reverse to restore original order (we prepended during accumulation)
-      callFunc runFunForKey (NVList (V.fromList (reverse vals)))
+      callFunc runFunForKey (NVList (V.reverse (V.fromList vals)))
 
 -- | Filter a list by a predicate.
 --
@@ -1085,7 +1087,6 @@ dirOfNix nvdir =
       NVPath path -> pure $ NVPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
--- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContextNix
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContextNix =
@@ -1170,35 +1171,37 @@ genericClosureNix c =
     (Just _     , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'operator' required"
     (Just startSet, Just operator) ->
       do
-        -- Get startSet as Vector, convert to list for worklist processing
+        -- Get startSet as Vector, convert to Seq for O(log n) worklist operations
         ssVec <- fromValue @(V.Vector (NValue t f m)) =<< demand startSet
         op <- demand operator
         let
+          -- Use Seq for O(log n) concat instead of O(n) list concat
           go
             :: Set (WValue t f m)
-            -> [NValue t f m]
-            -> m (Set (WValue t f m), [NValue t f m])
-          go ks []       = pure (ks, mempty)
-          go ks (t : ts) =
-            do
-              v <- demand t
-              k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
+            -> Seq (NValue t f m)
+            -> m (Set (WValue t f m), Seq (NValue t f m))
+          go ks worklist = case Seq.viewl worklist of
+            EmptyL -> pure (ks, mempty)
+            t :< ts ->
+              do
+                v <- demand t
+                k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
 
-              if S.member (WValue k) ks
-                then go ks ts
-                else do
-                  checkComparable k $
-                    handlePresence
-                      k
-                      (\ (WValue j:_) -> j)
-                      (S.toList ks)
+                if S.member (WValue k) ks
+                  then go ks ts
+                  else do
+                    checkComparable k $
+                      handlePresence
+                        k
+                        (\ (WValue j:_) -> j)
+                        (S.toList ks)
 
-                  -- Get operator result as Vector, convert to list for worklist
-                  opResult <- fromValue @(V.Vector (NValue t f m)) =<< callFunc op v
-                  (<<$>>) (v :) . go (S.insert (WValue k) ks) $ ts <> V.toList opResult
+                    -- Get operator result as Vector, append to worklist with O(log n) concat
+                    opResult <- fromValue @(V.Vector (NValue t f m)) =<< callFunc op v
+                    (<<$>>) (v Seq.<|) . go (S.insert (WValue k) ks) $ ts >< Seq.fromList (V.toList opResult)
 
-        -- Convert result list to Vector
-        (NVList . V.fromList) . snd <$> go mempty (V.toList ssVec)
+        -- Convert result Seq to Vector
+        (NVList . V.fromList . toList) . snd <$> go mempty (Seq.fromList (V.toList ssVec))
 
 -- | Takes:
 -- 1. List of strings to match.

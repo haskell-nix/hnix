@@ -121,11 +121,6 @@ staticImport pann path =
       Nothing -> importIt
       Just v -> pure v
 
--- gatherNames :: NExprLoc -> HashSet VarName
--- gatherNames = foldFix $ \case
---     NSymAnnF _ var -> S.singleton var
---     AnnF _ x -> fold x
-
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe Path -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
@@ -285,19 +280,7 @@ reduce (NLetAnnF ann binds body) =
           )
           binds
 
-    -- let names = gatherNames body'
-    -- binds' <- traverse sequenceA binds <&> \b -> flip filter b $ \case
-    --     NamedVar (StaticKey name _ :| []) _ ->
-    --         name `S.member` names
-    --     _ -> True
     pure $ NLetAnn ann binds' body'
-    -- where
-    --   go m [] = pure m
-    --   go m (x:xs) = case x of
-    --       NamedVar (StaticKey name _ :| []) def -> do
-    --           v <- pushScope m def
-    --           go (M.insert name v m) xs
-    --       _ -> go m xs
 
 -- | Reduce an if to the relevant path if
 --   the condition is a boolean constant.

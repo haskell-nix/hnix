@@ -110,18 +110,3 @@ instance
  where
   atomicModifyRef r = lift . atomicModifyRef r
   {-# INLINABLE atomicModifyRef #-}
-
-{-
-
-newtype Flip (f :: i -> j -> *) (a :: j) (b :: i) = Flip { unFlip :: f b a }
-
--- | Natural Transformations
---  ( Included from
---   [compdata](https://hackage.haskell.org/package/compdata)
---  )
-type (:->) f g = forall a. f a -> g a
-
-class HFunctor f where
-  hfmap :: a :-> b -> f a :-> f b
-
--}

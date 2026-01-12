@@ -415,14 +415,6 @@ instance
   {-# INLINABLE informF #-}
 
 
-{------------------------------------------------------------------------}
-
--- jww (2019-03-22): NYI
--- whileForcingThunk
---   :: forall t f m s e r . (Exception s, Convertible e t f m) => s -> m r -> m r
--- whileForcingThunk frame =
---   withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame
-
 -- | The core evaluation transformer, parameterized by compile-time config.
 --
 -- The @cfg@ parameter enables zero-cost conditional execution in the

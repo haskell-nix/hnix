@@ -18,15 +18,17 @@ import           Nix.Prelude             hiding ( Type
                                                 , empty
                                                 )
 
+import qualified Data.HashMap.Strict           as HM
+
 import           Nix.Expr.Types
 import           Nix.Type.Type
 
-newtype Assumption = Assumption [(VarName, Type)]
+-- | Assumptions map variable names to lists of types.
+-- Keys can have multiple types (the consistency between assumptions is the inference responsibility).
+-- Uses HashMap for O(1) average lookup and remove operations.
+newtype Assumption = Assumption (HM.HashMap VarName [Type])
   deriving (Eq, Show)
 
--- We pretend that Assumptions can be inconsistent (nonunique keys),
--- (just like people in real life).
--- The consistency between assumptions is the inference responcibility.
 instance Semigroup Assumption where
   (<>) = merge
 
@@ -35,40 +37,33 @@ instance Monoid Assumption where
 
 instance One Assumption where
   type OneItem Assumption = (VarName, Type)
-  one vt = Assumption $ one vt
+  one (var, ty) = Assumption $ HM.singleton var [ty]
 
---  2022-01-12: NOTE: `empty` implies Alternative. Either have Alternative or use `mempty`
 empty :: Assumption
-empty = Assumption mempty
+empty = Assumption HM.empty
 
+-- | Add a type for a variable (prepends to existing types for that variable).
 extend :: Assumption -> (VarName, Type) -> Assumption
-extend a vt =
-  one (coerce vt) <> a
+extend (Assumption m) (var, ty) =
+  Assumption $ HM.insertWith (++) var [ty] m
 
+-- | Remove all types for a variable.
 remove :: Assumption -> VarName -> Assumption
-remove a var =
-  coerce
-    rmVar
-    a
- where
-  rmVar :: [(VarName, Type)] -> [(VarName, Type)]
-  rmVar =
-    filter
-      ((/=) var . fst)
+remove (Assumption m) var =
+  Assumption $ HM.delete var m
 
+-- | Look up all types for a variable.
 lookup :: VarName -> Assumption -> [Type]
-lookup key a =
-  snd <$>
-    filter
-      ((==) key . fst)
-      (coerce a)
+lookup key (Assumption m) =
+  fromMaybe [] $ HM.lookup key m
 
+-- | Merge two assumptions by combining type lists for each variable.
 merge :: Assumption -> Assumption -> Assumption
-merge =
-  coerce ((<>) @[(VarName, Type)])
+merge (Assumption m1) (Assumption m2) =
+  Assumption $ HM.unionWith (++) m1 m2
 
 singleton :: VarName -> Type -> Assumption
 singleton = curry one
 
 keys :: Assumption -> [VarName]
-keys (Assumption a) = fst <$> a
+keys (Assumption m) = HM.keys m

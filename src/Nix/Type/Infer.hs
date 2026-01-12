@@ -323,9 +323,6 @@ instance Monad m => MonadCatch (InferT s m) where
             Just ex -> h ex
         err -> error $ "Unexpected error: " <> show err
 
--- instance MonadThunkId m => MonadThunkId (InferT s m) where
---   type ThunkId (InferT s m) = ThunkId m
-
 instance
   Monad m
   => FromValue NixString (InferT s m) (Judgment s)
@@ -422,27 +419,6 @@ instance Monad m => MonadValueF (Judgment s) (InferT s m) where
     -> Judgment s
     -> InferT s m (Judgment s)
   informF f = f . pure
-
-{-
-instance MonadInfer m
-  => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where
-
-  thunkId (JThunk x) = thunkId x
-
-  thunk = fmap JThunk . thunk
-
-  query b (JThunk x) = query b x
-
-  -- If we have a thunk loop, we just don't know the type.
-  force (JThunk t) = catch (force t)
-    $ \(_ :: ThunkLoop) ->
-                           f =<< Judgment mempty mempty <$> fresh
-
-  -- If we have a thunk loop, we just don't know the type.
-  forceEff (JThunk t) = catch (forceEff t)
-    $ \(_ :: ThunkLoop) ->
-                           f =<< Judgment mempty mempty <$> fresh
--}
 
 polymorphicVar :: MonadInfer m => VarName -> InferT s m (Judgment s)
 polymorphicVar var =

@@ -99,8 +99,7 @@ data SynHoleInfo m v = SynHoleInfo
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
--- jww (2019-03-18): By deferring only those things which must wait until
--- context of us, this can be written as:
+-- TODO: Consider optimizing signature by deferring only context-dependent parts:
 -- eval :: forall v m . MonadNixEval v m => NExprF v -> m v
 eval :: forall v m . MonadNixEval v m => NExprF (m v) -> m v
 
@@ -343,7 +342,8 @@ evalBinds isRecursive binds =
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     do
       (o', p') <- fromValue =<< finalValue
-      -- jww (2018-05-09): What to do with the key position here?
+      -- TODO: Determine correct position handling for __overrides keys
+      -- Currently falls back to the binding position when key position is missing
       pure $
         (\ (k, v) ->
           ( one k
