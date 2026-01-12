@@ -402,6 +402,7 @@ library
     Nix.EvalStats
     Nix.Exec
     Nix.Expr
+    Nix.Expr.Desugar
     Nix.Expr.Shorthands
     Nix.Expr.Strings
     Nix.Expr.Types

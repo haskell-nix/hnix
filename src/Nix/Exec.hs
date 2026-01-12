@@ -34,6 +34,7 @@ import           Nix.Config.Singleton
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
+import           Nix.Expr.Desugar              ( desugarExprLoc )
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
@@ -720,6 +721,8 @@ evalExprLoc expr =
     mstats <- askEvalStats
     let thresholdMs = getEvalTimingThresholdMs opts
     let
+      -- Apply AST-level desugaring before evaluation
+      desugared = desugarExprLoc expr
       traced = isTrace opts
       timed  = isEvalTiming opts
       pTracedAdi =
@@ -734,7 +737,7 @@ evalExprLoc expr =
             evalWithStatsAndMetaInfo stats
           (False, False, Nothing) ->
             Eval.evalWithMetaInfo
-    pTracedAdi expr
+    pTracedAdi desugared
 {-# INLINABLE evalExprLoc #-}
 
 -- | Evaluation with compile-time feature dispatch tied to environment config.
@@ -759,21 +762,24 @@ evalExprLocT
    . (MonadNix e t f m, HasEvalCfg e)
   => NExprLoc
   -> m (NValue t f m)
-evalExprLocT = case singTrace @(CtxCfg e) of
-  STrue ->
-    -- Tracing enabled: use tracing evaluator
-    join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo
-  SFalse -> case singStats @(CtxCfg e) of
+evalExprLocT expr =
+  let
+    -- Apply AST-level desugaring before evaluation
+    desugared = desugarExprLoc expr
+  in case singTrace @(CtxCfg e) of
     STrue ->
-      -- Stats enabled: use stats evaluator (still need runtime lookup for handle)
-      \expr -> do
+      -- Tracing enabled: use tracing evaluator
+      join $ (`runReaderT` (0 :: Int)) $ evalWithTracingAndMetaInfo desugared
+    SFalse -> case singStats @(CtxCfg e) of
+      STrue -> do
+        -- Stats enabled: use stats evaluator (still need runtime lookup for handle)
         mstats <- askEvalStats
         case mstats of
-          Just s  -> evalWithStatsAndMetaInfo s expr
-          Nothing -> Eval.evalWithMetaInfo expr  -- fallback
-    SFalse ->
-      -- Stats disabled: use plain evaluator (fastest path, zero overhead)
-      Eval.evalWithMetaInfo
+          Just s  -> evalWithStatsAndMetaInfo s desugared
+          Nothing -> Eval.evalWithMetaInfo desugared  -- fallback
+      SFalse ->
+        -- Stats disabled: use plain evaluator (fastest path, zero overhead)
+        Eval.evalWithMetaInfo desugared
 {-# INLINABLE evalExprLocT #-}
 
 exec :: (MonadNix e t f m, MonadInstantiate m, HasProvCfg (CtxCfg e)) => Vector Text -> m (NValue t f m)

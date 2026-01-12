@@ -154,12 +154,14 @@ eval (NList l           ) =
 
 eval (NSet r binds) =
   do
-    attrSet <- evalBinds (r == Recursive) $ desugarBinds (eval . NSet mempty) binds
+    -- Bindings are already desugared at the AST level (see Nix.Expr.Desugar)
+    attrSet <- evalBinds (r == Recursive) binds
     toValue attrSet
 
 eval (NLet binds body    ) =
   do
-    (attrSet, _) <- evalBinds True $ desugarBinds (eval . NSet mempty) binds
+    -- Bindings are already desugared at the AST level (see Nix.Expr.Desugar)
+    (attrSet, _) <- evalBinds True binds
     pushScope (coerce attrSet) body
 
 eval (NIf cond t f       ) =
@@ -261,45 +263,6 @@ attrSetAlter ks' pos m' p' val =
           )
     recurse p'' m'' =
       insertVal . ((toValue @(AttrSet v, PositionSet)) <=< ((,mempty) <$>) . sequenceA . snd) <$> go p'' m'' ks
-
-desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
- where
-  collect
-    :: Binding r
-    -> State
-         (AttrSet (NSourcePos, [Binding r]))
-         (Either VarName (Binding r))
-  collect (NamedVar (StaticKey x :| y : ys) val oldPosition) =
-    do
-      modify updateBindingInformation
-      pure $ Left x
-   where
-    updateBindingInformation
-      :: AttrSet (NSourcePos, [Binding r])
-      -> AttrSet (NSourcePos, [Binding r])
-    updateBindingInformation m =
-      case HM.lookup x m of
-        Nothing -> HM.insert x (mkBindingSingleton oldPosition) m
-        Just (foundPosition, newBindings) ->
-          HM.insert x (second (<> newBindings) $ mkBindingSingleton foundPosition) m
-    mkBindingSingleton :: NSourcePos -> (NSourcePos, [Binding r])
-    mkBindingSingleton np = (np , one $ bindValAt np)
-     where
-      bindValAt :: NSourcePos -> Binding r
-      bindValAt = NamedVar (y :| ys) val
-  collect x = pure $ pure x
-
-  findBinding
-    :: Either VarName (Binding r)
-    -> State (AttrSet (NSourcePos, [Binding r])) (Binding r)
-  findBinding = \case
-    Left x -> do
-      mres <- gets (HM.lookup x)
-      case mres of
-        Nothing -> error $ "No binding " <> show x
-        Just (p, v) -> pure $ NamedVar (one $ StaticKey x) (embed v) p
-    Right b -> pure b
 
 evalBinds
   :: forall v m
