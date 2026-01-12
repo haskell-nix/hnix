@@ -702,120 +702,80 @@ data NOperatorDef
 appOpDef :: NOperatorDef
 appOpDef = NAppDef NAppOp NAssocLeft 1 " " -- This defined as "2" in Nix lang spec.
 
---  2022-01-26: NOTE: When total - make sure to hide & inline all these instances to get free solution.
+-- | Extract associativity from any NOperatorDef
+opDefAssoc :: NOperatorDef -> NAssoc
+opDefAssoc = \case
+  NAppDef     _ assoc _ _ -> assoc
+  NUnaryDef   _ assoc _ _ -> assoc
+  NBinaryDef  _ assoc _ _ -> assoc
+  NSpecialDef _ assoc _ _ -> assoc
+
+-- | Extract precedence from any NOperatorDef
+opDefPrecedence :: NOperatorDef -> NOpPrecedence
+opDefPrecedence = \case
+  NAppDef     _ _ prec _ -> prec
+  NUnaryDef   _ _ prec _ -> prec
+  NBinaryDef  _ _ prec _ -> prec
+  NSpecialDef _ _ prec _ -> prec
+
+-- | Extract name from any NOperatorDef
+opDefName :: NOperatorDef -> NOpName
+opDefName = \case
+  NAppDef     _ _ _ name -> name
+  NUnaryDef   _ _ _ name -> name
+  NBinaryDef  _ _ _ name -> name
+  NSpecialDef _ _ _ name -> name
+
 -- | Class to get a private free construction to abstract away the gap between the Nix operation types
 -- 'NUnaryOp', 'NBinaryOp', 'NSpecialOp'.
--- And in doing remove 'OperatorInfo' from existance.
 class NOp a where
-  {-# minimal getOpDef, getOpAssoc, getOpPrecedence, getOpName #-}
+  {-# MINIMAL getOpDef #-}
 
   getOpDef :: a -> NOperatorDef
+
   getOpAssoc :: a -> NAssoc
+  getOpAssoc = opDefAssoc . getOpDef
+
   getOpPrecedence :: a -> NOpPrecedence
+  getOpPrecedence = opDefPrecedence . getOpDef
+
   getOpName :: a -> NOpName
+  getOpName = opDefName . getOpDef
 
 instance NOp NAppOp where
   getOpDef NAppOp = appOpDef
-  getOpAssoc _op = fun appOpDef
-   where
-    fun (NAppDef _op assoc _prec _name) = assoc
-    fun _ = error "Impossible happened, funapp operation should been matched."
-  getOpPrecedence _op = fun appOpDef
-   where
-    fun (NAppDef _op _assoc prec _name) = prec
-    fun _ = error "Impossible happened, funapp operation should been matched."
-  getOpName _ = fun appOpDef
-   where
-    fun (NAppDef _op _assoc _prec name) = name
-    fun _ = error "Impossible happened, funapp operation should been matched."
 
 instance NOp NUnaryOp where
-  getOpDef =
-    \case
-      NNeg -> NUnaryDef NNeg NAssocRight 3 "-"
-      NNot -> NUnaryDef NNot NAssocRight 8 "!"
-  getOpAssoc = fun . getOpDef
-   where
-    fun (NUnaryDef _op assoc _prec _name) = assoc
-    fun _ = error "Impossible happened, unary operation should been matched."
-  getOpPrecedence = fun . getOpDef
-   where
-    fun (NUnaryDef _op _assoc prec _name) = prec
-    fun _ = error "Impossible happened, unary operation should been matched."
-  getOpName = fun . getOpDef
-   where
-    fun (NUnaryDef _op _assoc _prec name) = name
-    fun _ = error "Impossible happened, unary operation should been matched."
+  getOpDef = \case
+    NNeg -> NUnaryDef NNeg NAssocRight 3 "-"
+    NNot -> NUnaryDef NNot NAssocRight 8 "!"
 
 instance NOp NBinaryOp where
-  getOpDef =
-    \case
-      NConcat -> NBinaryDef NConcat NAssocRight  5 "++"
-      NMult   -> NBinaryDef NMult   NAssocLeft   6 "*"
-      NDiv    -> NBinaryDef NDiv    NAssocLeft   6 "/"
-      NPlus   -> NBinaryDef NPlus   NAssocLeft   7 "+"
-      NMinus  -> NBinaryDef NMinus  NAssocLeft   7 "-"
-      NUpdate -> NBinaryDef NUpdate NAssocRight  9 "//"
-      NLt     -> NBinaryDef NLt     NAssocLeft  10 "<"
-      NLte    -> NBinaryDef NLte    NAssocLeft  10 "<="
-      NGt     -> NBinaryDef NGt     NAssocLeft  10 ">"
-      NGte    -> NBinaryDef NGte    NAssocLeft  10 ">="
-      NEq     -> NBinaryDef NEq     NAssoc      11 "=="
-      NNEq    -> NBinaryDef NNEq    NAssoc      11 "!="
-      NAnd    -> NBinaryDef NAnd    NAssocLeft  12 "&&"
-      NOr     -> NBinaryDef NOr     NAssocLeft  13 "||"
-      NImpl   -> NBinaryDef NImpl   NAssocRight 14 "->"
-  getOpAssoc = fun . getOpDef
-   where
-    fun (NBinaryDef _op assoc _prec _name) = assoc
-    fun _ = error "Impossible happened, binary operation should been matched."
-  getOpPrecedence = fun . getOpDef
-   where
-    fun (NBinaryDef _op _assoc prec _name) = prec
-    fun _ = error "Impossible happened, binary operation should been matched."
-  getOpName = fun . getOpDef
-   where
-    fun (NBinaryDef _op _assoc _prec name) = name
-    fun _ = error "Impossible happened, binary operation should been matched."
+  getOpDef = \case
+    NConcat -> NBinaryDef NConcat NAssocRight  5 "++"
+    NMult   -> NBinaryDef NMult   NAssocLeft   6 "*"
+    NDiv    -> NBinaryDef NDiv    NAssocLeft   6 "/"
+    NPlus   -> NBinaryDef NPlus   NAssocLeft   7 "+"
+    NMinus  -> NBinaryDef NMinus  NAssocLeft   7 "-"
+    NUpdate -> NBinaryDef NUpdate NAssocRight  9 "//"
+    NLt     -> NBinaryDef NLt     NAssocLeft  10 "<"
+    NLte    -> NBinaryDef NLte    NAssocLeft  10 "<="
+    NGt     -> NBinaryDef NGt     NAssocLeft  10 ">"
+    NGte    -> NBinaryDef NGte    NAssocLeft  10 ">="
+    NEq     -> NBinaryDef NEq     NAssoc      11 "=="
+    NNEq    -> NBinaryDef NNEq    NAssoc      11 "!="
+    NAnd    -> NBinaryDef NAnd    NAssocLeft  12 "&&"
+    NOr     -> NBinaryDef NOr     NAssocLeft  13 "||"
+    NImpl   -> NBinaryDef NImpl   NAssocRight 14 "->"
 
 instance NOp NSpecialOp where
-  getOpDef =
-    \case
-      NSelectOp  -> NSpecialDef NSelectOp  NAssocLeft 1 "."
-      NHasAttrOp -> NSpecialDef NHasAttrOp NAssocLeft 4 "?"
-      NTerm      -> NSpecialDef NTerm      NAssocLeft 1 "???"
-  getOpAssoc = fun . getOpDef
-   where
-    fun (NSpecialDef _op assoc _prec _name) = assoc
-    fun _ = error "Impossible happened, special operation should been matched."
-  getOpPrecedence = fun . getOpDef
-   where
-    fun (NSpecialDef _op _assoc prec _name) = prec
-    fun _ = error "Impossible happened, special operation should been matched."
-  getOpName = fun . getOpDef
-   where
-    fun (NSpecialDef _op _assoc _prec name) = name
-    fun _ = error "Impossible happened, special operation should been matched."
+  getOpDef = \case
+    NSelectOp  -> NSpecialDef NSelectOp  NAssocLeft 1 "."
+    NHasAttrOp -> NSpecialDef NHasAttrOp NAssocLeft 4 "?"
+    NTerm      -> NSpecialDef NTerm      NAssocLeft 1 "???"
 
 instance NOp NOperatorDef where
-  getOpDef op = op
-  getOpAssoc = \case
-    (NAppDef     _op assoc _prec _name) -> assoc
-    (NUnaryDef   _op assoc _prec _name) -> assoc
-    (NBinaryDef  _op assoc _prec _name) -> assoc
-    (NSpecialDef _op assoc _prec _name) -> assoc
-  getOpPrecedence = fun . getOpDef
-   where
-    fun (NAppDef     _op _assoc prec _name) = prec
-    fun (NUnaryDef   _op _assoc prec _name) = prec
-    fun (NBinaryDef  _op _assoc prec _name) = prec
-    fun (NSpecialDef _op _assoc prec _name) = prec
-  getOpName = fun . getOpDef
-   where
-    fun (NAppDef     _op _assoc _prec name) = name
-    fun (NUnaryDef   _op _assoc _prec name) = name
-    fun (NBinaryDef  _op _assoc _prec name) = name
-    fun (NSpecialDef _op _assoc _prec name) = name
+  getOpDef = id
 
 prefix :: NUnaryOp -> Operator Parser NExprLoc
 prefix op =

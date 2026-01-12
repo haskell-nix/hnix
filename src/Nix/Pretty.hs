@@ -160,6 +160,18 @@ prettyPathString (Indented _ parts) =
   prettyPart EscapedNewline = "\\n"
   prettyPart (Antiquoted r) = antiquote r
 
+-- | Normalize a standalone path for pretty-printing.
+-- Handles special cases where paths need explicit prefixes:
+-- - "./" and "../" and ".." get a trailing "." to avoid ambiguity
+-- - Paths without recognized prefixes get "./" prepended
+normalizePath :: Text -> Text
+normalizePath = \case
+  "./"  -> "./."
+  "../" -> "../."
+  ".."  -> "../."
+  t | any (`Text.isPrefixOf` t) ["/", "~/", "./", "../"] -> t
+    | otherwise -> "./" <> t
+
 normalizePathString :: NString r -> NString r
 normalizePathString (DoubleQuoted parts) = DoubleQuoted (normalizePathParts parts)
 normalizePathString other = other
@@ -171,15 +183,11 @@ normalizePathParts parts =
     _ -> parts
  where
   normalizePrefix :: Text -> [Antiquoted Text r] -> Text
-  normalizePrefix t rest =
-    case (t, rest) of
-      ("./", [])  -> "./."
-      ("../", []) -> "../."
-      ("..", [])  -> "../."
-      _ ->
-        if any (`Text.isPrefixOf` t) ["/", "~/", "./", "../"]
-          then t
-          else "./" <> t
+  normalizePrefix t = \case
+    [] -> normalizePath t
+    _  -> if any (`Text.isPrefixOf` t) ["/", "~/", "./", "../"]
+            then t
+            else "./" <> t
 
 prettyVarName :: VarName -> Doc ann
 prettyVarName = pretty . varNameText
@@ -328,16 +336,7 @@ exprFNixDoc = \case
 
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
   NLiteralPath p ->
-    pathExpr $
-      pretty @FilePath $ coerce $
-        case p of
-          "./"  -> "./."
-          "../" -> "../."
-          ".."  -> "../."
-          path  ->
-            if any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"]
-              then path
-              else "./" <> path
+    pathExpr $ pretty @Text $ normalizePath $ toText $ coerce @_ @FilePath p
   NPath p ->
     pathExpr $ prettyPathString $ normalizePathString p
   NSym name -> simpleExpr $ prettyVarName name

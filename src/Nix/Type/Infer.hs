@@ -373,14 +373,7 @@ instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ inferred typeBool
 
-instance
-  Monad m
-  => Scoped (Judgment s) (InferT s m) where
-  askScopes   = askScopesReader
-  clearScopes = clearScopesReader @(InferT s m) @(Judgment s)
-  pushScopes  = pushScopesReader
-  setScopes   = setScopesReader
-  lookupVar   = lookupVarReader
+instance Monad m => Scoped (Judgment s) (InferT s m)
 
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
@@ -401,24 +394,6 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
     -> InferT s m (Judgment s)
   inform = pure
 
-
---  2021-02-22: NOTE: Seems like suporflous instance
-instance Monad m => MonadValueF (Judgment s) (InferT s m) where
-
-  demandF
-    :: ( Judgment s
-      -> InferT s m r)
-    -> Judgment s
-    -> InferT s m r
-  demandF f = f
-
-  informF
-    :: ( InferT s m (Judgment s)
-      -> InferT s m (Judgment s)
-      )
-    -> Judgment s
-    -> InferT s m (Judgment s)
-  informF f = f . pure
 
 polymorphicVar :: MonadInfer m => VarName -> InferT s m (Judgment s)
 polymorphicVar var =

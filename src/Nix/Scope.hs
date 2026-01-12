@@ -1,6 +1,7 @@
 {-# language UndecidableInstances #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
+{-# language DefaultSignatures #-}
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
 
@@ -90,14 +91,38 @@ emptyScopes :: Scopes m a
 emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
-  askScopes :: m (Scopes m a)
+  askScopes     :: m (Scopes m a)
   clearScopes   :: m r -> m r
   pushScopes    :: Scopes m a -> m r -> m r
   -- | Set scopes directly. More efficient than clearScopes . pushScopes
-  -- Default implementation uses clearScopes + pushScopes for compatibility.
   setScopes     :: Scopes m a -> m r -> m r
-  setScopes scopes = clearScopes . pushScopes scopes
   lookupVar     :: VarName -> m (Maybe a)
+
+  -- Default implementations for MonadReader-based monads
+  default askScopes
+    :: (MonadReader e m, Has e (Scopes m a))
+    => m (Scopes m a)
+  askScopes = askScopesReader
+
+  default clearScopes
+    :: (MonadReader e m, Has e (Scopes m a))
+    => m r -> m r
+  clearScopes = clearScopesReader @m @a
+
+  default pushScopes
+    :: (MonadReader e m, Has e (Scopes m a))
+    => Scopes m a -> m r -> m r
+  pushScopes = pushScopesReader
+
+  default setScopes
+    :: (MonadReader e m, Has e (Scopes m a))
+    => Scopes m a -> m r -> m r
+  setScopes = setScopesReader
+
+  default lookupVar
+    :: (MonadReader e m, Has e (Scopes m a))
+    => VarName -> m (Maybe a)
+  lookupVar = lookupVarReader
 
 askScopesReader
   :: forall m a e

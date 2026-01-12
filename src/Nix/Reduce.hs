@@ -474,9 +474,4 @@ reducingEvalExpr eval mpath expr =
  where
   addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 
-instance Monad m => Scoped NExprLoc (Reducer m) where
-  askScopes   = askScopesReader
-  clearScopes = clearScopesReader @(Reducer m) @NExprLoc
-  pushScopes  = pushScopesReader
-  setScopes   = setScopesReader
-  lookupVar   = lookupVarReader
+instance Monad m => Scoped NExprLoc (Reducer m)

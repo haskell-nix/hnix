@@ -61,10 +61,6 @@ alignEqM eq fa fb =
             )
             (Data.Semialign.align fa fb)
 
-alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
-alignEq eq fa fb =
-  runIdentity $ alignEqM ((Identity .) . eq) fa fb
-
 isDerivationM
   :: Monad m
   => ( t
@@ -82,16 +78,6 @@ isDerivationM f m =
         -- We should probably really make sure the context is empty here
         -- but the C++ implementation ignores it.
         pure $ (==) "derivation" . ignoreContext $ ty
-
-
-isDerivation
-  :: Monad m
-  => ( t
-     -> Maybe NixString
-     )
-  -> AttrSet t
-  -> Bool
-isDerivation f = runIdentity . isDerivationM (Identity . f)
 
 valueFEqM
   :: Monad n
@@ -118,20 +104,6 @@ valueFEqM attrsEq eq =
       (NVPathF     lp        , NVPathF     rp        ) ->             pure $ lp == rp
       _                                                -> pure False
 
-valueFEq
-  :: (AttrSet a -> AttrSet a -> Bool)
-  -> (a -> a -> Bool)
-  -> NValueF p m a
-  -> NValueF p m a
-  -> Bool
-valueFEq attrsEq eq x y =
-  runIdentity $
-    valueFEqM
-      ((Identity .) . attrsEq)
-      ((Identity .) . eq)
-      x
-      y
-
 compareAttrSetsM
   :: Monad m
   => (t -> m (Maybe NixString))
@@ -152,15 +124,6 @@ compareAttrSetsM f eq lm rm =
   areDerivations = on (liftA2 (&&)) (isDerivationM f              ) lm rm
   equalOutPaths  = on (liftA2   eq) (HM.lookup "outPath") lm rm
   compareAttrs   =     alignEqM eq                                  lm rm
-
-compareAttrSets
-  :: (t -> Maybe NixString)
-  -> (t -> t -> Bool)
-  -> AttrSet t
-  -> AttrSet t
-  -> Bool
-compareAttrSets f eq lm rm =
-  runIdentity $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
 
 valueEqM
   :: forall t f m

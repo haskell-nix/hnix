@@ -293,54 +293,6 @@ instance
   {-# INLINABLE further #-}
 
 
--- * @instance MonadThunkF@ (Kleisli functor HOFs)
-
--- | This is a functorized version in CPS.
-
--- Please do not use MonadThunkF instances to define MonadThunk. as MonadThunk uses specialized functions.
-instance
-  ( Typeable       m
-  , MonadThunkId   m
-  , MonadAtomicRef m
-  , MonadCatch     m
-  , MonadReader (Context cfg m (StdValue m)) m
-  )
-  => MonadThunkF (StdThunk m) m (StdValue m) where
-
-  queryF
-    :: ( StdValue m
-       -> m r
-       )
-    -> m r
-    -> StdThunk m
-    -> m r
-  queryF k b = queryF @(CitedStdThunk m) k b . coerce
-
-  forceF
-    :: ( StdValue m
-       -> m r
-       )
-    -> StdThunk m
-    -> m r
-  forceF k = forceF @(CitedStdThunk m) k . coerce
-
-  forceEffF
-    :: ( StdValue m
-       -> m r
-       )
-    -> StdThunk m
-    -> m r
-  forceEffF k = forceEffF @(CitedStdThunk m) k . coerce
-
-  furtherF
-    :: ( m (StdValue m)
-       -> m (StdValue m)
-       )
-    ->    StdThunk m
-    -> m (StdThunk m)
-  furtherF k = fmap coerce . furtherF @(CitedStdThunk m) k . coerce
-
-
 -- * @instance MonadValue (StdValue m) m@
 
 instance
@@ -382,37 +334,6 @@ instance
         ((pure . coerce <$>) . (further @(CitedStdThunk m) . coerce))
         ((Free <$>) . bindNValue' id go)
   {-# INLINABLE inform #-}
-
-
--- * @instance MonadValueF (StdValue m) m@
-
-instance
-  ( MonadAtomicRef m
-  , MonadCatch m
-  , MonadIO m
-  , Typeable m
-  , MonadReader (Context cfg m (StdValue m)) m
-  , MonadThunkId m
-  )
-  => MonadValueF (StdValue m) m where
-
-  demandF
-    :: ( StdValue m
-      -> m r
-      )
-    -> StdValue m
-    -> m r
-  demandF f = f <=< demand
-  {-# INLINABLE demandF #-}
-
-  informF
-    :: ( m (StdValue m)
-      -> m (StdValue m)
-      )
-    -> StdValue m
-    -> m (StdValue m)
-  informF f = f . inform
-  {-# INLINABLE informF #-}
 
 
 -- | The core evaluation transformer, parameterized by compile-time config.

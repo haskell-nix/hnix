@@ -89,18 +89,6 @@ class
   further  :: t -> m t
 
 
--- ** @class MonadThunk@
-
--- | Class of Kleisli functors for easiness of customized implementation developlemnt.
-class
-  MonadThunkF t m a | t -> m, t -> a
- where
-  queryF   :: (a   -> m r) -> m r -> t -> m r
-  forceF    :: (a   -> m r) -> t   -> m r
-  forceEffF :: (a   -> m r) -> t   -> m r
-  furtherF  :: (m a -> m a) -> t   -> m t
-
-
 -- ** @newtype ThunkLoop@
 
 newtype ThunkLoop = ThunkLoop Text -- contains rendering of ThunkId

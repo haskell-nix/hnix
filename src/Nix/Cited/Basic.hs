@@ -128,33 +128,6 @@ instance
   further (CitedP ps t) = cite ps $ further t
 
 
--- ** Kleisli functor HOFs
-
--- Please, do not use MonadThunkF for MonadThunk, later uses more straight-forward specialized line of functions.
-instance
-  ( Has e Options
-  , Framed e m
-  , MonadThunkF t m v
-  , Typeable m
-  , Typeable f
-  , Typeable u
-  , MonadCatch m
-  )
-  => MonadThunkF (Cited u f m t) m v where
-
-  queryF :: (v -> m r) -> m r -> Cited u f m t -> m r
-  queryF k m (CitedP _ t) = queryF k m t
-
-  forceF :: (v -> m r) -> Cited u f m t -> m r
-  forceF k (CitedP ps t) = handleDisplayProvenance ps $ forceF k t
-
-  forceEffF :: (v -> m r) -> Cited u f m t -> m r
-  forceEffF k (CitedP ps t) = handleDisplayProvenance ps $ forceEffF k t
-
-  furtherF :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
-  furtherF k (CitedP ps t) = cite ps $ furtherF k t
-
-
 -- * Representation
 
 handleDisplayProvenance

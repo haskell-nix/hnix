@@ -11,10 +11,3 @@ class MonadValue v m where
   --   performed by the thunk, perhaps by enriching it with scope info, for
   --   example.
   inform :: v -> m v
-
-
--- * @MonadValueF@ - a Kleisli-able customization class
-
-class MonadValueF v m where
-  demandF :: (v -> m r) -> v -> m r
-  informF :: (m v -> m v) -> v -> m v

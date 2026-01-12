@@ -301,13 +301,8 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   demand (ST v) = demand =<< force v
   demand (SV v) = pure (SV v)
 
-
-instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
-  => MonadValueF (Symbolic m) m where
-
-  demandF :: (Symbolic m -> m r) -> Symbolic m -> m r
-  demandF f (ST v) = demandF f =<< force v
-  demandF f (SV v) = f (SV v)
+  inform :: Symbolic m -> m (Symbolic m)
+  inform = pure
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
@@ -512,10 +507,4 @@ lint opts expr =
           expr
         )
 
-instance
-  Scoped (Symbolic (Lint s)) (Lint s) where
-  askScopes = askScopesReader
-  clearScopes   = clearScopesReader @(Lint s) @(Symbolic (Lint s))
-  pushScopes    = pushScopesReader
-  setScopes     = setScopesReader
-  lookupVar     = lookupVarReader
+instance Scoped (Symbolic (Lint s)) (Lint s)

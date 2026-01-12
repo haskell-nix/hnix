@@ -249,15 +249,10 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
             toValue delta
       SFalse -> toValue delta
 
-  evaledSym name val = case singProv @(CtxCfg e) of
-    STrue -> do
-      scope <- askScopes
-      span  <- askSpan
-      pure $
-        addProvenance @_ @_ @(NValue t f m)
-          (Provenance scope $ NSymAnnF span name)
-          val
-    SFalse -> pure val
+  evaledSym name val = withProvCtx
+    (\scope span -> pure $ addProvenance @_ @_ @(NValue t f m)
+      (Provenance scope $ NSymAnnF span name) val)
+    (pure val)
 
   evalConstant c = withProvCtx
     (\scope span -> pure $ mkNVConstantWithProvenance scope span c)
@@ -268,12 +263,9 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
       mns <- assembleString str
       case mns of
         Nothing -> nverr $ ErrorCall "Failed to assemble string"
-        Just ns -> case singProv @(CtxCfg e) of
-          STrue -> do
-            scope <- askScopes
-            span  <- askSpan
-            pure $ mkNVStrWithProvenance scope span ns
-          SFalse -> pure $ NVStr ns
+        Just ns -> withProvCtx
+          (\scope span -> pure $ mkNVStrWithProvenance scope span ns)
+          (pure $ NVStr ns)
 
   evalLiteralPath p = do
     realPath <- toAbsolutePath @t @f @m p
@@ -290,12 +282,11 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
           let litText = ignoreContext ns
           let litPath = fromString (toString litText)
           real <- toAbsolutePath @t @f @m litPath
-          case singProv @(CtxCfg e) of
-            STrue -> do
-              scope <- askScopes
-              span  <- askSpan
-              pure $ addProvenance (Provenance scope . NPathAnnF span $ DoubleQuoted $ one $ Plain litText) $ NVPath real
-            SFalse -> pure $ NVPath real
+          withProvCtx
+            (\scope span -> pure $ addProvenance
+              (Provenance scope . NPathAnnF span $ DoubleQuoted $ one $ Plain litText)
+              (NVPath real))
+            (pure $ NVPath real)
 
   evalEnvPath p = do
     realPath <- findEnvPath @t @f @m (coerce p)
@@ -309,13 +300,11 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
 
   evalWith c b = do
     result <- evalWithAttrSet c b
-    case singProv @(CtxCfg e) of
-      STrue -> do
-        scope <- askScopes
-        span  <- askSpan
+    withProvCtx
+      (\scope span ->
         let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
-        pure $ f result
-      SFalse -> pure result
+        in pure $ f result)
+      (pure result)
 
   evalIf c tVal fVal = do
     bl :: Bool <- fromValue c
@@ -338,24 +327,16 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
     span <- askSpan
     b :: Bool <- fromValue c
     if b
-      then
-        case singProv @(CtxCfg e) of
-          STrue -> do
-            scope <- askScopes
-            join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body
-          SFalse -> body
+      then withProvCtx
+        (\scope _ -> join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body)
+        body
       else nverr $ Assertion span c
 
   evalApp f x = do
     result <- callFunc f =<< defer x
-    -- Compile-time provenance dispatch eliminates this check when disabled.
-    -- When CfgProv ~ 'False, this entire branch is eliminated.
-    case singProv @(CtxCfg e) of
-      STrue -> do
-        scope <- askScopes
-        span <- askSpan
-        pure $ mkNVAppOpWithProvenance scope span (pure f) Nothing result
-      SFalse -> pure result
+    withProvCtx
+      (\scope span -> pure $ mkNVAppOpWithProvenance scope span (pure f) Nothing result)
+      (pure result)
 
   evalAbs
     :: Params (m (NValue t f m))
@@ -370,12 +351,9 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
     -> m (NValue t f m)
   evalAbs p k =
     let closureFunc = fmap snd . flip (k @()) (const (fmap (mempty ,))) . pure
-    in case singProv @(CtxCfg e) of
-      STrue -> do
-        scope <- askScopes
-        span  <- askSpan
-        pure $ mkNVClosureWithProvenance scope span (void p) closureFunc
-      SFalse -> pure $ NVClosure (void p) closureFunc
+    in withProvCtx
+      (\scope span -> pure $ mkNVClosureWithProvenance scope span (void p) closureFunc)
+      (pure $ NVClosure (void p) closureFunc)
 
   evalError = throwError
 
