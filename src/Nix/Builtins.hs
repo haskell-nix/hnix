@@ -606,35 +606,39 @@ divNix nvX nvY =
       (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> toValue $                     x / y
       (_x                   , _y                   )         -> throwError $ Division _x _y
 
+-- | Short-circuit evaluation: returns True as soon as any element satisfies the predicate.
+-- Uses V.foldr with lazy accumulator to avoid evaluating remaining elements.
 anyNix
-  :: MonadNix e t f m
+  :: forall e t f m
+   . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-anyNix f = toValue <=< anyMNix fromValue <=< traverse (callFunc f) <=< fromValue
- where
-  anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
-  anyMNix _ []       = pure False
-  anyMNix p (x : xs) =
-    bool
-      (anyMNix p xs)
-      (pure True)
-      =<< p x
+anyNix f nvList = do
+  vec <- fromValue @(V.Vector (NValue t f m)) nvList
+  toValue =<< V.foldr
+    (\x acc -> do
+      result <- callFunc f x >>= fromValue
+      if result then pure True else acc)
+    (pure False)
+    vec
 
+-- | Short-circuit evaluation: returns False as soon as any element fails the predicate.
+-- Uses V.foldr with lazy accumulator to avoid evaluating remaining elements.
 allNix
-  :: MonadNix e t f m
+  :: forall e t f m
+   . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-allNix f = toValue <=< allMNix fromValue <=< traverse (callFunc f) <=< fromValue
- where
-  allMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
-  allMNix _ []       = pure True
-  allMNix p (x : xs) =
-    bool
-      (pure False)
-      (allMNix p xs)
-      =<< p x
+allNix f nvList = do
+  vec <- fromValue @(V.Vector (NValue t f m)) nvList
+  toValue =<< V.foldr
+    (\x acc -> do
+      result <- callFunc f x >>= fromValue
+      if result then acc else pure False)
+    (pure True)
+    vec
 
 foldl'Nix
   :: forall e t f m
@@ -860,15 +864,15 @@ zipAttrsWithNix f nvSets =
   do
     sets <- fromValue @(V.Vector (NValue t f m)) =<< demand nvSets
 
-    -- Collect values by key, building Vectors directly
-    -- Use flip (V.++) because insertWith passes new val first, but we want old ++ new
+    -- Collect values by key, accumulating as lists (O(1) prepend) then converting to Vector at end
+    -- Uses (++) which prepends [val] to existing list in O(1), building lists in reverse order
     collected <-
       V.foldM'
         (\ acc v -> do
           v' <- demand v
           case v' of
             NVSet _ attrs ->
-              pure $ HM.foldlWithKey' (\m k val -> HM.insertWith (flip (V.++)) k (V.singleton val) m) acc attrs
+              pure $ HM.foldlWithKey' (\m k val -> HM.insertWith (++) k [val] m) acc attrs
             _ ->
               throwError $ ErrorCall $ "builtins.zipAttrsWith: expected a list of attrsets, got " <> show v'
         )
@@ -881,7 +885,8 @@ zipAttrsWithNix f nvSets =
   applyFunToKeyVals key vals =
     defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in zipAttrsWith:\n") $ do
       runFunForKey <- callFunc f $ mkNVStrWithoutContext (varNameText key)
-      callFunc runFunForKey (NVList vals)
+      -- Reverse to restore original order (we prepended during accumulation)
+      callFunc runFunForKey (NVList (V.fromList (reverse vals)))
 
 -- | Filter a list by a predicate.
 --
@@ -1159,6 +1164,8 @@ elemAtNix xs n = do
     pure
     (nlIndex v n')
 
+-- | Generate a list by applying function to indices 0..n-1.
+-- Uses V.generateM to build Vector directly without intermediate list allocation.
 genListNix
   :: forall e t f m
    . MonadNix e t f m
@@ -1168,10 +1175,11 @@ genListNix
 genListNix f nixN =
   do
     n <- fromValue @Integer nixN
-    bool
-      (throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n)
-      (toValue =<< traverse (defer . callFunc f <=< toValue) [0 .. n - 1])
-      (n >= 0)
+    if n < 0
+      then throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n
+      else toValue =<< V.generateM (fromIntegral n) genElement
+ where
+  genElement i = defer $ callFunc f =<< toValue (fromIntegral i :: Integer)
 
 genericClosureNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1425,9 +1433,10 @@ isAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isAttrsNix = hasKind @(AttrSet (NValue t f m))
 
+-- | O(1) check using Vector type instead of list to avoid O(n) V.toList conversion.
 isListNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isListNix = hasKind @[NValue t f m]
+isListNix = hasKind @(V.Vector (NValue t f m))
 
 isIntNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

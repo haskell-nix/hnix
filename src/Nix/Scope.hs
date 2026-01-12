@@ -61,15 +61,15 @@ scopeLookup key = foldr fun Nothing
 
 -- | Like scopeLookup but also returns (total depth, scopes searched before finding)
 --   If not found, scopes searched = total depth
+--   Computes depth during single traversal to avoid extra pass.
 scopeLookupWithDepth :: VarName -> [Scope a] -> (Maybe a, Int, Int)
-scopeLookupWithDepth key scopes = go 0 scopes
+scopeLookupWithDepth key = go 0
  where
-  totalDepth = length scopes
-  go searched [] = (Nothing, totalDepth, searched)
-  go searched (Scope m : rest) =
+  go !depth [] = (Nothing, depth, depth)
+  go !depth (Scope m : rest) =
     case HM.lookup key m of
-      Just v  -> (Just v, totalDepth, searched + 1)
-      Nothing -> go (searched + 1) rest
+      Just v  -> (Just v, depth + 1 + length rest, depth + 1)
+      Nothing -> go (depth + 1) rest
 
 data Scopes m a =
   Scopes
