@@ -219,13 +219,14 @@ evalWithAttrSet aset body = do
 attrSetAlter
   :: forall v m
    . MonadNixEval v m
-  => [VarName]
+  => Bool          -- ^ allowOverwrite: if True, overwrite existing keys (for __overrides)
+  -> [VarName]
   -> NSourcePos
   -> AttrSet (m v)
   -> PositionSet
   -> m v
   -> m (AttrSet (m v), PositionSet)
-attrSetAlter ks' pos m' p' val =
+attrSetAlter allowOverwrite ks' pos m' p' val =
   swap <$> go p' m' ks'
  where
   -- This `go` does traverse in disquise. Notice how it traverses `ks`.
@@ -240,11 +241,30 @@ attrSetAlter ks' pos m' p' val =
       then
         case HM.lookup k m of
           Nothing -> recurse mempty mempty
-          Just x -> do
-            --  2021-10-12: NOTE: swapping sourcewide into (PositionSet, AttrSet) would optimize code and remove this `swap`
-            (swap -> (sp, st)) <- fromValue @(AttrSet v, PositionSet) =<< x
-            recurse sp $ demand <$> st
-      else pure $ insertVal val
+          -- Dynamic attribute already defined - raise error (matching Nix behavior)
+          -- unless allowOverwrite is True (for __overrides)
+          Just _ | not allowOverwrite ->
+            let oldPosMsg = case HM.lookup k p of
+                  Just oldPos -> " at " <> show oldPos
+                  Nothing     -> ""
+            in evalError @v $ ErrorCall $
+                 "dynamic attribute '" <> toString (varNameText k) <>
+                 "' already defined" <> oldPosMsg
+          -- With allowOverwrite, just overwrite the existing key
+          Just _ -> pure $ insertVal (defer $ toValue @(AttrSet v, PositionSet) mempty)
+      else
+        -- Single-key binding: check for duplicate (from dynamic keys that evaluate to same value)
+        -- unless allowOverwrite is True (for __overrides)
+        case HM.lookup k m of
+          Nothing -> pure $ insertVal val
+          Just _ | allowOverwrite -> pure $ insertVal val
+          Just _ ->
+            let oldPosMsg = case HM.lookup k p of
+                  Just oldPos -> " at " <> show oldPos
+                  Nothing     -> ""
+            in evalError @v $ ErrorCall $
+                 "dynamic attribute '" <> toString (varNameText k) <>
+                 "' already defined" <> oldPosMsg
    where
     insertVal :: m v -> (PositionSet, AttrSet (m v))
     insertVal v =
@@ -281,7 +301,7 @@ evalBinds isRecursive binds =
  where
   buildResult
     :: Scopes m v
-    -> [([VarName], NSourcePos, m v)]
+    -> [(Bool, [VarName], NSourcePos, m v)]  -- (allowOverwrite, path, pos, value)
     -> m (AttrSet v, PositionSet)
   buildResult scopes bindings =
     do
@@ -294,22 +314,24 @@ evalBinds isRecursive binds =
       pure (coerce res, p)
 
    where
-    insert :: (AttrSet (m v), PositionSet) -> ([VarName], NSourcePos, m v) -> m (AttrSet (m v), PositionSet)
-    insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
+    insert :: (AttrSet (m v), PositionSet) -> (Bool, [VarName], NSourcePos, m v) -> m (AttrSet (m v), PositionSet)
+    insert (m, p) (allowOverwrite, path, pos, value) = attrSetAlter allowOverwrite path pos m p value
 
     mkThunk = defer . withScopes scopes
 
     encapsulate f ~attrs = mkThunk $ pushScope attrs f  -- ~attrs: lazy for loebM knot-tying
 
-  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([VarName], NSourcePos, m v)]
+  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [(Bool, [VarName], NSourcePos, m v)]
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     do
       (o', p') <- fromValue =<< finalValue
       -- TODO: Determine correct position handling for __overrides keys
       -- Currently falls back to the binding position when key position is missing
+      -- __overrides is allowed to overwrite existing keys
       pure $
         (\ (k, v) ->
-          ( one k
+          ( True  -- allowOverwrite for __overrides
+          , one k
           , case HM.lookup k p' of
               Nothing -> pos
               Just p2 -> p2
@@ -321,25 +343,25 @@ evalBinds isRecursive binds =
     (\case
       -- When there are no path segments, e.g. `${null} = 5;`, we don't
       -- bind anything
-      ([], _, _) -> mempty
-      result     -> one result
+      (_, [], _, _) -> mempty
+      result        -> one result
     ) <$> processAttrSetKeys pathExpr
    where
-    processAttrSetKeys :: NAttrPath (m v) -> m ([VarName], NSourcePos, m v)
+    processAttrSetKeys :: NAttrPath (m v) -> m (Bool, [VarName], NSourcePos, m v)
     processAttrSetKeys (h :| t) =
       do
         mk <- evalSetterKeyName h
         case mk of
           -- Empty attrset - return a stub.
-          Nothing -> pure (mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty)
+          Nothing -> pure (False, mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty)
           Just k ->
             handlePresence
               -- No more keys in the attrset - return the result
-              (pure (one k, pos, finalValue))
+              (pure (False, one k, pos, finalValue))  -- allowOverwrite = False
               -- There are unprocessed keys in attrset - recurse appending the results
               (\ (x : xs) -> do
-                (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
-                pure (k : restOfPath, pos, v)
+                (_, restOfPath, _, v) <- processAttrSetKeys (x :| xs)
+                pure (False, k : restOfPath, pos, v)  -- allowOverwrite = False
               )
               t
 
@@ -348,9 +370,10 @@ evalBinds isRecursive binds =
    where
     processScope
       :: VarName
-      -> ([VarName], NSourcePos, m v)
+      -> (Bool, [VarName], NSourcePos, m v)
     processScope var =
-      ( one var
+      ( False  -- allowOverwrite = False for Inherit
+      , one var
       , pos
       , do
           scopeVal <-

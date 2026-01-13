@@ -409,13 +409,37 @@ mergeBindings binds = do
  where
   -- Partition into static key bindings and others (dynamic keys, inherits)
   -- Keep the original index for ordering
+  -- Note: Plain quoted strings like "foo" are treated as static keys for merging purposes
   partitionBindings :: [(Int, Binding NExprLoc)]
                     -> ([(Int, VarName, [NKeyName NExprLoc], NExprLoc, NSourcePos)], [(Int, Binding NExprLoc)])
   partitionBindings = foldr go ([], [])
    where
     go (idx, b) (statics, others) = case b of
       NamedVar (StaticKey k :| rest) val pos -> ((idx, k, rest, val, pos) : statics, others)
+      -- Plain quoted strings (no interpolation) should be treated as static keys
+      NamedVar (DynamicKey dk :| rest) val pos
+        | Just k <- staticStringFromDynamic dk -> ((idx, k, rest, val, pos) : statics, others)
       _ -> (statics, (idx, b) : others)
+
+  -- Extract a static string from a DynamicKey if it's a plain string (no interpolation)
+  -- "foo" -> Just "foo", ${x} -> Nothing, "${x}" -> Nothing
+  staticStringFromDynamic :: Antiquoted (NString NExprLoc) NExprLoc -> Maybe VarName
+  staticStringFromDynamic (Plain (DoubleQuoted parts)) = extractPlainText parts
+  staticStringFromDynamic (Plain (Indented _ parts))   = extractPlainText parts
+  staticStringFromDynamic _ = Nothing  -- Antiquoted expressions are truly dynamic
+
+  -- Extract plain text from string parts, returning Nothing if any part is interpolated
+  -- or if the result would be empty (empty strings remain dynamic keys)
+  extractPlainText :: [Antiquoted Text NExprLoc] -> Maybe VarName
+  extractPlainText parts =
+    case traverse getPlain parts of
+      Just texts
+        | let t = mconcat texts
+        , not (Text.null t) -> Just $ mkVarName t
+      _ -> Nothing
+   where
+    getPlain (Plain t) = Just t
+    getPlain _         = Nothing  -- Antiquoted or EscapedNewline
 
   -- Group static bindings by their top-level key, keeping indices
   groupByTopKey :: [(Int, VarName, [NKeyName NExprLoc], NExprLoc, NSourcePos)]
@@ -467,28 +491,33 @@ mergeBindings binds = do
   mergeMultiple key bindings = do
     -- Collect all nested bindings (strip indices, they were only for ordering)
     let bindingsNoIdx = [(rest, val, pos) | (_, rest, val, pos) <- bindings]
-    nestedBinds <- traverse (extractNestedBinding key) bindingsNoIdx
-    let allBindings = concat nestedBinds
+    nestedBindsWithRec <- traverse (extractNestedBinding key) bindingsNoIdx
+    let allBindings = concatMap snd nestedBindsWithRec
+        -- If ANY direct attrset is recursive, the merged result is recursive
+        mergedRec = case [r | (r, _) <- nestedBindsWithRec, r == Recursive] of
+                      (_:_) -> Recursive
+                      []    -> NonRecursive
         -- Use the first position for the merged binding
         firstPos = case bindingsNoIdx of
           ((_, _, pos) : _) -> pos
           [] -> error "mergeMultiple: impossible empty list"
     -- Recursively merge the collected bindings (handles nested conflicts)
     mergedInner <- mergeBindings allBindings
-    -- Construct the merged NSet
-    let mergedSet = mkNSet mempty mergedInner  -- Use NonRecursive; rec is applied at outer level
+    -- Construct the merged NSet, preserving recursivity from direct attrsets
+    let mergedSet = mkNSet mergedRec mergedInner
     pure $ NamedVar (one $ StaticKey key) mergedSet firstPos
 
   -- Extract bindings from a single entry (either nested path or direct NSet)
-  extractNestedBinding :: VarName -> ([NKeyName NExprLoc], NExprLoc, NSourcePos) -> Parser [Binding NExprLoc]
+  -- Returns (Recursivity, bindings) - Recursive if from a rec attrset, NonRecursive otherwise
+  extractNestedBinding :: VarName -> ([NKeyName NExprLoc], NExprLoc, NSourcePos) -> Parser (Recursivity, [Binding NExprLoc])
   extractNestedBinding key ([], val, pos) =
     -- Direct binding: value must be an NSet to merge
     case unFix val of
-      AnnF _ (NSet _ innerBinds) -> pure innerBinds
+      AnnF _ (NSet rec innerBinds) -> pure (rec, innerBinds)  -- Preserve recursivity!
       _ -> fail $ "attribute '" <> toString (varNameText key) <> "' already defined at " <> show pos
   extractNestedBinding _key (rest, val, pos) =
-    -- Nested path: convert to a binding
-    pure [NamedVar (fromList rest) val pos]
+    -- Nested path: convert to a binding (not from a direct attrset, so NonRecursive)
+    pure (NonRecursive, [NamedVar (fromList rest) val pos])
 
   -- Helper to construct an NSet with source span
   mkNSet :: Recursivity -> [Binding NExprLoc] -> NExprLoc

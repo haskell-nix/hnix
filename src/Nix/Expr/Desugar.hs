@@ -23,6 +23,7 @@ import           Nix.Prelude
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.List.NonEmpty            as NE
+import qualified Data.Text                     as T
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 
@@ -100,6 +101,7 @@ desugarBindings binds =
   where
     -- Partition bindings into static-first-key NamedVar and others
     -- Returns: (single-key bindings, path bindings, other bindings)
+    -- Note: Plain quoted strings like "foo" are treated as static keys for merging purposes
     partitionBindings :: [Binding NExprLoc]
                       -> ([(VarName, NExprLoc, NSourcePos)],           -- Single-key: (key, val, pos)
                           [(VarName, NAttrPath NExprLoc, NExprLoc, NSourcePos)],  -- Path: (firstKey, restPath, val, pos)
@@ -107,13 +109,39 @@ desugarBindings binds =
     partitionBindings = foldr go ([], [], [])
       where
         go b@(Inherit _ _ _) (singles, paths, others) = (singles, paths, b : others)
-        go b@(NamedVar (DynamicKey _ :| _) _ _) (singles, paths, others) = (singles, paths, b : others)
         go (NamedVar (StaticKey k :| ks) val pos) (singles, paths, others) =
           case ks of
             -- Single-key binding: a = expr
             [] -> ((k, val, pos) : singles, paths, others)
             -- Path binding: a.b.c = expr -> store (a, b :| [c], expr, pos)
             (k' : ks') -> (singles, (k, k' :| ks', val, pos) : paths, others)
+        -- Plain quoted strings (no interpolation) should be treated as static keys
+        go (NamedVar (DynamicKey dk :| ks) val pos) (singles, paths, others)
+          | Just k <- staticStringFromDynamic dk =
+              case ks of
+                [] -> ((k, val, pos) : singles, paths, others)
+                (k' : ks') -> (singles, (k, k' :| ks', val, pos) : paths, others)
+        go b (singles, paths, others) = (singles, paths, b : others)
+
+    -- Extract a static string from a DynamicKey if it's a plain string (no interpolation)
+    -- "foo" -> Just "foo", ${x} -> Nothing, "${x}" -> Nothing
+    staticStringFromDynamic :: Antiquoted (NString NExprLoc) NExprLoc -> Maybe VarName
+    staticStringFromDynamic (Plain (DoubleQuoted parts)) = extractPlainText parts
+    staticStringFromDynamic (Plain (Indented _ parts))   = extractPlainText parts
+    staticStringFromDynamic _ = Nothing  -- Antiquoted expressions are truly dynamic
+
+    -- Extract plain text from string parts, returning Nothing if any part is interpolated
+    -- or if the result would be empty (empty strings remain dynamic keys)
+    extractPlainText :: [Antiquoted Text NExprLoc] -> Maybe VarName
+    extractPlainText parts =
+      case traverse getPlain parts of
+        Just texts
+          | let t = mconcat texts
+          , not (T.null t) -> Just $ mkVarName t
+        _ -> Nothing
+     where
+      getPlain (Plain t) = Just t
+      getPlain _         = Nothing  -- Antiquoted or EscapedNewline
 
     -- Insert a single-key binding into the grouped map
     insertSingleKey :: (VarName, NExprLoc, NSourcePos)
