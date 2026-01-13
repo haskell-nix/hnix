@@ -49,6 +49,7 @@ import qualified Data.HashMap.Strict           as HM
 import           Data.Scientific
 import qualified Data.Sequence                 as Seq
 import           Data.Sequence                  ( ViewL(..), (><) )
+import qualified Data.Map.Strict               as M
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
 import           Data.Text.Read                 ( decimal )
@@ -102,6 +103,7 @@ import           Text.Regex.TDFA                ( Regex
                                                 , matchOnceText
                                                 , matchAllText
                                                 )
+import qualified Toml
 
 -- This is a big module. There is recursive reuse:
 -- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@,
@@ -2101,6 +2103,38 @@ fromJSONNix nvjson =
     traverseToNValue :: Traversable t0 => (t0 (NValue t f m) -> b) -> t0 A.Value -> m b
     traverseToNValue f v = f <$> traverse jsonToNValue v
 
+fromTOMLNix
+  :: forall e t f m . MonadNix e t f m
+  => NValue t f m -> m (NValue t f m)
+fromTOMLNix nvtoml = do
+  tomlText <- fromStringNoContext =<< fromValue =<< demand nvtoml
+  case Toml.parse tomlText of
+    Left err -> throwError $ ErrorCall $ "builtins.fromTOML: " <> err
+    Right table -> tableToNValue table
+ where
+  tableToNValue :: Toml.Table' Toml.Position -> m (NValue t f m)
+  tableToNValue (Toml.MkTable m) =
+    fmap (NVSet mempty) . traverse tomlToNValue $
+      HM.fromList [(mkVarName k, v) | (k, (_, v)) <- M.toList m]
+
+  tomlToNValue :: Toml.Value' Toml.Position -> m (NValue t f m)
+  tomlToNValue = \case
+    Toml.Integer' _ n -> pure $ NVConstant $ NInt n
+    Toml.Double' _ d  -> pure $ NVConstant $ NFloat (realToFrac d)
+    Toml.Bool' _ b    -> pure $ NVConstant $ NBool b
+    Toml.Text' _ t    -> pure $ mkNVStrWithoutContext t
+    Toml.List' _ xs   -> NVList <$> traverse tomlToNValue (V.fromList xs)
+    Toml.Table' _ t   -> tableToNValue t
+    -- Date/time types: error (matching Nix behavior without experimental feature)
+    Toml.Day' _ _         -> dateTimeError
+    Toml.TimeOfDay' _ _   -> dateTimeError
+    Toml.LocalTime' _ _   -> dateTimeError
+    Toml.ZonedTime' _ _   -> dateTimeError
+
+  dateTimeError :: m a
+  dateTimeError = throwError $ ErrorCall
+    "builtins.fromTOML: date/time values are not supported"
+
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap NVStr . toJSONNixString) <=< demand
 
@@ -2574,7 +2608,7 @@ builtinsList =
     , add' Normal   "floor"            (arity1 (floor @Float @Integer))
     , add3 Normal   "foldl'"           foldl'Nix
     , add  Normal   "fromJSON"         fromJSONNix
-    --, add  Normal   "fromTOML"         fromTOML
+    , add  Normal   "fromTOML"         fromTOMLNix
     , add  Normal   "functionArgs"     functionArgsNix
     , add  Normal   "genericClosure"   genericClosureNix
     , add2 Normal   "genList"          genListNix
