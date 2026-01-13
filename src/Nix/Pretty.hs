@@ -7,6 +7,7 @@ module Nix.Pretty where
 
 import           Nix.Prelude             hiding ( toList, group )
 import           Control.Monad.Free             ( Free(Free) )
+import           Data.Char                      ( isAlpha, isAlphaNum )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
 import           Data.HashMap.Strict            ( toList )
@@ -228,11 +229,30 @@ prettyBind (Inherit s ns _p) =
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey key) =
-  if Text.null $ varNameText key
-    then "\"\""
-    else if HS.member key reservedNames
-      then dquotes (prettyVarName key)
-      else prettyVarName key
+  if needsQuoting (varNameText key)
+    then dquotes (prettyVarName key)
+    else prettyVarName key
+ where
+  -- Check if an attribute key needs to be quoted
+  needsQuoting :: Text -> Bool
+  needsQuoting t =
+    Text.null t ||
+    HS.member (mkVarName t) reservedNames ||
+    not (isValidIdentifier t)
+
+  -- A valid Nix identifier starts with a letter or underscore,
+  -- followed by letters, digits, underscores, apostrophes, or hyphens
+  isValidIdentifier :: Text -> Bool
+  isValidIdentifier t =
+    case Text.uncons t of
+      Nothing -> False
+      Just (c, rest) ->
+        (isAlpha c || c == '_') &&
+        Text.all isIdentChar rest
+
+  isIdentChar :: Char -> Bool
+  isIdentChar c = isAlphaNum c || c == '_' || c == '\'' || c == '-'
+
 prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
@@ -518,18 +538,33 @@ printNix =
   phi (NVSet' _ s) =
     "{ " <>
       fold
-        [ check k <> " = " <> v <> "; "
+        [ quoteKey k <> " = " <> v <> "; "
         | (varNameText -> k, v) <- sort $ toList s
         ] <> "}"
    where
-    check :: Text -> Text
-    check v =
-      fromMaybe
-        v
-        (tryRead @Int <|> tryRead @Float)
-     where
-      tryRead :: forall a . (Read a, Show a) => Maybe Text
-      tryRead = fmap ((\ s -> "\"" <> s <> "\"") . show) $ readMaybe @a $ toString v
+    -- Quote a key if it's not a valid Nix identifier
+    quoteKey :: Text -> Text
+    quoteKey t =
+      if needsQuoting t
+        then "\"" <> t <> "\""
+        else t
+
+    needsQuoting :: Text -> Bool
+    needsQuoting t =
+      Text.null t ||
+      HS.member (mkVarName t) reservedNames ||
+      not (isValidIdentifier t)
+
+    isValidIdentifier :: Text -> Bool
+    isValidIdentifier t =
+      case Text.uncons t of
+        Nothing -> False
+        Just (c, rest) ->
+          (isAlpha c || c == '_') &&
+          Text.all isIdentChar rest
+
+    isIdentChar :: Char -> Bool
+    isIdentChar c = isAlphaNum c || c == '_' || c == '\'' || c == '-'
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fromString $ coerce fp
   phi (NVBuiltin' name _) = "<<builtin " <> varNameText name <> ">>"
