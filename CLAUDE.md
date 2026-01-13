@@ -62,7 +62,7 @@ cabal v2-configure --enable-coverage
 cabal v2-test --enable-coverage
 ```
 
-**Note on Test Flakiness:** The test suite has intermittent failures when run in parallel due to race conditions. Use `--test-options="-j1"` for reliable single-threaded execution. All 294 tests pass consistently with `-j1`.
+**Note on Test Flakiness:** The test suite has intermittent failures when run in parallel due to race conditions. Use `--test-options="-j1"` for reliable single-threaded execution.
 
 ### Test Wrappers
 
@@ -423,6 +423,24 @@ ifSBool STrue thenBranch elseBranch  -- elseBranch eliminated at compile time
 - **Evaluation tests** (`tests/EvalTests.hs`): HNix-specific behavior
 - **Parser tests** (`tests/ParserTests.hs`): Round-trip properties
 - **Pretty tests** (`tests/PrettyTests.hs`): Pretty-printer correctness
+
+### Nix Language Tests (`data/nix/tests/lang/`)
+
+These are golden tests from Nix's test suite. Test files follow naming conventions:
+
+| Pattern | Description |
+|---------|-------------|
+| `eval-okay-*.nix` + `.exp` | Expression should evaluate; compare output to `.exp` |
+| `eval-fail-*.nix` | Expression should fail to evaluate |
+| `parse-okay-*.nix` | Should parse successfully |
+| `parse-fail-*.nix` | Should fail to parse |
+
+**Adding new tests:**
+1. Copy test files from `~/nix/tests/functional/lang/` to `data/nix/tests/lang/`
+2. Include both `.nix` and `.exp` files for eval-okay tests
+3. Run `cabal test --test-options="-j1"` to verify
+
+**Test discovery:** `NixLanguageTests.hs` automatically discovers tests by filename pattern.
 
 ### Writing Effective Tests
 ```haskell
