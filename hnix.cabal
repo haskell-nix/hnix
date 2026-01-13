@@ -521,6 +521,7 @@ executable hnix
   build-depends:
       hnix
     , aeson
+    , aeson-pretty
     , comonad
     , containers
     , deepseq

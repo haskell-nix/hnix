@@ -1,7 +1,10 @@
 {-# language TemplateHaskell #-}
 
 -- | Code that configures presentation parser for the CLI options
-module Nix.Options.Parser where
+module Nix.Options.Parser
+  ( nixCommandInfo
+  , nixOptionsInfo
+  ) where
 
 import           Nix.Prelude
 import           Relude.Unsafe                  ( read )
@@ -267,3 +270,60 @@ nixOptionsInfo current =
   info
     (helper <*> versionOpt <*> nixOptions current)
     (fullDesc <> progDesc mempty <> header "hnix")
+
+-- | Parser for top-level commands (subcommands + legacy options)
+nixCommandInfo :: UTCTime -> ParserInfo Command
+nixCommandInfo current =
+  info
+    (helper <*> versionOpt <*> nixCommand current)
+    (fullDesc <> progDesc mempty <> header "hnix")
+
+-- | Combined parser: try subcommands first, fall back to legacy options
+nixCommand :: UTCTime -> Parser Command
+nixCommand current =
+  hsubparser derivationSubcommand <|> (LegacyCommand <$> nixOptions current)
+
+-- | The `derivation` subcommand group
+derivationSubcommand :: Mod CommandFields Command
+derivationSubcommand =
+  command "derivation" $ info (helper <*> derivationCommand)
+    (fullDesc <> progDesc "Commands for working with derivations")
+
+-- | Subcommands under `derivation`
+derivationCommand :: Parser Command
+derivationCommand =
+  hsubparser $
+    command "show" $ info (helper <*> derivationShowParser)
+      (fullDesc <> progDesc "Show the contents of a store derivation")
+
+-- | Parser for `derivation show <paths>`
+derivationShowParser :: Parser Command
+derivationShowParser =
+  DerivationCmd . DerivationShow <$> derivationShowOpts
+
+-- | Options for `derivation show`
+derivationShowOpts :: Parser DerivationShowOpts
+derivationShowOpts = DerivationShowOpts
+  <$> many (strArgument (metavar "PATHS" <> help "Derivation paths to show"))
+  <*> switch
+      (  short 'r'
+      <> long "recursive"
+      <> help "Include the dependencies of the specified derivations"
+      )
+  <*> optional (prettyFlag <|> noPrettyFlag)
+  <*> optional
+      (strOption
+        (  long "expr"
+        <> metavar "EXPR"
+        <> help "Evaluate expression to get derivation"
+        )
+      )
+ where
+  prettyFlag = flag' True
+    (  long "pretty"
+    <> help "Print multi-line, indented JSON output"
+    )
+  noPrettyFlag = flag' False
+    (  long "no-pretty"
+    <> help "Print compact JSON output on a single line"
+    )

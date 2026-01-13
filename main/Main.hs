@@ -16,15 +16,24 @@ import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Free
 import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
-import           System.IO                      ( hPutStrLn )
+import           System.IO                      ( hPutStrLn, hIsTerminalDevice )
 import qualified Data.HashMap.Strict           as HM
 import           Data.Time
-import qualified Data.Text.IO                  as Text
+import qualified Data.Text                     as Text
+import qualified Data.Text.IO                  as Text.IO
 import           Text.Show.Pretty               ( ppShow )
 import           Nix                     hiding ( force )
 import           Nix.Convert
+import           Nix.Effects.Derivation        ( Derivation(..), readDerivation )
 import           Nix.Json
-import           Nix.Options.Parser
+import qualified Data.Aeson                    as A
+import qualified Data.Aeson.Encode.Pretty      as A
+import qualified Data.Map.Strict               as Map
+import qualified Data.Set                      as Set
+import qualified Data.Aeson.Key                as AK
+import qualified Data.Aeson.KeyMap             as AKM
+import qualified Data.ByteString.Lazy          as LBS
+import           Nix.Options.Parser             ( nixCommandInfo )
 import           Nix.Standard
 import           Nix.Thunk.Basic
 import           Nix.Type.Env                   ( Env(..) )
@@ -41,9 +50,93 @@ main :: IO ()
 main =
   do
     currentTime <- getCurrentTime
-    opts <- execParser $ nixOptionsInfo currentTime
+    cmd <- execParser $ nixCommandInfo currentTime
 
-    main' opts
+    case cmd of
+      LegacyCommand opts -> main' opts
+      DerivationCmd dcmd -> runDerivationCommand currentTime dcmd
+
+-- | Handle derivation subcommands
+runDerivationCommand :: UTCTime -> DerivationCommand -> IO ()
+runDerivationCommand currentTime = \case
+  DerivationShow DerivationShowOpts{..} -> do
+    let opts = defaultOptions currentTime
+    -- Use minimal config for derivation show (no stats, no tracing)
+    withEvalCfg False False False $ \(_ :: Proxy cfg) ->
+      runWithStoreEffectsIOT @cfg opts $ do
+        -- Get initial paths from either --expr or positional arguments
+        initialPaths <- case drvShowExpr of
+          Just expr -> do
+            -- Evaluate expression to get derivation
+            drvPath <- evalExprToDrvPath @cfg expr
+            pure [drvPath]
+          Nothing -> pure drvShowPaths
+
+        -- Collect all derivation paths (including dependencies if --recursive)
+        allPaths <- if drvShowRecursive
+          then collectRecursiveDrvPaths initialPaths
+          else pure initialPaths
+
+        -- Read all derivations and build JSON output
+        -- Format: {"derivations": {"hash-name.drv": {...}}, "version": 4}
+        drvs <- forM allPaths $ \drvPath -> do
+          drv <- readDerivation drvPath
+          let drvKey = fromMaybe (toText $ coerce @Path @FilePath drvPath) $
+                         Text.stripPrefix "/nix/store/" (toText $ coerce @Path @FilePath drvPath)
+          pure (AK.fromText drvKey, A.toJSON drv)
+
+        let jsonOutput = A.object
+              [ "derivations" A..= A.Object (AKM.fromList drvs)
+              , "version" A..= (4 :: Int)
+              ]
+
+        -- Format based on --pretty/--no-pretty (default: pretty if terminal)
+        liftIO $ do
+          isTerm <- hIsTerminalDevice stdout
+          let shouldPretty = fromMaybe isTerm drvShowPretty
+          if shouldPretty
+            then LBS.putStr $ A.encodePretty' prettyConfig jsonOutput
+            else LBS.putStr $ A.encode jsonOutput
+          putStrLn ""
+   where
+    -- Configure aeson-pretty to match Nix's output format (2-space indentation)
+    prettyConfig = A.defConfig { A.confIndent = A.Spaces 2 }
+
+-- | Evaluate an expression and extract its drvPath
+evalExprToDrvPath
+  :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)
+  => Text -> StdM cfg m Path
+evalExprToDrvPath expr = do
+  case parseNixTextLoc expr of
+    Left err -> fail $ "Parse error: " <> show err
+    Right parsed -> do
+      val <- withNixContext mempty $ nixEvalExprLocT mempty parsed
+      demanded <- demand val
+      case demanded of
+        NVSet _ attrs -> case HM.lookup "drvPath" attrs of
+          Just drvPathVal -> do
+            drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM cfg m NixString)
+            pure $ coerce $ toString drvPathStr
+          Nothing -> fail "Expression does not evaluate to a derivation (missing drvPath)"
+        _ -> fail "Expression does not evaluate to an attribute set"
+
+-- | Recursively collect all derivation paths including dependencies
+collectRecursiveDrvPaths
+  :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)
+  => [Path] -> StdM cfg m [Path]
+collectRecursiveDrvPaths initialPaths = do
+  -- Use a set to track visited paths and avoid duplicates
+  let go :: Set Path -> [Path] -> StdM cfg m (Set Path)
+      go visited [] = pure visited
+      go visited (p:ps)
+        | p `Set.member` visited = go visited ps
+        | otherwise = do
+            drv <- readDerivation p
+            let (_, inputDrvs) = inputs drv
+            let depPaths = coerce . toString <$> Map.keys inputDrvs
+            go (Set.insert p visited) (depPaths <> ps)
+  visitedSet <- go Set.empty initialPaths
+  pure $ Set.toList visitedSet
 
 main' :: Options -> IO ()
 main' opts@Options{..} =
@@ -78,7 +171,7 @@ main' opts@Options{..} =
 
       readExpressionFromStdin :: StdM cfg m ()
       readExpressionFromStdin =
-        processExpr @cfg =<< liftIO Text.getContents
+        processExpr @cfg =<< liftIO Text.IO.getContents
 
     processSeveralFiles :: [Path] -> StdM cfg m ()
     processSeveralFiles = traverse_ processFile
@@ -106,7 +199,7 @@ main' opts@Options{..} =
       -- https://github.com/haskell-nix/hnix/issues/912
       (processSeveralFiles . (coerce . toString <$>) . lines <=< liftIO) .
         (\case
-          "-" -> Text.getContents
+          "-" -> Text.IO.getContents
           _fp -> readFile _fp
         ) <$> getFromFile
 
@@ -216,7 +309,7 @@ main' opts@Options{..} =
           -> (a -> StdM cfg m b)
           -> a
           -> StdM cfg m ()
-        out transform val = liftIO . Text.putStrLn . transform <=< val
+        out transform val = liftIO . Text.IO.putStrLn . transform <=< val
 
         -- | Special case for JSON: toJSONNixString is monadic, not pure
         outJson
@@ -224,7 +317,7 @@ main' opts@Options{..} =
           -> (a -> StdM cfg m b)
           -> a
           -> StdM cfg m ()
-        outJson transform val a = liftIO . Text.putStrLn . ignoreContext =<< transform =<< val a
+        outJson transform val a = liftIO . Text.IO.putStrLn . ignoreContext =<< transform =<< val a
 
       findAttrs
         :: AttrSet (StdValM cfg m)
@@ -241,7 +334,7 @@ main' opts@Options{..} =
                   (report, descend) = filterEntry path k
                 when report $
                   do
-                    liftIO $ Text.putStrLn path
+                    liftIO $ Text.IO.putStrLn path
                     when descend $
                       maybe
                         stub
@@ -309,7 +402,7 @@ main' opts@Options{..} =
             fun (coerce -> frames) =
               do
                 liftIO
-                  . Text.putStrLn
+                  . Text.IO.putStrLn
                   . (("Exception forcing " <> k <> ": ") <>)
                   . show =<<
                   renderFrames
@@ -341,3 +434,4 @@ main' opts@Options{..} =
           putStrLn $ "Wrote sifted expression tree to " <> path
           writeFile path $ show $ prettyNix $ stripAnnotation expr'
       either throwM pure eres
+

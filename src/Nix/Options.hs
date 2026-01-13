@@ -1,10 +1,39 @@
 {-# language StrictData #-}
 
 -- | Definitions & defaults for the CLI options
-module Nix.Options where
+module Nix.Options
+  ( Command(..)
+  , DerivationCommand(..)
+  , DerivationShowOpts(..)
+  , Options(..)
+  , StoreMode(..)
+  , Verbosity(..)
+  , defaultOptions
+  , askOptions
+  ) where
 
 import           Nix.Prelude
 import           Data.Time
+
+-- | Top-level command structure
+data Command
+  = LegacyCommand Options        -- ^ Legacy flag-based CLI
+  | DerivationCmd DerivationCommand  -- ^ `hnix derivation <subcommand>`
+  deriving Show
+
+-- | Derivation subcommands
+data DerivationCommand
+  = DerivationShow DerivationShowOpts  -- ^ `hnix derivation show <paths>`
+  deriving Show
+
+-- | Options for `derivation show`
+data DerivationShowOpts = DerivationShowOpts
+  { drvShowPaths     :: [Path]       -- ^ Derivation paths to show
+  , drvShowRecursive :: Bool         -- ^ Include dependencies (-r/--recursive)
+  , drvShowPretty    :: Maybe Bool   -- ^ Pretty print JSON (Nothing = auto based on terminal)
+  , drvShowExpr      :: Maybe Text   -- ^ Expression to evaluate (--expr)
+  }
+  deriving Show
 
 --  2021-07-15: NOTE: What these are? They need to be documented.
 -- Also need better names. Foe example, Maybes & lists names need to show their type in the name.

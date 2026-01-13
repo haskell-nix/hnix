@@ -6,9 +6,17 @@
 {-# language RecordWildCards #-}
 {-# language TypeApplications #-}
 
-module Nix.Effects.Derivation ( defaultDerivationStrict ) where
+module Nix.Effects.Derivation
+  ( defaultDerivationStrict
+  , Derivation(..)
+  , HashMode(..)
+  , readDerivation
+  ) where
 
 import           Nix.Prelude             hiding ( readFile )
+import qualified Data.Aeson                    as A
+import qualified Data.Aeson.Key                as AK
+import qualified Data.Aeson.KeyMap             as AKM
 import           Data.ByteArray                 ( convert )
 import           Data.ByteArray.Encoding        ( Base(Base16), convertToBase )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
@@ -119,6 +127,60 @@ data Derivation = Derivation
 
 data HashMode = Flat | Recursive
   deriving (Show, Eq)
+
+-- | JSON serialization for Derivation matching Nix's `derivation show` format (version 4)
+instance A.ToJSON Derivation where
+  toJSON drv = A.object
+    [ "args"      A..= args drv
+    , "builder"   A..= builder drv
+    , "env"       A..= env drv
+    , "inputs"    A..= inputsToJSON (inputs drv)
+    , "name"      A..= name drv
+    , "outputs"   A..= outputsToJSON drv
+    , "system"    A..= platform drv
+    , "version"   A..= (4 :: Int)
+    ]
+
+-- | Convert outputs to JSON format
+-- For regular outputs: {"out": {"path": "hash-name"}}
+-- For fixed-output: {"out": {"method": "flat"/"nar", "hash": "sha256:..."}}
+outputsToJSON :: Derivation -> A.Value
+outputsToJSON drv = A.Object $ AKM.fromList
+  [ (AK.fromText outName, outputValueJSON outPath)
+  | (outName, outPath) <- Map.toList (outputs drv)
+  ]
+ where
+  outputValueJSON :: Text -> A.Value
+  outputValueJSON outPath = case mFixed drv of
+    -- Fixed-output derivation: include method and hash
+    Just hashDigest -> A.object
+      [ "method" A..= hashModeText (hashMode drv)
+      , "hash"   A..= (hashDigestAlgoText hashDigest <> ":" <> hashDigestText hashDigest)
+      ]
+    -- Regular derivation: just the hash-name (strip /nix/store/ prefix)
+    Nothing -> A.object [ "path" A..= stripStorePath outPath ]
+
+  hashModeText :: HashMode -> Text
+  hashModeText Flat = "flat"
+  hashModeText Recursive = "nar"
+
+-- | Strip /nix/store/ prefix from path to get just the hash-name
+stripStorePath :: Text -> Text
+stripStorePath p = fromMaybe p $ Text.stripPrefix "/nix/store/" p
+
+-- | Convert inputs to JSON format matching Nix's structure:
+-- {"drvs": {"hash-name.drv": {"dynamicOutputs": {}, "outputs": [...]}}, "srcs": ["hash-name"]}
+inputsToJSON :: (Set Text, Map Text [Text]) -> A.Value
+inputsToJSON (inputSrcs, inputDrvs) = A.object
+  [ "drvs" A..= A.Object (AKM.fromList
+      [ (AK.fromText (stripStorePath drvPath), A.object
+          [ "dynamicOutputs" A..= A.object []
+          , "outputs"        A..= outs
+          ])
+      | (drvPath, outs) <- Map.toList inputDrvs
+      ])
+  , "srcs" A..= (stripStorePath <$> Set.toList inputSrcs)
+  ]
 
 -- | Configuration for builtin:fetchurl builder
 data BuiltinFetchurlConfig = BuiltinFetchurlConfig
@@ -299,7 +361,14 @@ readDerivation path = do
   content <- readFile path
   case parse derivationParser (coerce path) content of
     Left err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err
-    Right drv -> pure drv
+    Right drv -> pure $ drv { name = extractDrvName (coerce path) }
+ where
+  -- Extract derivation name from path like /nix/store/<hash>-<name>.drv
+  extractDrvName :: FilePath -> Text
+  extractDrvName fp =
+    let filename = Text.pack $ FP.takeBaseName fp  -- "hash-name"
+        -- Drop the hash (32 chars) and the hyphen
+    in Text.drop 33 filename
 
 derivationParser :: Parsec () Text Derivation
 derivationParser = do
