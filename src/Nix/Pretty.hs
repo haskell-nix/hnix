@@ -418,7 +418,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi (NVList'     l     ) = NList (V.toList l)
   phi (NVSet'      p    s) = NSet mempty
     [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`HM.lookup` p) k)
-    | (k, v) <- toList s
+    | (k, v) <- sortWith fst $ toList s  -- Sort alphabetically like Nix
     ]
   phi (NVClosure'  _    _) = NSym "<closure>"
   phi (NVPath'     p     ) = NLiteralPath p
