@@ -292,6 +292,7 @@ stringChar
   -> Parser (Antiquoted Text NExprLoc)
 stringChar end escStart esc =
   antiquoted
+  <|> Plain "$$" <$ try (chunk "$$")  -- $$ escapes the second $, preventing ${...} interpolation
   <|> Plain . one <$> char '$'
   <|> esc
   <|> Plain . fromString <$> some plainChar
