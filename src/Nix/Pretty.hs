@@ -7,7 +7,7 @@ module Nix.Pretty where
 
 import           Nix.Prelude             hiding ( toList, group )
 import           Control.Monad.Free             ( Free(Free) )
-import           Data.Char                      ( isAlpha, isAlphaNum )
+import           Data.Char                      ( isAsciiLower, isAsciiUpper, isDigit )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
 import           Data.HashMap.Strict            ( toList )
@@ -229,10 +229,12 @@ prettyBind (Inherit s ns _p) =
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey key) =
-  if needsQuoting (varNameText key)
-    then dquotes (prettyVarName key)
+  if needsQuoting keyText
+    then dquotes (pretty $ escapeString keyText)
     else prettyVarName key
  where
+  keyText = varNameText key
+
   -- Check if an attribute key needs to be quoted
   needsQuoting :: Text -> Bool
   needsQuoting t =
@@ -240,18 +242,20 @@ prettyKeyName (StaticKey key) =
     HS.member (mkVarName t) reservedNames ||
     not (isValidIdentifier t)
 
-  -- A valid Nix identifier starts with a letter or underscore,
-  -- followed by letters, digits, underscores, apostrophes, or hyphens
+  -- A valid Nix identifier uses only ASCII letters, digits, _, ', -
   isValidIdentifier :: Text -> Bool
   isValidIdentifier t =
     case Text.uncons t of
       Nothing -> False
       Just (c, rest) ->
-        (isAlpha c || c == '_') &&
+        isAsciiAlpha c &&
         Text.all isIdentChar rest
 
+  isAsciiAlpha :: Char -> Bool
+  isAsciiAlpha c = isAsciiLower c || isAsciiUpper c || c == '_'
+
   isIdentChar :: Char -> Bool
-  isIdentChar c = isAlphaNum c || c == '_' || c == '\'' || c == '-'
+  isIdentChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c == '\'' || c == '-'
 
 prettyKeyName (DynamicKey key) =
   runAntiquoted
@@ -542,11 +546,11 @@ printNix =
         | (varNameText -> k, v) <- sort $ toList s
         ] <> "}"
    where
-    -- Quote a key if it's not a valid Nix identifier
+    -- Quote a key if it's not a valid Nix identifier, escaping special chars
     quoteKey :: Text -> Text
     quoteKey t =
       if needsQuoting t
-        then "\"" <> t <> "\""
+        then "\"" <> escapeString t <> "\""
         else t
 
     needsQuoting :: Text -> Bool
@@ -555,16 +559,20 @@ printNix =
       HS.member (mkVarName t) reservedNames ||
       not (isValidIdentifier t)
 
+    -- A valid Nix identifier uses only ASCII letters, digits, _, ', -
     isValidIdentifier :: Text -> Bool
     isValidIdentifier t =
       case Text.uncons t of
         Nothing -> False
         Just (c, rest) ->
-          (isAlpha c || c == '_') &&
+          isAsciiAlpha c &&
           Text.all isIdentChar rest
 
+    isAsciiAlpha :: Char -> Bool
+    isAsciiAlpha c = isAsciiLower c || isAsciiUpper c || c == '_'
+
     isIdentChar :: Char -> Bool
-    isIdentChar c = isAlphaNum c || c == '_' || c == '\'' || c == '-'
+    isIdentChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c == '\'' || c == '-'
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fromString $ coerce fp
   phi (NVBuiltin' name _) = "<<builtin " <> varNameText name <> ">>"

@@ -56,8 +56,7 @@ groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 -- previously passed.
 newFailingTests :: Set String
 newFailingTests = Set.fromList
-  [ "eval-okay-fromTOML"  -- Float format differences (precision, scientific notation rules)
-  , "eval-okay-zipAttrsWith"
+  [ "eval-okay-zipAttrsWith"
   , "eval-okay-tojson"
   , "eval-okay-search-path"
   , "eval-okay-sort"
