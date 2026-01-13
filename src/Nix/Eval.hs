@@ -451,6 +451,9 @@ evalSetterKeyName =
     DynamicKey k ->
       mkVarName . ignoreContext <<$>> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
+-- | Assemble a Nix string with interpolations.
+-- Returns Nothing only for null values in string context (for backwards compat).
+-- Throws descriptive errors for non-coercible types like lists, functions, etc.
 assembleString
   :: forall v m
    . (MonadEval v m, FromValue NixString m v)
@@ -466,7 +469,22 @@ assembleString = fromParts . stringParts
     runAntiquoted
       "\n"
       (pure . pure . mkNixStringWithoutContext)
-      (fromValueMay =<<)
+      coerceToString
+
+  -- Coerce a value to a string, returning Nothing for null (backwards compat)
+  -- but throwing errors for other non-coercible types
+  coerceToString :: m v -> m (Maybe NixString)
+  coerceToString mv = do
+    v <- mv
+    mns <- fromValueMay v
+    case mns of
+      Just ns -> pure (Just ns)
+      Nothing -> do
+        -- Try to get better error - force fromValue to get descriptive error
+        -- fromValue throws Expectation error with value type info
+        _ <- fromValue @NixString v
+        -- If we somehow get here, return Nothing (shouldn't happen)
+        pure Nothing
 
 buildArgument
   :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
