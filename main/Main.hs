@@ -205,11 +205,11 @@ main' opts@Options{..} =
       -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
       -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
       printer'
-        | isXml     = out (ignoreContext . toXML)                    normalForm
-        | isJson    = out (ignoreContext . mempty . toJSONNixString) normalForm
-        | isStrict  = out (show . prettyNValue)                      normalForm
-        | isValues  = out (show . prettyNValueProv)                  removeEffects
-        | otherwise = out (show . prettyNValue)                      removeEffects
+        | isXml     = out (ignoreContext . toXML)       normalForm
+        | isJson    = outJson toJSONNixString           normalForm
+        | isStrict  = out (show . prettyNValue)         normalForm
+        | isValues  = out (show . prettyNValueProv)     removeEffects
+        | otherwise = out (show . prettyNValue)         removeEffects
        where
         out
           :: (b -> Text)
@@ -217,6 +217,14 @@ main' opts@Options{..} =
           -> a
           -> StdM cfg m ()
         out transform val = liftIO . Text.putStrLn . transform <=< val
+
+        -- | Special case for JSON: toJSONNixString is monadic, not pure
+        outJson
+          :: (b -> StdM cfg m NixString)
+          -> (a -> StdM cfg m b)
+          -> a
+          -> StdM cfg m ()
+        outJson transform val a = liftIO . Text.putStrLn . ignoreContext =<< transform =<< val a
 
       findAttrs
         :: AttrSet (StdValM cfg m)
