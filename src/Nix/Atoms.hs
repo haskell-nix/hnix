@@ -1,7 +1,18 @@
 {-# language CPP               #-}
 {-# language DeriveAnyClass    #-}
 
-module Nix.Atoms where
+module Nix.Atoms
+  ( NAtom(..)
+  , atomText
+  -- Re-export Int64 for convenience
+  , Int64
+  -- Checked arithmetic operations (throw on overflow)
+  , checkedAdd
+  , checkedSub
+  , checkedMul
+  , checkedDiv
+  , checkedNeg
+  ) where
 
 import           Nix.Prelude
 import           Codec.Serialise                ( Serialise )
@@ -29,9 +40,9 @@ import           Data.Aeson.Types               ( FromJSON
 data NAtom
   -- | An URI like @https://example.com@.
   = NURI Text
-  -- | An integer. The c nix implementation currently only supports
-  -- integers that fit in the range of 'Int64'.
-  | NInt Integer
+  -- | An integer. The Nix implementation uses checked 64-bit integers
+  -- that throw an error on overflow.
+  | NInt Int64
   -- | A floating point number
   | NFloat Double
   -- | Booleans. @false@ or @true@.
@@ -129,3 +140,44 @@ atomText (NFloat f) = showNixFloat f
   padExponent s   = s
 atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"
+
+-- | Checked arithmetic operations for Int64 that match Nix's behavior.
+-- These throw an error on overflow rather than wrapping.
+
+-- | Checked addition. Throws on overflow.
+checkedAdd :: Int64 -> Int64 -> Either String Int64
+checkedAdd x y
+  | y > 0 && x > maxBound - y = Left $ "integer overflow in adding " <> show x <> " + " <> show y
+  | y < 0 && x < minBound - y = Left $ "integer overflow in adding " <> show x <> " + " <> show y
+  | otherwise = Right (x + y)
+
+-- | Checked subtraction. Throws on overflow.
+checkedSub :: Int64 -> Int64 -> Either String Int64
+checkedSub x y
+  | y < 0 && x > maxBound + y = Left $ "integer overflow in subtracting " <> show x <> " - " <> show y
+  | y > 0 && x < minBound + y = Left $ "integer overflow in subtracting " <> show x <> " - " <> show y
+  | otherwise = Right (x - y)
+
+-- | Checked multiplication. Throws on overflow.
+checkedMul :: Int64 -> Int64 -> Either String Int64
+checkedMul x y
+  | x == 0 || y == 0 = Right 0
+  | x == -1 && y == minBound = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
+  | y == -1 && x == minBound = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
+  | x > 0 && y > 0 && x > maxBound `div` y = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
+  | x > 0 && y < 0 && y < minBound `div` x = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
+  | x < 0 && y > 0 && x < minBound `div` y = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
+  | x < 0 && y < 0 && x < maxBound `div` y = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
+  | otherwise = Right (x * y)
+
+-- | Checked integer division. Returns floor of division (matching Nix).
+-- Throws on division by zero.
+checkedDiv :: Int64 -> Int64 -> Either String Int64
+checkedDiv _ 0 = Left "division by zero"
+checkedDiv x y = Right (x `div` y)
+
+-- | Checked negation. Throws on overflow (negating minBound).
+checkedNeg :: Int64 -> Either String Int64
+checkedNeg x
+  | x == minBound = Left $ "integer overflow in negating " <> show x
+  | otherwise = Right (negate x)

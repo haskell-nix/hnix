@@ -227,10 +227,19 @@ nixBool =
 integer :: Parser Integer
 integer = lexeme Lexer.decimal
 
+-- | Parse an integer literal and validate it fits in Int64 bounds.
+-- Nix uses 64-bit signed integers and errors on out-of-range literals.
+int64 :: Parser Int64
+int64 = do
+  n <- integer
+  if n > fromIntegral (maxBound :: Int64) || n < fromIntegral (minBound :: Int64)
+    then fail $ "invalid integer '" <> show n <> "'"
+    else pure (fromIntegral n)
+
 nixInt :: Parser NExprLoc
 nixInt =
   annotateNamedLocation "integer" $
-    mkIntF <$> integer
+    mkIntF <$> int64
 
 float :: Parser Double
 float = lexeme Lexer.float

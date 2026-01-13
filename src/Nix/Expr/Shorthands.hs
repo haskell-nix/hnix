@@ -25,7 +25,7 @@ mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
 
 -- | Put integer.
-mkInt :: Integer -> NExpr
+mkInt :: Int64 -> NExpr
 mkInt = Fix . mkIntF
 
 -- | Put floating point number.
@@ -232,7 +232,7 @@ mkBoolF :: Bool -> NExprF a
 mkBoolF = NConstant . NBool
 
 -- | Unfixed @mkInt@.
-mkIntF :: Integer -> NExprF a
+mkIntF :: Int64 -> NExprF a
 mkIntF = NConstant . NInt
 
 -- | Unfixed @mkFloat@.

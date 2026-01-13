@@ -183,7 +183,18 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVConstant' (NInt b) -> pure $ fromInteger b
+        NVConstant' (NInt b) -> pure $ fromIntegral b
+        _                    -> Nothing
+
+  fromValue = fromMayToValue TInt
+
+instance Convertible e t f m
+  => FromValue Int64 m (NValue' t f m (NValue t f m)) where
+
+  fromValueMay =
+    pure .
+      \case
+        NVConstant' (NInt b) -> pure b
         _                    -> Nothing
 
   fromValue = fromMayToValue TInt
@@ -194,7 +205,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVConstant' (NInt b) -> pure b
+        NVConstant' (NInt b) -> pure $ fromIntegral b
         _                    -> Nothing
 
   fromValue = fromMayToValue TInt
@@ -206,7 +217,7 @@ instance Convertible e t f m
     pure .
       \case
         NVConstant' (NFloat b) -> pure b
-        NVConstant' (NInt   i) -> pure $ fromInteger i
+        NVConstant' (NInt   i) -> pure $ fromIntegral i
         _                      -> Nothing
 
   fromValue = fromMayToValue TFloat
@@ -394,11 +405,15 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue Int m (NValue' t f m (NValue t f m)) where
-  toValue = pure . NVConstant' . NInt . toInteger
+  toValue = pure . NVConstant' . NInt . fromIntegral
+
+instance Convertible e t f m
+  => ToValue Int64 m (NValue' t f m (NValue t f m)) where
+  toValue = pure . NVConstant' . NInt
 
 instance Convertible e t f m
   => ToValue Integer m (NValue' t f m (NValue t f m)) where
-  toValue = pure . NVConstant' . NInt
+  toValue = pure . NVConstant' . NInt . fromIntegral
 
 instance Convertible e t f m
   => ToValue Double m (NValue' t f m (NValue t f m)) where

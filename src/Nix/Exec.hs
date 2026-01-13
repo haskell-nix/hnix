@@ -417,7 +417,10 @@ execUnaryOp' op arg =
   case arg of
     NVConstant c ->
       case (op, c) of
-        (NNeg, NInt   i) -> wrapResult $ NVConstant $ NInt (negate i)
+        (NNeg, NInt   i) ->
+          case checkedNeg i of
+            Left err -> throwError $ ErrorCall err
+            Right r  -> wrapResult $ NVConstant $ NInt r
         (NNeg, NFloat f) -> wrapResult $ NVConstant $ NFloat (negate f)
         (NNot, NBool  b) -> wrapResult $ NVConstant $ NBool (not b)
         _seq ->
@@ -504,9 +507,9 @@ execBinaryOpForced' op lval rval =
     NLte   -> mkCmpOp (<=)
     NGt    -> mkCmpOp (>)
     NGte   -> mkCmpOp (>=)
-    NMinus -> mkBinNumOp (-)
-    NMult  -> mkBinNumOp (*)
-    NDiv   -> mkBinNumOp' div (/)
+    NMinus -> mkCheckedBinNumOp checkedSub (-)
+    NMult  -> mkCheckedBinNumOp checkedMul (*)
+    NDiv   -> mkCheckedBinNumOp checkedDiv (/)
     NConcat ->
       case (lval, rval) of
         (NVList ls, NVList rs) -> wrapResult $ NVList $ ls <> rs
@@ -521,7 +524,7 @@ execBinaryOpForced' op lval rval =
 
     NPlus ->
       case (lval, rval) of
-        (NVConstant _, NVConstant _) -> mkBinNumOp (+)
+        (NVConstant _, NVConstant _) -> mkCheckedBinNumOp checkedAdd (+)
         (NVStr ls, NVStr rs) -> wrapResult $ NVStr (ls <> rs)
         (NVStr ls, NVPath p) ->
           wrapResult . NVStr . (ls <>) =<<
@@ -553,7 +556,7 @@ execBinaryOpForced' op lval rval =
   mkBoolP :: Bool -> m (NValue t f m)
   mkBoolP = wrapResult . NVConstant . NBool
 
-  mkIntP :: Integer -> m (NValue t f m)
+  mkIntP :: Int64 -> m (NValue t f m)
   mkIntP = wrapResult . NVConstant . NInt
 
   mkFloatP :: Double -> m (NValue t f m)
@@ -565,20 +568,21 @@ execBinaryOpForced' op lval rval =
     (NVStr l, NVStr r) -> mkBoolP $ l `cmpOp` r
     _ -> unsupportedTypes
 
-  mkBinNumOp :: (forall a. Num a => a -> a -> a) -> m (NValue t f m)
-  mkBinNumOp numOp = mkBinNumOp' numOp numOp
-
-  mkBinNumOp'
-    :: (Integer -> Integer -> Integer)
+  -- | Binary numeric operation with checked Int64 arithmetic that throws on overflow.
+  mkCheckedBinNumOp
+    :: (Int64 -> Int64 -> Either String Int64)
     -> (Double -> Double -> Double)
     -> m (NValue t f m)
-  mkBinNumOp' intOp floatOp =
+  mkCheckedBinNumOp intOp floatOp =
     case (lval, rval) of
       (NVConstant l, NVConstant r) ->
         case (l, r) of
-          (NInt   li, NInt   ri) -> mkIntP $ li `intOp` ri
-          (NInt   li, NFloat rf) -> mkFloatP $ fromInteger li `floatOp` rf
-          (NFloat lf, NInt   ri) -> mkFloatP $ lf `floatOp` fromInteger ri
+          (NInt   li, NInt   ri) ->
+            case intOp li ri of
+              Left err -> throwError $ ErrorCall err
+              Right result -> mkIntP result
+          (NInt   li, NFloat rf) -> mkFloatP $ fromIntegral li `floatOp` rf
+          (NFloat lf, NInt   ri) -> mkFloatP $ lf `floatOp` fromIntegral ri
           (NFloat lf, NFloat rf) -> mkFloatP $ lf `floatOp` rf
           _ -> unsupportedTypes
       _ -> unsupportedTypes

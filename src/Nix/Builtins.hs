@@ -151,9 +151,9 @@ newtype WValue t f m = WValue (NValue t f m)
 
 instance NVConstraint f => Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
-    x == fromInteger y
+    x == fromIntegral y
   WValue (NVConstant (NInt   x)) == WValue (NVConstant (NFloat y)) =
-    fromInteger x == y
+    fromIntegral x == y
   WValue (NVConstant (NInt   x)) == WValue (NVConstant (NInt   y)) = x == y
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
   WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
@@ -163,9 +163,9 @@ instance NVConstraint f => Eq (WValue t f m) where
 
 instance NVConstraint f => Ord (WValue t f m) where
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
-    x <= fromInteger y
+    x <= fromIntegral y
   WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NFloat y)) =
-    fromInteger x <= y
+    fromIntegral x <= y
   WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NInt   y)) = x <= y
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
   WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
@@ -553,9 +553,12 @@ addNix nvX nvY =
     y' <- demand nvY
 
     case (x', y') of
-      (NVConstant (NInt   x), NVConstant (NInt   y)) -> toValue (             x + y :: Integer       )
-      (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue $             x + fromInteger y
-      (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue $ fromInteger x + y
+      (NVConstant (NInt   x), NVConstant (NInt   y)) ->
+        case checkedAdd x y of
+          Left err -> throwError $ ErrorCall err
+          Right r  -> toValue r
+      (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue $             x + fromIntegral y
+      (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue $ fromIntegral x + y
       (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue $             x + y
       (_x                   , _y                   ) -> throwError $ Addition _x _y
 
@@ -570,9 +573,12 @@ mulNix nvX nvY =
     y' <- demand nvY
 
     case (x', y') of
-      (NVConstant (NInt   x), NVConstant (NInt   y)) -> toValue (x * y :: Integer       )
-      (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue (x * fromInteger y)
-      (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromInteger x * y)
+      (NVConstant (NInt   x), NVConstant (NInt   y)) ->
+        case checkedMul x y of
+          Left err -> throwError $ ErrorCall err
+          Right r  -> toValue r
+      (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue (x * fromIntegral y)
+      (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromIntegral x * y)
       (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue (x * y            )
       (_x                   , _y                   ) -> throwError $ Multiplication _x _y
 
@@ -586,9 +592,12 @@ divNix nvX nvY =
     x' <- demand nvX
     y' <- demand nvY
     case (x', y') of
-      (NVConstant (NInt   x), NVConstant (NInt   y)) | y /= 0 -> toValue (  floor (fromInteger x / fromInteger y :: Double) :: Integer)
-      (NVConstant (NFloat x), NVConstant (NInt   y)) | y /= 0 -> toValue $                     x / fromInteger y
-      (NVConstant (NInt   x), NVConstant (NFloat y)) | y /= 0 -> toValue $         fromInteger x / y
+      (NVConstant (NInt   x), NVConstant (NInt   y)) | y /= 0 ->
+        case checkedDiv x y of
+          Left err -> throwError $ ErrorCall err
+          Right r  -> toValue r
+      (NVConstant (NFloat x), NVConstant (NInt   y)) | y /= 0 -> toValue $                     x / fromIntegral y
+      (NVConstant (NInt   x), NVConstant (NFloat y)) | y /= 0 -> toValue $         fromIntegral x / y
       (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> toValue $                     x / y
       (_x                   , _y                   )         -> throwError $ Division _x _y
 
@@ -1584,8 +1593,8 @@ lessThanNix ta tb =
         (NVConstant ca, NVConstant cb) ->
           case (ca, cb) of
             (NInt   a, NInt   b) -> pure $             a < b
-            (NInt   a, NFloat b) -> pure $ fromInteger a < b
-            (NFloat a, NInt   b) -> pure $             a < fromInteger b
+            (NInt   a, NFloat b) -> pure $ fromIntegral a < b
+            (NFloat a, NInt   b) -> pure $             a < fromIntegral b
             (NFloat a, NFloat b) -> pure $             a < b
             _                    -> badType
         (NVStr a, NVStr b) -> pure $ ignoreContext a < ignoreContext b
@@ -2119,7 +2128,10 @@ fromTOMLNix nvtoml = do
 
   tomlToNValue :: Toml.Value' Toml.Position -> m (NValue t f m)
   tomlToNValue = \case
-    Toml.Integer' _ n -> pure $ NVConstant $ NInt n
+    Toml.Integer' _ n
+      | n > fromIntegral (maxBound :: Int64) -> throwError $ ErrorCall $ "builtins.fromTOML: integer too large: " <> show n
+      | n < fromIntegral (minBound :: Int64) -> throwError $ ErrorCall $ "builtins.fromTOML: integer too small: " <> show n
+      | otherwise -> pure $ NVConstant $ NInt (fromIntegral n)
     Toml.Double' _ d  -> pure $ NVConstant $ NFloat (realToFrac d)
     Toml.Bool' _ b    -> pure $ NVConstant $ NBool b
     Toml.Text' _ t    -> pure $ mkNVStrWithoutContext t
@@ -2608,7 +2620,7 @@ builtinsList =
     , add' Normal   "floor"            (arity1 (floor @Double @Integer))
     , add3 Normal   "foldl'"           foldl'Nix
     , add  Normal   "fromJSON"         fromJSONNix
-    , add  Normal   "fromTOML"         fromTOMLNix
+    , add  TopLevel "fromTOML"         fromTOMLNix
     , add  Normal   "functionArgs"     functionArgsNix
     , add  Normal   "genericClosure"   genericClosureNix
     , add2 Normal   "genList"          genListNix
