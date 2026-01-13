@@ -42,8 +42,11 @@ This avoids issues with buffering, signal handling, and incomplete output from t
 
 ### Testing Commands
 ```bash
-# Standard test suite
-cabal v2-test
+# Standard test suite (use -j1 for reliable results, see note below)
+nix develop ".?submodules=1#" --command cabal test --test-options="-j1"
+
+# Standard test suite (parallel, may have intermittent failures)
+nix develop ".?submodules=1#" --command cabal test
 
 # All tests including Nixpkgs parsing (slow)
 env ALL_TESTS=yes cabal v2-test
@@ -58,6 +61,37 @@ env PRETTY_TESTS=yes cabal v2-test
 cabal v2-configure --enable-coverage
 cabal v2-test --enable-coverage
 ```
+
+**Note on Test Flakiness:** The test suite has intermittent failures when run in parallel due to race conditions. Use `--test-options="-j1"` for reliable single-threaded execution. All 294 tests pass consistently with `-j1`.
+
+### Test Wrappers
+
+Additional test scripts for Nix compatibility testing:
+
+```bash
+# Parser comparison tests - compares HNix parser output against Nix
+# Runs 3 phases: string escapes, Nix test suite, edge cases
+nix develop ".?submodules=1#" --command bash tests/parser-compare/run-all.sh
+
+# Individual parser comparison phases
+nix develop ".?submodules=1#" --command bash tests/parser-compare/01-string-escapes.sh
+nix develop ".?submodules=1#" --command bash tests/parser-compare/02-nix-test-suite.sh
+nix develop ".?submodules=1#" --command bash tests/parser-compare/03-edge-cases.sh
+
+# Nixpkgs module system tests (requires nixpkgs checkout)
+# Set NIXPKGS_DIR and HNIX_BIN environment variables first
+./test-nixpkgs-modules.sh
+```
+
+**Parser Comparison Tests (`tests/parser-compare/`):**
+- Phase 1: String escape sequences (quotes, dollars, backslashes)
+- Phase 2: Nix's official test suite files
+- Phase 3: Edge cases (unicode, nested interpolation, indentation, paths)
+
+**Nixpkgs Module Tests (`test-nixpkgs-modules.sh`):**
+- Tests HNix against Nixpkgs' module system
+- Requires `NIXPKGS_DIR` pointing to a nixpkgs checkout
+- Requires `HNIX_BIN` pointing to the built hnix binary
 
 ### Debugging & Profiling
 ```bash
