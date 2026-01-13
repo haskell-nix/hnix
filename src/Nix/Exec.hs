@@ -35,6 +35,7 @@ import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
 import           Nix.Expr.Desugar              ( desugarExprLoc )
+import           Nix.Expr.Strings              ( runAntiquoted )
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
@@ -261,12 +262,27 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
 
   evalString str =
     do
-      mns <- assembleString str
-      case mns of
-        Nothing -> nverr $ ErrorCall "Failed to assemble string"
-        Just ns -> withProvCtx
-          (\scope span -> pure $ mkNVStrWithProvenance scope span ns)
-          (pure $ NVStr ns)
+      -- Use coerceAnyToNixString to properly handle __toString and outPath
+      ns <- assembleStringWithCoercion (stringParts str)
+      withProvCtx
+        (\scope span -> pure $ mkNVStrWithProvenance scope span ns)
+        (pure $ NVStr ns)
+   where
+    assembleStringWithCoercion :: [Antiquoted Text (m (NValue t f m))] -> m NixString
+    assembleStringWithCoercion parts = fold <$> traverse coercePart parts
+
+    coercePart :: Antiquoted Text (m (NValue t f m)) -> m NixString
+    coercePart =
+      runAntiquoted
+        "\n"
+        (pure . mkNixStringWithoutContext)
+        coerceValue
+
+    coerceValue :: m (NValue t f m) -> m NixString
+    coerceValue mv = do
+      v <- mv
+      -- Use CopyToStore: when paths are interpolated in strings, they get added to the store
+      coerceAnyToNixString callFunc CopyToStore v
 
   evalLiteralPath p = do
     realPath <- toAbsolutePath @t @f @m p
