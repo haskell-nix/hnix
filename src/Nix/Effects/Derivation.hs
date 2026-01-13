@@ -805,12 +805,36 @@ buildDerivationWithContext drvAttrs = do
     inferHashDigest :: Text -> Either String HashDigest
     inferHashDigest hash
       | Text.null hash = Left "empty outputHash requires explicit outputHashAlgo"
+      -- First try SRI format: "sha256-<base64>" etc.
+      | Just (algo, b64hash) <- parseSRI hash =
+          -- Add base64 padding if needed (Nix uses unpadded base64 in SRI)
+          let paddedHash = padBase64 b64hash
+          in case Store.mkNamedDigest algo paddedHash of
+               Right d -> Right d
+               Left err -> Left $ "Invalid SRI hash: " <> err
+      -- Fall back to trying different algorithms
       | otherwise = tryAlgos ["sha256", "sha512", "sha1", "md5"]
       where
         tryAlgos [] = Left $ "outputHashAlgo missing and outputHash is not a valid SRI/known hash: " <> Text.unpack hash
         tryAlgos (a:as) = case Store.mkNamedDigest a hash of
           Right d -> Right d
           Left _  -> tryAlgos as
+
+        -- Parse SRI format hash: "algo-base64hash"
+        parseSRI :: Text -> Maybe (Text, Text)
+        parseSRI h =
+          let algos = ["sha256", "sha512", "sha1", "md5"]
+          in listToMaybe [ (a, rest)
+                         | a <- algos
+                         , Just rest <- [Text.stripPrefix (a <> "-") h]
+                         ]
+
+        -- Add base64 padding to make length a multiple of 4
+        padBase64 :: Text -> Text
+        padBase64 t =
+          let len = Text.length t
+              pad = (4 - len `mod` 4) `mod` 4
+          in t <> Text.replicate pad "="
 
     -- Test validity for fields
 
