@@ -29,7 +29,7 @@ mkInt :: Integer -> NExpr
 mkInt = Fix . mkIntF
 
 -- | Put floating point number.
-mkFloat :: Float -> NExpr
+mkFloat :: Double -> NExpr
 mkFloat = Fix . mkFloatF
 
 -- | Put a regular (double-quoted) string.
@@ -236,7 +236,7 @@ mkIntF :: Integer -> NExprF a
 mkIntF = NConstant . NInt
 
 -- | Unfixed @mkFloat@.
-mkFloatF :: Float -> NExprF a
+mkFloatF :: Double -> NExprF a
 mkFloatF = NConstant . NFloat
 
 -- | Unfixed @mkPath@.

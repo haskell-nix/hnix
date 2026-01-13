@@ -1421,7 +1421,7 @@ isIntNix = hasKind @Int
 
 isFloatNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isFloatNix = hasKind @Float
+isFloatNix = hasKind @Double
 
 isBoolNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -2583,7 +2583,7 @@ builtinsList =
     , add0 Normal   "builtins"         builtinsBuiltinNix
     , add  Normal   "break"            breakNix
     , add2 Normal   "catAttrs"         catAttrsNix
-    , add' Normal   "ceil"             (arity1 (ceiling @Float @Integer))
+    , add' Normal   "ceil"             (arity1 (ceiling @Double @Integer))
     , add2 Normal   "compareVersions"  compareVersionsNix
     , add  Normal   "convertHash"      convertHashNix
     , add  Normal   "concatLists"      concatListsNix
@@ -2605,7 +2605,7 @@ builtinsList =
     , add2 Normal   "filter"           filterNix
     , add2 Normal   "filterSource"     filterSourceNix
     , add2 Normal   "findFile"         findFileNix
-    , add' Normal   "floor"            (arity1 (floor @Float @Integer))
+    , add' Normal   "floor"            (arity1 (floor @Double @Integer))
     , add3 Normal   "foldl'"           foldl'Nix
     , add  Normal   "fromJSON"         fromJSONNix
     , add  Normal   "fromTOML"         fromTOMLNix

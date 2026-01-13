@@ -56,7 +56,7 @@ groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 -- previously passed.
 newFailingTests :: Set String
 newFailingTests = Set.fromList
-  [ "eval-okay-fromTOML"  -- Large float rendering bug: truncates to Int, overflows
+  [ "eval-okay-fromTOML"  -- Pretty-printer differences: key quoting and float format
   , "eval-okay-zipAttrsWith"
   , "eval-okay-tojson"
   , "eval-okay-search-path"

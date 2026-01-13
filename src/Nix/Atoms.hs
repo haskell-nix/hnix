@@ -31,7 +31,7 @@ data NAtom
   -- integers that fit in the range of 'Int64'.
   | NInt Integer
   -- | A floating point number
-  | NFloat Float
+  | NFloat Double
   -- | Booleans. @false@ or @true@.
   | NBool Bool
   -- | Null values. There's only one of this variant: @null@.
@@ -60,10 +60,12 @@ atomText (NURI   t) = t
 atomText (NInt   i) = show i
 atomText (NFloat f) = showNixFloat f
  where
-  showNixFloat :: Float -> Text
+  showNixFloat :: Double -> Text
   showNixFloat x =
-    if x `mod'` 1 == 0
-      then show (truncate x :: Int)
+    -- Nix displays whole-number floats as integers only if |x| < 1e6
+    -- For larger values, scientific notation is used
+    if x `mod'` 1 == 0 && abs x < 1e6
+      then show (truncate x :: Integer)
       else show x
 atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"

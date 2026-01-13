@@ -101,7 +101,7 @@ genParams = Gen.choice
 genAtom :: Gen NAtom
 genAtom = Gen.choice
   [ NInt   <$> Gen.integral (Range.linear     0   1000  )
-  , NFloat <$> Gen.float    (Range.linearFrac 0.0 1000.0)
+  , NFloat <$> Gen.double   (Range.linearFrac 0.0 1000.0)
   , NBool  <$> Gen.bool
   , pure NNull
   ]

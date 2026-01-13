@@ -200,7 +200,7 @@ instance Convertible e t f m
   fromValue = fromMayToValue TInt
 
 instance Convertible e t f m
-  => FromValue Float m (NValue' t f m (NValue t f m)) where
+  => FromValue Double m (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
     pure .
@@ -401,7 +401,7 @@ instance Convertible e t f m
   toValue = pure . NVConstant' . NInt
 
 instance Convertible e t f m
-  => ToValue Float m (NValue' t f m (NValue t f m)) where
+  => ToValue Double m (NValue' t f m (NValue t f m)) where
   toValue = pure . NVConstant' . NFloat
 
 instance Convertible e t f m

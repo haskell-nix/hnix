@@ -556,7 +556,7 @@ execBinaryOpForced' op lval rval =
   mkIntP :: Integer -> m (NValue t f m)
   mkIntP = wrapResult . NVConstant . NInt
 
-  mkFloatP :: Float -> m (NValue t f m)
+  mkFloatP :: Double -> m (NValue t f m)
   mkFloatP = wrapResult . NVConstant . NFloat
 
   mkCmpOp :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
@@ -570,7 +570,7 @@ execBinaryOpForced' op lval rval =
 
   mkBinNumOp'
     :: (Integer -> Integer -> Integer)
-    -> (Float -> Float -> Float)
+    -> (Double -> Double -> Double)
     -> m (NValue t f m)
   mkBinNumOp' intOp floatOp =
     case (lval, rval) of
