@@ -100,13 +100,18 @@ done
 
 # Phase 2: Run HNix evaluations in single nix develop session
 echo "Running HNix evaluations (single nix develop session)..."
+
+# Build first to avoid build output in test results
+nix develop ".?submodules=1#" --command cabal build exe:hnix >/dev/null 2>&1
+
+# Run evaluations using cabal exec
 nix develop ".?submodules=1#" --command bash -c '
   test_dir="$1"
   results_dir="$2"
   shift 2
   for name in "$@"; do
     hnix_out="$results_dir/hnix-$name.out"
-    if cabal run hnix -- --eval --strict "$test_dir/$name.nix" > "$hnix_out" 2>/dev/null; then
+    if cabal exec hnix -- --eval --strict "$test_dir/$name.nix" > "$hnix_out" 2>&1; then
       echo "  OK: $name"
     else
       echo "  FAIL: $name"

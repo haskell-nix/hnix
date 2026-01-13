@@ -60,11 +60,18 @@ else
   exit 1
 fi
 
-# Run HNix (suppress build output, only capture eval result)
+# Run HNix (build first, then exec to avoid build output in results)
 echo "Running hnix..."
 cd /home/connorbaker/hnix
+echo "  Building..."
+if ! nix develop ".?submodules=1#" --command cabal build exe:hnix >/dev/null 2>&1; then
+  echo "  HNix: BUILD FAILED"
+  exit 1
+fi
+echo "  Evaluating..."
+# Redirect nix develop stderr to /dev/null to avoid "Using saved setting" messages
 if nix develop ".?submodules=1#" --command \
-   cabal run hnix -- --eval --strict "$TEST_DIR/string-escapes.nix" 2>/dev/null > "$RESULTS_DIR/hnix-escapes.out"; then
+   cabal exec hnix -- --eval --strict "$TEST_DIR/string-escapes.nix" 2>/dev/null > "$RESULTS_DIR/hnix-escapes.out"; then
   echo "  HNix: OK"
 else
   echo "  HNix: FAILED"

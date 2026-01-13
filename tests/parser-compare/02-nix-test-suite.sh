@@ -50,14 +50,17 @@ echo "  Found ${#VALID_TESTS[@]} valid tests, ${#SKIPPED[@]} skipped"
 if [[ ${#VALID_TESTS[@]} -gt 0 ]]; then
   echo "Running HNix evaluations (single nix develop session)..."
 
-  # Run all HNix evaluations in one nix develop session
+  # Build first to avoid build output in test results
+  nix develop ".?submodules=1#" --command cabal build exe:hnix >/dev/null 2>&1
+
+  # Run all HNix evaluations in one nix develop session using cabal exec
   nix develop ".?submodules=1#" --command bash -c '
     results_dir="$1"
     shift
     for test_path in "$@"; do
       test_file=$(basename "$test_path")
       out_file="$results_dir/hnix-${test_file%.nix}.out"
-      if cabal run hnix -- --eval --strict "$test_path" > "$out_file" 2>/dev/null; then
+      if cabal exec hnix -- --eval --strict "$test_path" > "$out_file" 2>&1; then
         echo "OK: $test_file"
       else
         echo "FAIL: $test_file"
