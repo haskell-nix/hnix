@@ -32,7 +32,7 @@ import qualified Paths_hnix
 import           System.Exit
 import qualified System.Info
 import           System.Process
-
+import           System.Nix.FileContentAddress  (FileIngestionMethod(..))
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Nar                as Store.Nar
@@ -418,8 +418,8 @@ instance MonadStore IO where
       Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
       Right pathName -> do
         let ingestionMethod = if recursive
-                              then Store.Remote.FileIngestionMethod_FileRecursive
-                              else Store.Remote.FileIngestionMethod_Flat
+                              then FileIngestionMethod_NixArchive
+                              else FileIngestionMethod_Flat
             repairMode = if repair
                          then Store.Remote.RepairMode_DoRepair
                          else Store.Remote.RepairMode_DontRepair
