@@ -358,8 +358,10 @@ common shared
     , optparse-applicative >= 0.14.3 && < 0.19
     , relude >= 1.0.0 && < 1.3
     , serialise >= 0.2.1 && < 0.3
-    , template-haskell >= 2.13 && < 2.23
-    , time >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.13
+    , template-haskell
+      -- >= 2.13 && < 2.23
+    , time
+      -- >= 1.8.0 && < 1.9 || >= 1.9.3 && < 1.13
   ghc-options:
     -Wall
     -Wno-incomplete-uni-patterns
@@ -452,7 +454,9 @@ library
     , extra >= 1.7 && < 1.9
     , free >= 5.1 && < 5.3
     , gitrev >= 1.1.0 && < 1.4
-    , hashable >= 1.2.5 && < 1.5
+    , hashable
+     -- >= 1.2.5 && < 1.5
+    -- , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.6.0 && < 0.9
     , hnix-store-nar >= 0.1.0 && < 0.2
     , hnix-store-remote >= 0.6.0 && < 0.9
@@ -463,7 +467,8 @@ library
     , lens-family-core >= 1.2.2 && < 2.2
     , lens-family-th >= 0.5.0 && < 0.6
     , logict >= 0.6.0 && < 0.7 || >= 0.7.0.2 && < 0.9
-    , megaparsec >= 7.0 && < 9.6
+    , megaparsec
+       -- >= 7.0 && < 9.6
     , monad-control >= 1.0.2 && < 1.1
     , monadlist >= 0.0.2 && < 0.1
     , mtl >= 2.2.2 && < 2.4
