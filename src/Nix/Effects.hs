@@ -5,7 +5,6 @@
 {-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
-{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 {-# language TypeOperators #-}
 
 {-# options_ghc -Wno-orphans #-}
@@ -23,7 +22,6 @@ import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
-import qualified "cryptonite" Crypto.Hash      as Hash
 import           Nix.Utils.Fix1
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames              hiding ( Proxy )
@@ -34,7 +32,7 @@ import qualified Paths_hnix
 import           System.Exit
 import qualified System.Info
 import           System.Process
-
+import           System.Nix.FileContentAddress  (FileIngestionMethod(..))
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 import qualified System.Nix.Nar                as Store.Nar
@@ -420,8 +418,8 @@ instance MonadStore IO where
       Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
       Right pathName -> do
         let ingestionMethod = if recursive
-                              then Store.Remote.FileIngestionMethod_FileRecursive
-                              else Store.Remote.FileIngestionMethod_Flat
+                              then FileIngestionMethod_NixArchive
+                              else FileIngestionMethod_Flat
             repairMode = if repair
                          then Store.Remote.RepairMode_DoRepair
                          else Store.Remote.RepairMode_DontRepair
