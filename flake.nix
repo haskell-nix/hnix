@@ -34,21 +34,64 @@
                     cabal = {};
                     hlint = {};
                     haskell-language-server = {};
+                    fourmolu = {};
                   };
                   buildInputs = with pkgs; [
                     pkg-config
+                    shellcheck
+                    shfmt
+                    lefthook
                   ];
                   withHoogle = false;
                 };
-                # modules = [{
-                #   enableLibraryProfiling = true;
-                #   enableProfiling = true;
-                # }];
+                modules = [{
+                  packages.hnix.doCheck = false;
+                  # enableLibraryProfiling = true;
+                  # enableProfiling = true;
+                }];
               };
           })
         ];
       in flake // {
         packages.default = flake.packages."hnix:exe:hnix";
+
+        checks = (flake.checks or {}) // {
+          formatting = pkgs.runCommand "check-formatting" {
+            nativeBuildInputs = [
+              pkgs.haskellPackages.fourmolu
+              pkgs.findutils
+            ];
+          } ''
+            cd ${./.}
+            find src main tests benchmarks -name '*.hs' \
+              -exec fourmolu --mode check {} +
+            touch $out
+          '';
+
+          hlint = pkgs.runCommand "check-hlint" {
+            nativeBuildInputs = [ pkgs.hlint ];
+          } ''
+            cd ${./.}
+            hlint src/ main/ tests/ benchmarks/
+            touch $out
+          '';
+
+          shellcheck = pkgs.runCommand "check-shellcheck" {
+            nativeBuildInputs = [ pkgs.shellcheck ];
+          } ''
+            cd ${./.}
+            shellcheck build.sh
+            touch $out
+          '';
+
+          shell-formatting = pkgs.runCommand "check-shell-formatting" {
+            nativeBuildInputs = [ pkgs.shfmt ];
+          } ''
+            cd ${./.}
+            shfmt -d build.sh
+            touch $out
+          '';
+        };
       });
 }
 
