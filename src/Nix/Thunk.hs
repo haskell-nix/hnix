@@ -74,19 +74,17 @@ class
     -- | Create new thunk
     thunk :: m a -> m t
 
-    {- | Non-blocking query.
-    If thunk got computed
-    then return its value
-    otherwise return default value (1st arg).
-    -}
+    -- | Non-blocking query.
+    --     If thunk got computed
+    --     then return its value
+    --     otherwise return default value (1st arg).
     query :: m a -> t -> m a
 
     force :: t -> m a
     forceEff :: t -> m a
 
-    {- | Modify the action to be performed by the thunk. For some implicits
-    this modifies the thunk, for others it may create a new thunk.
-    -}
+    -- | Modify the action to be performed by the thunk. For some implicits
+    --     this modifies the thunk, for others it may create a new thunk.
     further :: t -> m t
 
 -- ** @class MonadThunk@

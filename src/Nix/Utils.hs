@@ -193,7 +193,9 @@ lifted f k =
 
 whenTrue ::
     (Monoid a) =>
-    a -> Bool -> a
+    a ->
+    Bool ->
+    a
 whenTrue =
     bool
         mempty
@@ -201,7 +203,9 @@ whenTrue =
 
 whenFalse ::
     (Monoid a) =>
-    a -> Bool -> a
+    a ->
+    Bool ->
+    a
 whenFalse f =
     bool
         f

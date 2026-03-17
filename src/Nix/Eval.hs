@@ -36,9 +36,8 @@ class (Show v, Monad m) => MonadEval v m where
     evalUnary :: NUnaryOp -> v -> m v
 
     evalBinary :: NBinaryOp -> v -> m v -> m v
-    {- ^ The second argument is an action because operators such as boolean &&
-    and || may not evaluate the second argument.
-    -}
+    -- ^ The second argument is an action because operators such as boolean &&
+    --     and || may not evaluate the second argument.
 
     evalWith :: m v -> m v -> m v
     evalIf :: v -> m v -> m v -> m v

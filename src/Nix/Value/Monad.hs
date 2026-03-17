@@ -9,10 +9,9 @@ class MonadValue v m where
     -- | Force the evaluation of the value.
     demand :: v -> m v
 
-    {- | If 'v' is a thunk, 'inform' allows us to modify the action to be
-    performed by the thunk, perhaps by enriching it with scope info, for
-    example.
-    -}
+    -- | If 'v' is a thunk, 'inform' allows us to modify the action to be
+    --     performed by the thunk, perhaps by enriching it with scope info, for
+    --     example.
     inform :: v -> m v
 
 -- * @MonadValueF@ - a Kleisli-able customization class

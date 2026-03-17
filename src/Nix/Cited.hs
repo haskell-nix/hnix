@@ -19,11 +19,10 @@ data Provenance m v
     { getLexicalScope :: Scopes m v
     , --  2021-11-09: NOTE: Better name?
       getOriginExpr :: NExprLocF (Maybe v)
-    {- ^ When calling the function x: x + 2 with argument x = 3, the
-    'originExpr' for the resulting value will be 3 + 2, while the
-    'contextExpr' will be @(x: x + 2) 3@, preserving not only the
-    result of the call, but what was called and with what arguments.
-    -}
+    -- ^ When calling the function x: x + 2 with argument x = 3, the
+    --     'originExpr' for the resulting value will be 3 + 2, while the
+    --     'contextExpr' will be @(x: x + 2) 3@, preserving not only the
+    --     result of the call, but what was called and with what arguments.
     }
     deriving (Generic, Typeable, Show)
 

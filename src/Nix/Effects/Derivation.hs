@@ -489,7 +489,10 @@ buildDerivationWithContext drvAttrs = do
     getAttrOr' ::
         forall v a.
         (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m))) =>
-        Text -> m a -> (v -> WithStringContextT m a) -> WithStringContextT m a
+        Text ->
+        m a ->
+        (v -> WithStringContextT m a) ->
+        WithStringContextT m a
     getAttrOr' n d f = case M.lookup n drvAttrs of
         Nothing -> lift d
         Just v ->

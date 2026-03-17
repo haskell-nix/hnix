@@ -38,11 +38,10 @@ data NixDoc ann = NixDoc
     { getDoc :: Doc ann
     -- ^ Rendered expression. Without surrounding parenthesis.
     , rootOp :: NOperatorDef
-    {- ^ The root operator is the operator at the root of
-    the expression tree. For example, in '(a * b) + c', '+' would be the root
-    operator. It is needed to determine if we need to wrap the expression in
-    parentheses.
-    -}
+    -- ^ The root operator is the operator at the root of
+    --     the expression tree. For example, in '(a * b) + c', '+' would be the root
+    --     operator. It is needed to determine if we need to wrap the expression in
+    --     parentheses.
     , wasPath :: Bool -- This is needed so that when a path is used in a selector path
     -- we can add brackets appropriately
     }
@@ -243,7 +242,8 @@ Prettifies that expression.
 prettyExtractFromProvenance ::
     forall t f m ann.
     (HasCitations1 m (NValue t f m) f) =>
-    [Provenance m (NValue t f m)] -> Doc ann
+    [Provenance m (NValue t f m)] ->
+    Doc ann
 prettyExtractFromProvenance =
     sep
         . fmap (prettyOriginExpr . getOriginExpr)

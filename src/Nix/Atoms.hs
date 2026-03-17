@@ -30,9 +30,8 @@ indivisible expression.
 data NAtom
     = -- | An URI like @https://example.com@.
       NURI Text
-    | {- | An integer. The c nix implementation currently only supports
-      integers that fit in the range of 'Int64'.
-      -}
+    | -- | An integer. The c nix implementation currently only supports
+      --       integers that fit in the range of 'Int64'.
       NInt Integer
     | -- | A floating point number
       NFloat Float

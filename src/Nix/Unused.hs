@@ -20,7 +20,9 @@ type AlgM f m a = f a -> m a
 
 whenFree ::
     (Monoid b) =>
-    (f (Free f a) -> b) -> Free f a -> b
+    (f (Free f a) -> b) ->
+    Free f a ->
+    b
 whenFree =
     free
         mempty
@@ -28,7 +30,9 @@ whenFree =
 
 whenPure ::
     (Monoid b) =>
-    (a -> b) -> Free f a -> b
+    (a -> b) ->
+    Free f a ->
+    b
 whenPure f =
     free
         f

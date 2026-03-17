@@ -240,18 +240,16 @@ instance Monoid Variadic where
 function can be represented.
 -}
 data Params r
-    = {- | For functions with a single named argument, such as @x: x + 1@.
-
-      > Param "x"                                  ~  x
-      -}
+    = -- | For functions with a single named argument, such as @x: x + 1@.
+      --
+      --       > Param "x"                                  ~  x
       Param !VarName
-    | {- | Explicit parameters (argument must be a set). Might specify a name to
-      bind to the set in the function body. The bool indicates whether it is
-      variadic or not.
-
-      > ParamSet  Nothing   False [("x",Nothing)]  ~  { x }
-      > ParamSet (pure "s") True  [("x", pure y)]  ~  s@{ x ? y, ... }
-      -}
+    | -- | Explicit parameters (argument must be a set). Might specify a name to
+      --       bind to the set in the function body. The bool indicates whether it is
+      --       variadic or not.
+      --
+      --       > ParamSet  Nothing   False [("x",Nothing)]  ~  { x }
+      --       > ParamSet (pure "s") True  [("x", pure y)]  ~  s@{ x ? y, ... }
       ParamSet !(Maybe VarName) !Variadic !(ParamSet r)
     deriving
         ( Eq
@@ -297,14 +295,13 @@ antiquoted (surrounded by ${...}) or plain (not antiquoted).
 -}
 data Antiquoted (v :: Type) (r :: Type)
     = Plain !v
-    | {- | 'EscapedNewline' corresponds to the special newline form
-
-      > ''\n
-
-      in an indented string. It is equivalent to a single newline character:
-
-      > ''''\n''  ≡  "\n"
-      -}
+    | -- | 'EscapedNewline' corresponds to the special newline form
+      --
+      --       > ''\n
+      --
+      --       in an indented string. It is equivalent to a single newline character:
+      --
+      --       > ''''\n''  ≡  "\n"
       EscapedNewline
     | Antiquoted !r
     deriving
@@ -358,24 +355,22 @@ or an antiquoted expression. After the antiquotes have been evaluated,
 the final string is constructed by concatenating all the parts.
 -}
 data NString r
-    = {- | Strings wrapped with double-quotes (__@"@__) can contain literal newline
-      characters, but the newlines are preserved and no indentation is stripped.
-
-      > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
-      -}
+    = -- | Strings wrapped with double-quotes (__@"@__) can contain literal newline
+      --       characters, but the newlines are preserved and no indentation is stripped.
+      --
+      --       > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
       DoubleQuoted ![Antiquoted Text r]
-    | {- | Strings wrapped with two single quotes (__@''@__) can contain newlines, and
-      their indentation will be stripped, but the amount stripped is
-      remembered.
-
-      > Indented 1 [Plain "x"]                  ~  '' x''
-      >
-      > Indented 0 [EscapedNewline]             ~  ''''\n''
-      >
-      > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
-      >                                            x
-      >                                             ${y}''
-      -}
+    | -- | Strings wrapped with two single quotes (__@''@__) can contain newlines, and
+      --       their indentation will be stripped, but the amount stripped is
+      --       remembered.
+      --
+      --       > Indented 1 [Plain "x"]                  ~  '' x''
+      --       >
+      --       > Indented 0 [EscapedNewline]             ~  ''''\n''
+      --       >
+      --       > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
+      --       >                                            x
+      --       >                                             ${y}''
       Indented !Int ![Antiquoted Text r]
     deriving
         ( Eq
@@ -439,15 +434,13 @@ allowed even if the context requires a static keyname, but the
 parser still considers it a 'DynamicKey' for simplicity.
 -}
 data NKeyName r
-    = {- |
-      > DynamicKey (Plain (DoubleQuoted [Plain "x"]))     ~  "x"
-      > DynamicKey (Antiquoted x)                         ~  ${x}
-      > DynamicKey (Plain (DoubleQuoted [Antiquoted x]))  ~  "${x}"
-      -}
+    = -- |
+      --       > DynamicKey (Plain (DoubleQuoted [Plain "x"]))     ~  "x"
+      --       > DynamicKey (Antiquoted x)                         ~  ${x}
+      --       > DynamicKey (Plain (DoubleQuoted [Antiquoted x]))  ~  "${x}"
       DynamicKey !(Antiquoted (NString r) r)
-    | {- |
-      > StaticKey "x"                                     ~  x
-      -}
+    | -- |
+      --       > StaticKey "x"                                     ~  x
       StaticKey !VarName
     deriving
         ( Eq
@@ -546,27 +539,25 @@ instance Hashable1 NonEmpty
 
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
-    = {- | An explicit naming.
-
-      > NamedVar (StaticKey "x" :| [StaticKey "y"]) z NSourcePos{}  ~  x.y = z;
-      -}
+    = -- | An explicit naming.
+      --
+      --       > NamedVar (StaticKey "x" :| [StaticKey "y"]) z NSourcePos{}  ~  x.y = z;
       NamedVar !(NAttrPath r) !r !NSourcePos
-    | {- | Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
-
-      +----------------------------------------------------------------+--------------------+-----------------------+
-      | Hask                                                           | Nix                | pseudocode            |
-      +================================================================+====================+=======================+
-      | @Inherit Nothing  [StaticKey "a"] NSourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
-      +----------------------------------------------------------------+--------------------+-----------------------+
-      | @Inherit (pure x) [StaticKey "a"] NSourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
-      +----------------------------------------------------------------+--------------------+-----------------------+
-      | @Inherit (pure x) [StaticKey "a", StaticKey "b"] NSourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
-      |                                                                |                    | @b = x.b;@            |
-      +----------------------------------------------------------------+--------------------+-----------------------+
-
-      (2021-07-07 use details):
-      Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
-      -}
+    | -- | Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
+      --
+      --       +----------------------------------------------------------------+--------------------+-----------------------+
+      --       | Hask                                                           | Nix                | pseudocode            |
+      --       +================================================================+====================+=======================+
+      --       | @Inherit Nothing  [StaticKey "a"] NSourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
+      --       +----------------------------------------------------------------+--------------------+-----------------------+
+      --       | @Inherit (pure x) [StaticKey "a"] NSourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
+      --       +----------------------------------------------------------------+--------------------+-----------------------+
+      --       | @Inherit (pure x) [StaticKey "a", StaticKey "b"] NSourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
+      --       |                                                                |                    | @b = x.b;@            |
+      --       +----------------------------------------------------------------+--------------------+-----------------------+
+      --
+      --       (2021-07-07 use details):
+      --       Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
       Inherit !(Maybe r) ![VarName] !NSourcePos
     deriving
         ( Eq
@@ -733,100 +724,84 @@ data NExprF r
       NConstant !NAtom
     | -- | A string, with interpolated expressions.
       NStr !(NString r)
-    | {- | A variable. For example, in the expression @f a@, @f@ is represented
-      as @NSym "f"@ and @a@ as @NSym "a"@.
-
-      > NSym "x"                                    ~  x
-      -}
+    | -- | A variable. For example, in the expression @f a@, @f@ is represented
+      --       as @NSym "f"@ and @a@ as @NSym "a"@.
+      --
+      --       > NSym "x"                                    ~  x
       NSym !VarName
-    | {- | A list literal.
-
-      > NList [x,y]                                 ~  [ x y ]
-      -}
+    | -- | A list literal.
+      --
+      --       > NList [x,y]                                 ~  [ x y ]
       NList ![r]
-    | {- | An attribute set literal
-
-      > NSet Recursive    [NamedVar x y _]         ~  rec { x = y; }
-      > NSet NonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
-      -}
+    | -- | An attribute set literal
+      --
+      --       > NSet Recursive    [NamedVar x y _]         ~  rec { x = y; }
+      --       > NSet NonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
       NSet !Recursivity ![Binding r]
-    | {- | A path expression, which is evaluated to a store path. The path here
-      can be relative, in which case it's evaluated relative to the file in
-      which it appears.
-
-      > NLiteralPath "/x"                           ~  /x
-      > NLiteralPath "x/y"                          ~  x/y
-      -}
+    | -- | A path expression, which is evaluated to a store path. The path here
+      --       can be relative, in which case it's evaluated relative to the file in
+      --       which it appears.
+      --
+      --       > NLiteralPath "/x"                           ~  /x
+      --       > NLiteralPath "x/y"                          ~  x/y
       NLiteralPath !Path
-    | {- | A path which refers to something in the Nix search path (the NIX_PATH
-      environment variable. For example, @<nixpkgs/pkgs>@.
-
-      > NEnvPath "x"                                ~  <x>
-      -}
+    | -- | A path which refers to something in the Nix search path (the NIX_PATH
+      --       environment variable. For example, @<nixpkgs/pkgs>@.
+      --
+      --       > NEnvPath "x"                                ~  <x>
       NEnvPath !Path
-    | {- | Functional application (aka F.A., apply a function to an argument).
-
-      > NApp f x  ~  f x
-      -}
+    | -- | Functional application (aka F.A., apply a function to an argument).
+      --
+      --       > NApp f x  ~  f x
       NApp !r !r
-    | {- | Application of a unary operator to an expression.
-
-      > NUnary NNeg x                               ~  - x
-      > NUnary NNot x                               ~  ! x
-      -}
+    | -- | Application of a unary operator to an expression.
+      --
+      --       > NUnary NNeg x                               ~  - x
+      --       > NUnary NNot x                               ~  ! x
       NUnary !NUnaryOp !r
-    | {- | Application of a binary operator to two expressions.
-
-      > NBinary NPlus x y                           ~  x + y
-      > NBinary NApp  f x                           ~  f x
-      -}
+    | -- | Application of a binary operator to two expressions.
+      --
+      --       > NBinary NPlus x y                           ~  x + y
+      --       > NBinary NApp  f x                           ~  f x
       NBinary !NBinaryOp !r !r
-    | {- | Dot-reference into an attribute set, optionally providing an
-      alternative if the key doesn't exist.
-
-      > NSelect Nothing  s (x :| [])                ~  s.x
-      > NSelect (pure y) s (x :| [])                ~  s.x or y
-      -}
+    | -- | Dot-reference into an attribute set, optionally providing an
+      --       alternative if the key doesn't exist.
+      --
+      --       > NSelect Nothing  s (x :| [])                ~  s.x
+      --       > NSelect (pure y) s (x :| [])                ~  s.x or y
       NSelect !(Maybe r) !r !(NAttrPath r)
-    | {- | Ask if a set contains a given attribute path.
-
-      > NHasAttr s (x :| [])                        ~  s ? x
-      -}
+    | -- | Ask if a set contains a given attribute path.
+      --
+      --       > NHasAttr s (x :| [])                        ~  s ? x
       NHasAttr !r !(NAttrPath r)
-    | {- | A function literal (lambda abstraction).
-
-      > NAbs (Param "x") y                          ~  x: y
-      -}
+    | -- | A function literal (lambda abstraction).
+      --
+      --       > NAbs (Param "x") y                          ~  x: y
       NAbs !(Params r) !r
-    | {- | Evaluate the second argument after introducing the bindings.
-
-      > NLet []                    x                ~  let in x
-      > NLet [NamedVar x y _]      z                ~  let x = y; in z
-      > NLet [Inherit Nothing x _] y                ~  let inherit x; in y
-      -}
+    | -- | Evaluate the second argument after introducing the bindings.
+      --
+      --       > NLet []                    x                ~  let in x
+      --       > NLet [NamedVar x y _]      z                ~  let x = y; in z
+      --       > NLet [Inherit Nothing x _] y                ~  let inherit x; in y
       NLet ![Binding r] !r
-    | {- | If-then-else statement.
-
-      > NIf x y z                                   ~  if x then y else z
-      -}
+    | -- | If-then-else statement.
+      --
+      --       > NIf x y z                                   ~  if x then y else z
       NIf !r !r !r
-    | {- | Evaluate an attribute set, bring its bindings into scope, and
-      evaluate the second argument.
-
-      > NWith x y                                   ~  with x; y
-      -}
+    | -- | Evaluate an attribute set, bring its bindings into scope, and
+      --       evaluate the second argument.
+      --
+      --       > NWith x y                                   ~  with x; y
       NWith !r !r
-    | {- | Checks that the first argument is a predicate that is @true@ before evaluating the second argument.
-
-      > NAssert x y                                 ~  assert x; y
-      -}
+    | -- | Checks that the first argument is a predicate that is @true@ before evaluating the second argument.
+      --
+      --       > NAssert x y                                 ~  assert x; y
       NAssert !r !r
-    | {- | Syntactic hole.
-
-      See <https://github.com/haskell-nix/hnix/issues/197> for context.
-
-      > NSynHole "x"                                ~  ^x
-      -}
+    | -- | Syntactic hole.
+      --
+      --       See <https://github.com/haskell-nix/hnix/issues/197> for context.
+      --
+      --       > NSynHole "x"                                ~  ^x
       NSynHole !VarName
     deriving
         ( Eq

@@ -116,35 +116,31 @@ import qualified Text.Show
 -}
 data NValueF p m r
     = NVConstantF NAtom
-    | {- | A string has a value and a context, which can be used to record what a
-      string has been build from
-      -}
+    | -- | A string has a value and a context, which can be used to record what a
+      --       string has been build from
       NVStrF NixString
     | NVPathF Path
     | NVListF [r]
-    | {- |
-      Quite frequently actions/processing happens with values
-      (for example - forcing of values & recreation of the monad),
-      but @SourcePos@ does not change then.
-      -}
+    | -- |
+      --       Quite frequently actions/processing happens with values
+      --       (for example - forcing of values & recreation of the monad),
+      --       but @SourcePos@ does not change then.
       NVSetF PositionSet (AttrSet r)
-    | {- | A function is a closed set of parameters representing the "call
-      signature", used at application time to check the type of arguments
-      passed to the function. Since it supports default values which may
-      depend on other values within the final argument set, this
-      dependency is represented as a set of pending evaluations. The
-      arguments are finally normalized into a set which is passed to the
-      function.
-
-      Note that 'm r' is being used here because effectively a function
-      and its set of default arguments is "never fully evaluated". This
-      enforces in the type that it must be re-evaluated for each call.
-      -}
+    | -- | A function is a closed set of parameters representing the "call
+      --       signature", used at application time to check the type of arguments
+      --       passed to the function. Since it supports default values which may
+      --       depend on other values within the final argument set, this
+      --       dependency is represented as a set of pending evaluations. The
+      --       arguments are finally normalized into a set which is passed to the
+      --       function.
+      --
+      --       Note that 'm r' is being used here because effectively a function
+      --       and its set of default arguments is "never fully evaluated". This
+      --       enforces in the type that it must be re-evaluated for each call.
       NVClosureF (Params ()) (p -> m r)
-    | {- | A builtin function is itself already in normal form. Also, it may
-      or may not choose to evaluate its argument in the production of a
-      result.
-      -}
+    | -- | A builtin function is itself already in normal form. Also, it may
+      --       or may not choose to evaluate its argument in the production of a
+      --       result.
       NVBuiltinF VarName (p -> m r)
     deriving (Generic, Typeable, Functor)
 

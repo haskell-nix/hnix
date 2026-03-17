@@ -25,9 +25,8 @@ data Type
       TList [Type]
     | -- | Type arrow (@Type -> Type@) in the Nix type system.
       (:~>) Type Type
-    | {- | Variant type (term). Since relating to Nix type system, more precicely -
-      dynamic types in dynamicly typed language (which is Nix).
-      -}
+    | -- | Variant type (term). Since relating to Nix type system, more precicely -
+      --       dynamic types in dynamicly typed language (which is Nix).
       TMany [Type]
     deriving (Show, Eq, Ord)
 
