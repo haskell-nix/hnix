@@ -17,12 +17,9 @@ pre-commit:
 pre-push:
   parallel: true
   commands:
-    cabal-build:
+    cabal-build-and-test:
       glob: "*.{hs,cabal}"
-      run: "cabal v2-build --ghc-options=-Werror 2>&1"
-    cabal-test:
-      glob: "*.{hs,cabal}"
-      run: "cabal v2-test 2>&1"
+      run: "cabal v2-build --ghc-options=-Werror 2>&1 && cabal v2-test 2>&1"
     nix-check:
       glob: "*.{hs,nix,cabal}"
       run: "nix flake check --no-warn-dirty --allow-import-from-derivation 2>&1"
