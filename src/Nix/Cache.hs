@@ -1,8 +1,9 @@
-{-# language CPP #-}
+{-# LANGUAGE CPP #-}
 
 -- | Reading and writing Nix cache files
 module Nix.Cache where
 
+{- FOURMOLU_DISABLE -}
 import           Nix.Prelude
 import qualified Data.ByteString.Lazy          as BSL
 import           Nix.Expr.Types.Annotated

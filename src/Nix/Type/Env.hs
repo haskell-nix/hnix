@@ -1,48 +1,48 @@
-{-# language TypeFamilies #-}
+{-# LANGUAGE TypeFamilies #-}
 
-module Nix.Type.Env
-  ( Env(..)
-  , empty
-  , lookup
-  , remove
-  , extend
-  , extends
-  , merge
-  , mergeEnvs
-  , singleton
-  , keys
-  , fromList
-  , toList
-  )
+module Nix.Type.Env (
+    Env (..),
+    empty,
+    lookup,
+    remove,
+    extend,
+    extends,
+    merge,
+    mergeEnvs,
+    singleton,
+    keys,
+    fromList,
+    toList,
+)
 where
 
-import           Nix.Prelude             hiding ( empty
-                                                , toList
-                                                , fromList
-                                                )
+import Nix.Prelude hiding (
+    empty,
+    fromList,
+    toList,
+ )
 
-import           Nix.Expr.Types
-import           Nix.Type.Type
+import Nix.Expr.Types
+import Nix.Type.Type
 
-import qualified Data.Map                      as Map
-
+import qualified Data.Map as Map
 
 -- * Typing Environment
 
 newtype Env = TypeEnv (Map VarName [Scheme])
-  deriving (Eq, Show)
+    deriving (Eq, Show)
 
 instance Semigroup Env where
-  -- | Right-biased merge (override). Analogous to @//@ in @Nix@
-  -- Since nature of environment is to update & grow.
-  (<>) = mergeRight
+    -- \| Right-biased merge (override). Analogous to @//@ in @Nix@
+    -- Since nature of environment is to update & grow.
+    (<>) = mergeRight
 
 instance Monoid Env where
-  mempty = empty
+    mempty = empty
 
 instance One Env where
-  type OneItem Env = (VarName, Scheme)
-  one (x, y) = TypeEnv $ one (x, one y)
+    type OneItem Env = (VarName, Scheme)
+    one (x, y) = TypeEnv $ one (x, one y)
 
 empty :: Env
 empty = TypeEnv mempty
@@ -79,4 +79,3 @@ fromList xs = coerce $ Map.fromList xs
 
 toList :: Env -> [(VarName, [Scheme])]
 toList (TypeEnv env) = Map.toList env
-

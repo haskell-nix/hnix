@@ -1,7 +1,7 @@
 module Main where
 
-import           Nix.Prelude
-import           Criterion.Main
+import Criterion.Main
+import Nix.Prelude
 
 import qualified ParserBench
 

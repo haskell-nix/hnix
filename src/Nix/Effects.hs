@@ -1,109 +1,105 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language CPP #-}
-{-# language DefaultSignatures #-}
-{-# language TypeFamilies #-}
-{-# language DataKinds #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language UndecidableInstances #-}
-{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
-{-# language TypeOperators #-}
-
-{-# options_ghc -Wno-orphans #-}
-
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Effects where
 
-import           Nix.Prelude             hiding ( putStrLn
-                                                , print
-                                                )
-import qualified Nix.Prelude                   as Prelude
-import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import qualified Data.HashSet                  as HS
-import qualified Data.Text                     as Text
-import           Network.HTTP.Client     hiding ( path, Proxy )
-import           Network.HTTP.Client.TLS
-import           Network.HTTP.Types
-import qualified "cryptonite" Crypto.Hash      as Hash
-import           Nix.Utils.Fix1
-import           Nix.Expr.Types.Annotated
-import           Nix.Frames              hiding ( Proxy )
-import           Nix.Parser
-import           Nix.Render
-import           Nix.Value
+import qualified Data.HashSet as HS
+import qualified Data.Text as Text
+import GHC.Exception (ErrorCall (ErrorCall))
+import Network.HTTP.Client hiding (Proxy, path)
+import Network.HTTP.Client.TLS
+import Network.HTTP.Types
+import Nix.Expr.Types.Annotated
+import Nix.Frames hiding (Proxy)
+import Nix.Parser
+import Nix.Prelude hiding (
+    print,
+    putStrLn,
+ )
+import qualified Nix.Prelude as Prelude
+import Nix.Render
+import Nix.Utils.Fix1
+import Nix.Value
 import qualified Paths_hnix
-import           System.Exit
+import System.Exit
 import qualified System.Info
-import           System.Process
+import System.Process
 
-import qualified System.Nix.Store.Remote       as Store.Remote
-import qualified System.Nix.StorePath          as Store
-import qualified System.Nix.Nar                as Store.Nar
-import qualified System.Nix.Hash               as Store.Hash
-import           Data.Some.Newtype              ( Some(..) )
-import           Data.Default.Class             ( def )
+import Data.Default.Class (def)
+import Data.Some.Newtype (Some (..))
+import qualified System.Nix.Hash as Store.Hash
+import qualified System.Nix.Nar as Store.Nar
+import qualified System.Nix.Store.Remote as Store.Remote
+import qualified System.Nix.StorePath as Store
 
 -- | A path into the nix store
 newtype StorePath = StorePath Path
-  deriving (Eq, Ord, Show, Hashable)
-
+    deriving (Eq, Ord, Show, Hashable)
 
 -- All of the following type classes defer to the underlying 'm'.
 
 -- * @class MonadEffects t f m@
 
 class
-  ( MonadFile m
-  , MonadStore m
-  , MonadPutStr m
-  , MonadHttp m
-  , MonadEnv m
-  , MonadPaths m
-  , MonadInstantiate m
-  , MonadExec m
-  , MonadIntrospect m
-  )
-  => MonadEffects t f m where
+    ( MonadFile m
+    , MonadStore m
+    , MonadPutStr m
+    , MonadHttp m
+    , MonadEnv m
+    , MonadPaths m
+    , MonadInstantiate m
+    , MonadExec m
+    , MonadIntrospect m
+    ) =>
+    MonadEffects t f m
+    where
+    -- | Determine the absolute path in the current context.
+    toAbsolutePath :: Path -> m Path
 
-  -- | Determine the absolute path in the current context.
-  toAbsolutePath :: Path -> m Path
-  findEnvPath :: String -> m Path
+    findEnvPath :: String -> m Path
 
-  -- | Having an explicit list of sets corresponding to the @NIX_PATH@ and a file path try to find an existing path.
-  findPath :: [NValue t f m] -> Path -> m Path
+    -- | Having an explicit list of sets corresponding to the @NIX_PATH@ and a file path try to find an existing path.
+    findPath :: [NValue t f m] -> Path -> m Path
 
-  importPath :: Path -> m (NValue t f m)
-  pathToDefaultNix :: Path -> m Path
+    importPath :: Path -> m (NValue t f m)
+    pathToDefaultNix :: Path -> m Path
 
-  derivationStrict :: NValue t f m -> m (NValue t f m)
+    derivationStrict :: NValue t f m -> m (NValue t f m)
 
-  --  2021-04-01: for trace, so leaving String here
-  traceEffect :: String -> m ()
-
+    --  2021-04-01: for trace, so leaving String here
+    traceEffect :: String -> m ()
 
 -- ** Instances
 
 instance
-  ( MonadFix1T t m
-  , MonadStore m
-  )
-  => MonadStore (Fix1T t m)
- where
-  addToStore a b c d = lift $ addToStore a b c d
-  addTextToStore' a b c d = lift $ addTextToStore' a b c d
+    ( MonadFix1T t m
+    , MonadStore m
+    ) =>
+    MonadStore (Fix1T t m)
+    where
+    addToStore a b c d = lift $ addToStore a b c d
+    addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 -- * @class MonadIntrospect m@
 
 class
-  Monad m
-  => MonadIntrospect m
- where
-  recursiveSize :: a -> m Word
-  default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
-  recursiveSize = lift . recursiveSize
-
+    (Monad m) =>
+    MonadIntrospect m
+    where
+    recursiveSize :: a -> m Word
+    default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
+    recursiveSize = lift . recursiveSize
 
 -- ** Instances
 
+{- FOURMOLU_DISABLE -}
 instance MonadIntrospect IO where
   recursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
@@ -111,189 +107,172 @@ instance MonadIntrospect IO where
 #else
     const $ pure 0
 #endif
+{- FOURMOLU_ENABLE -}
 
-deriving
-  instance
-    MonadIntrospect (t (Fix1 t))
-    => MonadIntrospect (Fix1 t)
+deriving instance
+    (MonadIntrospect (t (Fix1 t))) =>
+    MonadIntrospect (Fix1 t)
 
-deriving
-  instance
-    MonadIntrospect (t (Fix1T t m) m)
-    => MonadIntrospect (Fix1T t m)
-
+deriving instance
+    (MonadIntrospect (t (Fix1T t m) m)) =>
+    MonadIntrospect (Fix1T t m)
 
 -- * @class MonadExec m@
 
 class
-  Monad m
-  => MonadExec m where
-
+    (Monad m) =>
+    MonadExec m
+    where
     exec' :: [Text] -> m (Either ErrorCall NExprLoc)
-    default exec' :: (MonadTrans t, MonadExec m', m ~ t m')
-                  => [Text] -> m (Either ErrorCall NExprLoc)
+    default exec' ::
+        (MonadTrans t, MonadExec m', m ~ t m') =>
+        [Text] -> m (Either ErrorCall NExprLoc)
     exec' = lift . exec'
-
 
 -- ** Instances
 
 instance MonadExec IO where
-  exec' = \case
-    []            -> pure $ Left $ ErrorCall "exec: missing program"
-    (prog : args) -> do
-      (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) mempty
-      let
-        t    = Text.strip $ fromString out
-        emsg = "program[" <> prog <> "] args=" <> show args
-      case exitCode of
-        ExitSuccess ->
-          pure $
-          if Text.null t
-            then Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
-            else
-              either
-                (\ err -> Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
-                pure
-                (parseNixTextLoc t)
-        err -> pure $ Left $ ErrorCall $ toString $ "exec  failed: " <> show err <> " " <> emsg
+    exec' = \case
+        [] -> pure $ Left $ ErrorCall "exec: missing program"
+        (prog : args) -> do
+            (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) mempty
+            let
+                t = Text.strip $ fromString out
+                emsg = "program[" <> prog <> "] args=" <> show args
+            case exitCode of
+                ExitSuccess ->
+                    pure $
+                        if Text.null t
+                            then Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
+                            else
+                                either
+                                    (\err -> Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
+                                    pure
+                                    (parseNixTextLoc t)
+                err -> pure $ Left $ ErrorCall $ toString $ "exec  failed: " <> show err <> " " <> emsg
 
-deriving
-  instance
-    MonadExec (t (Fix1 t))
-    => MonadExec (Fix1 t)
+deriving instance
+    (MonadExec (t (Fix1 t))) =>
+    MonadExec (Fix1 t)
 
-deriving
-  instance
-    MonadExec (t (Fix1T t m) m)
-    => MonadExec (Fix1T t m)
-
+deriving instance
+    (MonadExec (t (Fix1T t m) m)) =>
+    MonadExec (Fix1T t m)
 
 -- * @class MonadInstantiate m@
 
 class
-  Monad m
-  => MonadInstantiate m where
-
+    (Monad m) =>
+    MonadInstantiate m
+    where
     instantiateExpr :: Text -> m (Either ErrorCall NExprLoc)
     default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => Text -> m (Either ErrorCall NExprLoc)
     instantiateExpr = lift . instantiateExpr
 
-
 -- ** Instances
 
 instance MonadInstantiate IO where
+    instantiateExpr expr =
+        do
+            traceM $
+                "Executing: " <> show ["nix-instantiate", "--eval", "--expr ", expr]
 
-  instantiateExpr expr =
-    do
-      traceM $
-        "Executing: " <> show ["nix-instantiate", "--eval", "--expr ", expr]
+            (exitCode, out, err) <-
+                readProcessWithExitCode
+                    "nix-instantiate"
+                    ["--eval", "--expr", toString expr]
+                    mempty
 
-      (exitCode, out, err) <-
-        readProcessWithExitCode
-          "nix-instantiate"
-          ["--eval", "--expr", toString expr]
-          mempty
+            pure $
+                case exitCode of
+                    ExitSuccess ->
+                        either
+                            (\e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
+                            pure
+                            (parseNixTextLoc $ fromString out)
+                    status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
-      pure $
-        case exitCode of
-          ExitSuccess ->
-            either
-              (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
-              pure
-              (parseNixTextLoc $ fromString out)
-          status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
+deriving instance
+    (MonadInstantiate (t (Fix1 t))) =>
+    MonadInstantiate (Fix1 t)
 
-deriving
-  instance
-    MonadInstantiate (t (Fix1 t))
-    => MonadInstantiate (Fix1 t)
-
-deriving
-  instance
-    MonadInstantiate (t (Fix1T t m) m)
-    => MonadInstantiate (Fix1T t m)
-
+deriving instance
+    (MonadInstantiate (t (Fix1T t m) m)) =>
+    MonadInstantiate (Fix1T t m)
 
 -- * @class MonadEnv m@
 
 class
-  Monad m
-  => MonadEnv m where
+    (Monad m) =>
+    MonadEnv m
+    where
+    getEnvVar :: Text -> m (Maybe Text)
+    default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => Text -> m (Maybe Text)
+    getEnvVar = lift . getEnvVar
 
-  getEnvVar :: Text -> m (Maybe Text)
-  default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => Text -> m (Maybe Text)
-  getEnvVar = lift . getEnvVar
+    getCurrentSystemOS :: m Text
+    default getCurrentSystemOS :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
+    getCurrentSystemOS = lift getCurrentSystemOS
 
-  getCurrentSystemOS :: m Text
-  default getCurrentSystemOS :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
-  getCurrentSystemOS = lift getCurrentSystemOS
-
-  getCurrentSystemArch :: m Text
-  default getCurrentSystemArch :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
-  getCurrentSystemArch = lift getCurrentSystemArch
-
+    getCurrentSystemArch :: m Text
+    default getCurrentSystemArch :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
+    getCurrentSystemArch = lift getCurrentSystemArch
 
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = (<<$>>) fromString . lookupEnv . toString
+    getEnvVar = (<<$>>) fromString . lookupEnv . toString
 
-  getCurrentSystemOS   = pure $ fromString System.Info.os
+    getCurrentSystemOS = pure $ fromString System.Info.os
 
-  -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
-  getCurrentSystemArch = pure $ fromString $ case System.Info.arch of
-    "i386" -> "i686"
-    arch   -> arch
+    -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
+    getCurrentSystemArch = pure $ fromString $ case System.Info.arch of
+        "i386" -> "i686"
+        arch -> arch
 
-deriving
-  instance
-    MonadEnv (t (Fix1 t))
-    => MonadEnv (Fix1 t)
+deriving instance
+    (MonadEnv (t (Fix1 t))) =>
+    MonadEnv (Fix1 t)
 
-deriving
-  instance
-    MonadEnv (t (Fix1T t m) m)
-    => MonadEnv (Fix1T t m)
-
+deriving instance
+    (MonadEnv (t (Fix1T t m) m)) =>
+    MonadEnv (Fix1T t m)
 
 -- * @class MonadPaths m@
 
 class
-  Monad m
-  => MonadPaths m where
-  getDataDir :: m Path
-  default getDataDir :: (MonadTrans t, MonadPaths m', m ~ t m') => m Path
-  getDataDir = lift getDataDir
-
+    (Monad m) =>
+    MonadPaths m
+    where
+    getDataDir :: m Path
+    default getDataDir :: (MonadTrans t, MonadPaths m', m ~ t m') => m Path
+    getDataDir = lift getDataDir
 
 -- ** Instances
 
 instance MonadPaths IO where
-  getDataDir = coerce Paths_hnix.getDataDir
+    getDataDir = coerce Paths_hnix.getDataDir
 
-deriving
-  instance
-    MonadPaths (t (Fix1 t))
-    => MonadPaths (Fix1 t)
+deriving instance
+    (MonadPaths (t (Fix1 t))) =>
+    MonadPaths (Fix1 t)
 
-deriving
-  instance
-    MonadPaths (t (Fix1T t m) m)
-    => MonadPaths (Fix1T t m)
-
+deriving instance
+    (MonadPaths (t (Fix1T t m) m)) =>
+    MonadPaths (Fix1T t m)
 
 -- * @class MonadHttp m@
 
 class
-  Monad m
-  => MonadHttp m where
-
-  getURL :: Text -> m (Either ErrorCall StorePath)
-  default getURL :: (MonadTrans t, MonadHttp m', m ~ t m') => Text -> m (Either ErrorCall StorePath)
-  getURL = lift . getURL
+    (Monad m) =>
+    MonadHttp m
+    where
+    getURL :: Text -> m (Either ErrorCall StorePath)
+    default getURL :: (MonadTrans t, MonadHttp m', m ~ t m') => Text -> m (Either ErrorCall StorePath)
+    getURL = lift . getURL
 
 baseNameOf :: Text -> Text
-baseNameOf a = Text.takeWhileEnd (/='/') $ Text.dropWhileEnd (=='/') a
+baseNameOf a = Text.takeWhileEnd (/= '/') $ Text.dropWhileEnd (== '/') a
 
 -- conversion from Store.StorePath to Effects.StorePath, different type with the same name.
 toStorePath :: Store.StorePath -> StorePath
@@ -302,73 +281,65 @@ toStorePath = StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.stor
 -- ** Instances
 
 instance MonadHttp IO where
-  getURL url =
-    do
-      let urlstr = toString url
-      traceM $ "fetching HTTP URL: " <> urlstr
-      req     <- parseRequest urlstr
-      manager <-
-        bool
-          (newManager defaultManagerSettings)
-          newTlsManager
-          (secure req)
-      response <- httpLbs (req { method = "GET" }) manager
-      let status = statusCode $ responseStatus response
-      let body = responseBody response
-      -- let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
-      let name = baseNameOf url
-      bool
-        (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr)
-        -- using addTextToStore' result in different hash from the addToStore.
-        -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
-        (addToStore name (NarText $ toStrict body) False False)
-        (status == 200)
+    getURL url =
+        do
+            let urlstr = toString url
+            traceM $ "fetching HTTP URL: " <> urlstr
+            req <- parseRequest urlstr
+            manager <-
+                bool
+                    (newManager defaultManagerSettings)
+                    newTlsManager
+                    (secure req)
+            response <- httpLbs (req{method = "GET"}) manager
+            let status = statusCode $ responseStatus response
+            let body = responseBody response
+            -- let digest::Hash.Digest Hash.SHA256 = Hash.hash $ (B.concat . BL.toChunks) body
+            let name = baseNameOf url
+            bool
+                (pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url = " <> urlstr)
+                -- using addTextToStore' result in different hash from the addToStore.
+                -- see https://github.com/haskell-nix/hnix/pull/1051#issuecomment-1031380804
+                (addToStore name (NarText $ toStrict body) False False)
+                (status == 200)
 
+deriving instance
+    (MonadHttp (t (Fix1 t))) =>
+    MonadHttp (Fix1 t)
 
-deriving
-  instance
-    MonadHttp (t (Fix1 t))
-    => MonadHttp (Fix1 t)
-
-deriving
-  instance
-    MonadHttp (t (Fix1T t m) m)
-    => MonadHttp (Fix1T t m)
-
+deriving instance
+    (MonadHttp (t (Fix1T t m) m)) =>
+    MonadHttp (Fix1T t m)
 
 -- * @class MonadPutStr m@
 
 class
-  (Monad m, MonadIO m)
-  => MonadPutStr m where
-
-  --TODO: Should this be used *only* when the Nix to be evaluated invokes a
-  --`trace` operation?
-  --  2021-04-01: Due to trace operation here, leaving it as String.
-  putStr :: String -> m ()
-  default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
-  putStr = lift . Prelude.putStr
-
+    (Monad m, MonadIO m) =>
+    MonadPutStr m
+    where
+    -- TODO: Should this be used *only* when the Nix to be evaluated invokes a
+    -- `trace` operation?
+    --  2021-04-01: Due to trace operation here, leaving it as String.
+    putStr :: String -> m ()
+    default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
+    putStr = lift . Prelude.putStr
 
 -- ** Instances
 
 instance MonadPutStr IO where
-  putStr = Prelude.putStr
+    putStr = Prelude.putStr
 
-deriving
-  instance
-    MonadPutStr (t (Fix1 t))
-    => MonadPutStr (Fix1 t)
+deriving instance
+    (MonadPutStr (t (Fix1 t))) =>
+    MonadPutStr (Fix1 t)
 
-deriving
-  instance
-    MonadPutStr (t (Fix1T t m) m)
-    => MonadPutStr (Fix1T t m)
-
+deriving instance
+    (MonadPutStr (t (Fix1T t m) m)) =>
+    MonadPutStr (Fix1T t m)
 
 -- ** Functions
 
-putStrLn :: MonadPutStr m => String -> m ()
+putStrLn :: (MonadPutStr m) => String -> m ()
 putStrLn = Nix.Effects.putStr . (<> "\n")
 
 print :: (MonadPutStr m, Show a) => a -> m ()
@@ -384,106 +355,111 @@ type StorePathName = Text
 type PathFilter m = Path -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
-
 -- ** @class MonadStore m@
 
 data NarContent = NarFile Path | NarText ByteString
+
 -- | convert NarContent to NarSource needed in the store API
-toNarSource :: MonadIO m => NarContent -> Store.Nar.NarSource m
+toNarSource :: (MonadIO m) => NarContent -> Store.Nar.NarSource m
 toNarSource (NarFile path) = Store.Nar.dumpPath $ coerce path
 toNarSource (NarText text) = Store.Nar.dumpString text
 
 class
-  Monad m
-  => MonadStore m where
+    (Monad m) =>
+    MonadStore m
+    where
+    {- | Copy the contents of a local path(Or pure text) to the store.  The resulting store
+    path is returned.  Note: This does not support yet support the expected
+    `filter` function that allows excluding some files.
+    -}
+    addToStore :: StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+    default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+    addToStore a b c d = lift $ addToStore a b c d
 
-  -- | Copy the contents of a local path(Or pure text) to the store.  The resulting store
-  -- path is returned.  Note: This does not support yet support the expected
-  -- `filter` function that allows excluding some files.
-  addToStore :: StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> NarContent -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-  addToStore a b c d = lift $ addToStore a b c d
-
-  -- | Like addToStore, but the contents written to the output path is a
-  -- regular file containing the given string.
-  addTextToStore' :: StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-  addTextToStore' a b c d = lift $ addTextToStore' a b c d
-
+    {- | Like addToStore, but the contents written to the output path is a
+    regular file containing the given string.
+    -}
+    addTextToStore' :: StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+    default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+    addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 -- *** Instances
 
 instance MonadStore IO where
+    addToStore name content recursive repair =
+        case Store.mkStorePathName name of
+            Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
+            Right pathName -> do
+                let ingestionMethod =
+                        if recursive
+                            then Store.Remote.FileIngestionMethod_FileRecursive
+                            else Store.Remote.FileIngestionMethod_Flat
+                    repairMode =
+                        if repair
+                            then Store.Remote.RepairMode_DoRepair
+                            else Store.Remote.RepairMode_DontRepair
+                    -- Use Some constructor with HashAlgo_SHA256
+                    hashAlgo = Some Store.Hash.HashAlgo_SHA256
+                res <-
+                    Store.Remote.runStore $
+                        Store.Remote.addToStore
+                            pathName
+                            (toNarSource content)
+                            ingestionMethod
+                            hashAlgo
+                            repairMode
+                either
+                    Left -- err
+                    (pure . toStorePath) -- store path
+                    <$> parseStoreResult "addToStore" res
 
-  addToStore name content recursive repair =
-    case Store.mkStorePathName name of
-      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
-      Right pathName -> do
-        let ingestionMethod = if recursive
-                              then Store.Remote.FileIngestionMethod_FileRecursive
-                              else Store.Remote.FileIngestionMethod_Flat
-            repairMode = if repair
-                         then Store.Remote.RepairMode_DoRepair
-                         else Store.Remote.RepairMode_DontRepair
-            -- Use Some constructor with HashAlgo_SHA256
-            hashAlgo = Some Store.Hash.HashAlgo_SHA256
-        res <- Store.Remote.runStore $ Store.Remote.addToStore
-                 pathName
-                 (toNarSource content)
-                 ingestionMethod
-                 hashAlgo
-                 repairMode
-        either
-          Left -- err
-          (pure . toStorePath) -- store path
-          <$> parseStoreResult "addToStore" res
-
-  addTextToStore' name text references repair =
-    case Store.mkStorePathName name of
-      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
-      Right pathName -> do
-        let storeText = Store.Remote.StoreText pathName text
-            repairMode = if repair
-                         then Store.Remote.RepairMode_DoRepair
-                         else Store.Remote.RepairMode_DontRepair
-            -- Convert our StorePathSet (HashSet of StorePath) to HashSet of Store.StorePath
-            storeDir = Store.StoreDir "/nix/store"
-            storeRefs = HS.map (\(StorePath p) -> Store.parsePath storeDir (encodeUtf8 $ toText p)) references
-            -- Filter out any parse failures and extract successful paths
-            validRefs = HS.fromList $ rights $ HS.toList storeRefs
-        res <- Store.Remote.runStore $ Store.Remote.addTextToStore storeText validRefs repairMode
-        either
-          Left -- err
-          (pure . toStorePath) -- path
-          <$> parseStoreResult "addTextToStore" res
-
+    addTextToStore' name text references repair =
+        case Store.mkStorePathName name of
+            Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> show err
+            Right pathName -> do
+                let storeText = Store.Remote.StoreText pathName text
+                    repairMode =
+                        if repair
+                            then Store.Remote.RepairMode_DoRepair
+                            else Store.Remote.RepairMode_DontRepair
+                    -- Convert our StorePathSet (HashSet of StorePath) to HashSet of Store.StorePath
+                    storeDir = Store.StoreDir "/nix/store"
+                    storeRefs = HS.map (\(StorePath p) -> Store.parsePath storeDir (encodeUtf8 $ toText p)) references
+                    -- Filter out any parse failures and extract successful paths
+                    validRefs = HS.fromList $ rights $ HS.toList storeRefs
+                res <- Store.Remote.runStore $ Store.Remote.addTextToStore storeText validRefs repairMode
+                either
+                    Left -- err
+                    (pure . toStorePath) -- path
+                    <$> parseStoreResult "addTextToStore" res
 
 -- ** Functions
 
 -- Import DList type (it's re-exported as part of the Run type signature)
-parseStoreResult :: Monad m => Text -> (Either Store.Remote.RemoteStoreError a, loggers) -> m (Either ErrorCall a)
+parseStoreResult :: (Monad m) => Text -> (Either Store.Remote.RemoteStoreError a, loggers) -> m (Either ErrorCall a)
 parseStoreResult name (res, _logs) =
-  pure $
-    either
-      (\ err -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> show err)
-      pure
-      res
+    pure $
+        either
+            (\err -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> show err)
+            pure
+            res
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> StorePathSet -> RepairFlag -> m StorePath
 addTextToStore a b c d =
-  either
-    throwError
-    pure
-    =<< addTextToStore' a b c d
+    either
+        throwError
+        pure
+        =<< addTextToStore' a b c d
 
 --  2021-10-30: NOTE: Misleading name, please rename.
+
 -- | Add @Path@ into the Nix Store
 addPath :: (Framed e m, MonadStore m) => Path -> m StorePath
 addPath p =
-  either
-    throwError
-    pure
-    =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
+    either
+        throwError
+        pure
+        =<< addToStore (fromString $ coerce takeFileName p) (NarFile p) True False
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
 toFile_ p contents = addTextToStore (fromString $ coerce p) contents mempty False

@@ -1,13 +1,14 @@
--- | Shorthands for making Nix expressions.
---
--- Functions with an @F@ suffix return a more general type (base functor @F a@) without the outer
--- 'Fix' wrapper that creates @a@.
+{- | Shorthands for making Nix expressions.
+
+Functions with an @F@ suffix return a more general type (base functor @F a@) without the outer
+'Fix' wrapper that creates @a@.
+-}
 module Nix.Expr.Shorthands where
 
-import           Nix.Prelude
-import           Data.Fix
-import           Nix.Atoms
-import           Nix.Expr.Types
+import Data.Fix
+import Nix.Atoms
+import Nix.Expr.Types
+import Nix.Prelude
 
 -- * Basic expression builders
 
@@ -33,17 +34,23 @@ mkFloat = Fix . mkFloatF
 
 -- | Put a regular (double-quoted) string.
 mkStr :: Text -> NExpr
-mkStr = Fix . NStr . DoubleQuoted .
-  whenText
-    mempty
-    (one . Plain)
+mkStr =
+    Fix
+        . NStr
+        . DoubleQuoted
+        . whenText
+            mempty
+            (one . Plain)
 
 -- | Put an indented string.
 mkIndentedStr :: Int -> Text -> NExpr
-mkIndentedStr w = Fix . NStr . Indented w .
-  whenText
-    mempty
-    (one . Plain)
+mkIndentedStr w =
+    Fix
+        . NStr
+        . Indented w
+        . whenText
+            mempty
+            (one . Plain)
 
 -- | Put a path. Use @True@ if the path should be read from the environment, else use @False@.
 mkPath :: Bool -> FilePath -> NExpr
@@ -68,10 +75,12 @@ mkSynHole = Fix . mkSynHoleF
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = one . StaticKey . coerce
 
--- | Put a binary operator.
---  @since
+{- | Put a binary operator.
+ @since
+-}
 mkApp :: NExpr -> NExpr -> NExpr
 mkApp a = Fix . NApp a
+
 -- | Put an unary operator.
 
 --  @since 0.15.0
@@ -82,52 +91,59 @@ mkOp op = Fix . NUnary op
 mkNot :: NExpr -> NExpr
 mkNot = mkOp NNot
 
--- | Number negation: @-@.
---
--- Negation in the language works with integers and floating point.
---  @since 0.15.0
+{- | Number negation: @-@.
+
+Negation in the language works with integers and floating point.
+ @since 0.15.0
+-}
 mkNeg :: NExpr -> NExpr
 mkNeg = mkOp NNeg
 
--- | Put a binary operator.
---  @since 0.15.0
+{- | Put a binary operator.
+ @since 0.15.0
+-}
 mkOp2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOp2 op a = Fix . NBinary op a
 
--- | > { x }
---  @since 0.15.0
+{- | > { x }
+ @since 0.15.0
+-}
 mkParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
 mkParamSet pset = mkGeneralParamSet Nothing pset False
 
--- | > { x, ... }
---  @since 0.15.0
+{- | > { x, ... }
+ @since 0.15.0
+-}
 mkVariadicParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
 mkVariadicParamSet pset = mkGeneralParamSet Nothing pset True
 
--- | > s@{ x }
---  @since 0.15.0
+{- | > s@{ x }
+ @since 0.15.0
+-}
 mkNamedParamSet :: Text -> [(Text, Maybe NExpr)] -> Params NExpr
 mkNamedParamSet name pset = mkGeneralParamSet (pure name) pset False
 
--- | > s@{ x, ... }
---  @since 0.15.0
+{- | > s@{ x, ... }
+ @since 0.15.0
+-}
 mkNamedVariadicParamSet :: Text -> [(Text, Maybe NExpr)] -> Params NExpr
 mkNamedVariadicParamSet name params = mkGeneralParamSet (pure name) params True
 
--- | Args:
---
--- 1. Maybe name:
---
--- > Nothing  ->   {}
--- > Just "s" -> s@{}
---
--- 2. key:expr pairs
---
--- 3. Is variadic or not:
---
--- > True  -> {...}
--- > False -> {}
---  @since 0.15.0
+{- | Args:
+
+1. Maybe name:
+
+> Nothing  ->   {}
+> Just "s" -> s@{}
+
+2. key:expr pairs
+
+3. Is variadic or not:
+
+> True  -> {...}
+> False -> {}
+ @since 0.15.0
+-}
 mkGeneralParamSet :: Maybe Text -> [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkGeneralParamSet mname params variadic = ParamSet (coerce mname) (Variadic `whenTrue` variadic) (coerce params)
 
@@ -135,9 +151,10 @@ mkGeneralParamSet mname params variadic = ParamSet (coerce mname) (Variadic `whe
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = mkSet Recursive
 
--- | Put a non-recursive set.
---
--- > { .. }
+{- | Put a non-recursive set.
+
+> { .. }
+-}
 mkNonRecSet :: [Binding NExpr] -> NExpr
 mkNonRecSet = mkSet mempty
 
@@ -145,10 +162,11 @@ mkNonRecSet = mkSet mempty
 mkSet :: Recursivity -> [Binding NExpr] -> NExpr
 mkSet r = Fix . NSet r
 
--- | Empty set.
---
--- Monoid. Use @//@ operation (shorthand $//) to extend the set.
---  @since 0.15.0
+{- | Empty set.
+
+Monoid. Use @//@ operation (shorthand $//) to extend the set.
+ @since 0.15.0
+-}
 emptySet :: NExpr
 emptySet = mkNonRecSet mempty
 
@@ -160,63 +178,69 @@ mkList = Fix . NList
 emptyList :: NExpr
 emptyList = mkList mempty
 
--- | Wrap in a @let@.
---
--- (Evaluate the second argument after introducing the bindings.)
---
--- +------------------------+-----------------+
--- | Haskell                | Nix             |
--- +========================+=================+
--- | @mkLets bindings expr@ | @let bindings;@ |
--- |                        | @in expr@       |
--- +------------------------+-----------------+
+{- | Wrap in a @let@.
+
+(Evaluate the second argument after introducing the bindings.)
+
++------------------------+-----------------+
+| Haskell                | Nix             |
++========================+=================+
+| @mkLets bindings expr@ | @let bindings;@ |
+|                        | @in expr@       |
++------------------------+-----------------+
+-}
 mkLets :: [Binding NExpr] -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
 
--- | Create a @whith@:
--- 1st expr - what to bring into the scope.
--- 2nd - expression that recieves the scope extention.
---
--- +--------------------+-------------------+
--- | Haskell            | Nix               |
--- +====================+===================+
--- | @mkWith body main@ | @with body; expr@ |
--- +--------------------+-------------------+
+{- | Create a @whith@:
+1st expr - what to bring into the scope.
+2nd - expression that recieves the scope extention.
+
++--------------------+-------------------+
+| Haskell            | Nix               |
++====================+===================+
+| @mkWith body main@ | @with body; expr@ |
++--------------------+-------------------+
+-}
 mkWith :: NExpr -> NExpr -> NExpr
 mkWith e = Fix . NWith e
 
--- | Create an @assert@:
--- 1st expr - asserting itself, must return @true@.
--- 2nd - main expression to evaluated after assertion.
---
--- +-----------------------+----------------------+
--- | Haskell               | Nix                  |
--- +=======================+======================+
--- | @mkAssert check eval@ | @assert check; eval@ |
--- +-----------------------+----------------------+
+{- | Create an @assert@:
+1st expr - asserting itself, must return @true@.
+2nd - main expression to evaluated after assertion.
+
++-----------------------+----------------------+
+| Haskell               | Nix                  |
++=======================+======================+
+| @mkAssert check eval@ | @assert check; eval@ |
++-----------------------+----------------------+
+-}
 mkAssert :: NExpr -> NExpr -> NExpr
 mkAssert e = Fix . NAssert e
 
--- | Put:
---
--- > if expr1
--- >   then expr2
--- >   else expr3
+{- | Put:
+
+> if expr1
+>   then expr2
+>   else expr3
+-}
 mkIf :: NExpr -> NExpr -> NExpr -> NExpr
 mkIf e1 e2 = Fix . NIf e1 e2
 
--- | Lambda function, analog of Haskell's @\\ x -> x@:
---
--- +-----------------------+-----------+
--- | Haskell               | Nix       |
--- +=======================+===========+
--- | @ mkFunction x expr @ | @x: expr@ |
--- +-----------------------+-----------+
+{- | Lambda function, analog of Haskell's @\\ x -> x@:
+
++-----------------------+-----------+
+| Haskell               | Nix       |
++=======================+===========+
+| @ mkFunction x expr @ | @x: expr@ |
++-----------------------+-----------+
+-}
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
--- | General dot-reference with optional alternative if the key does not exist.
---  @since 0.15.0
+{- | General dot-reference with optional alternative if the key does not exist.
+ @since 0.15.0
+-}
 getRefOrDefault :: Maybe NExpr -> NExpr -> Text -> NExpr
 getRefOrDefault alt obj = Fix . NSelect alt obj . mkSelector
 
@@ -241,7 +265,7 @@ mkFloatF = NConstant . NFloat
 -- | Unfixed @mkPath@.
 mkPathF :: Bool -> FilePath -> NExprF a
 mkPathF False = NLiteralPath . coerce
-mkPathF True  = NEnvPath . coerce
+mkPathF True = NEnvPath . coerce
 
 -- | Unfixed @mkEnvPath@.
 mkEnvPathF :: FilePath -> NExprF a
@@ -259,52 +283,56 @@ mkSymF = NSym . coerce
 mkSynHoleF :: Text -> NExprF a
 mkSynHoleF = NSynHole . coerce
 
-
 -- * Other
+
 -- (org this better/make a better name for section(s))
 
--- | An `inherit` clause with an expression to pull from.
---
--- +------------------------+--------------------+------------+
--- | Hask                   | Nix                | pseudocode |
--- +========================+====================+============+
--- | @inheritFrom x [a, b]@ | @inherit (x) a b;@ | @a = x.a;@ |
--- |                        |                    | @b = x.b;@ |
--- +------------------------+--------------------+------------+
+{- | An `inherit` clause with an expression to pull from.
+
++------------------------+--------------------+------------+
+| Hask                   | Nix                | pseudocode |
++========================+====================+============+
+| @inheritFrom x [a, b]@ | @inherit (x) a b;@ | @a = x.a;@ |
+|                        |                    | @b = x.b;@ |
++------------------------+--------------------+------------+
+-}
 inheritFrom :: e -> [VarName] -> Binding e
 inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
--- | An `inherit` clause without an expression to pull from.
---
--- +----------------------+----------------+------------------+
--- | Hask                 | Nix            | pseudocode       |
--- +======================+================+==================+
--- | @inheritFrom [a, b]@ | @inherit a b;@ | @a = outside.a;@ |
--- |                      |                | @b = outside.b;@ |
--- +----------------------+----------------+------------------+
+{- | An `inherit` clause without an expression to pull from.
+
++----------------------+----------------+------------------+
+| Hask                 | Nix            | pseudocode       |
++======================+================+==================+
+| @inheritFrom [a, b]@ | @inherit a b;@ | @a = outside.a;@ |
+|                      |                | @b = outside.b;@ |
++----------------------+----------------+------------------+
+-}
 inherit :: [VarName] -> Binding e
 inherit ks = Inherit Nothing ks nullPos
 
 -- | Nix @=@ (bind operator).
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
+
 infixr 2 $=
 
 -- | Shorthand for producing a binding of a name to an expression: Nix's @=@.
 bindTo :: Text -> NExpr -> Binding NExpr
 bindTo name x = NamedVar (mkSelector name) x nullPos
 
--- | Append a list of bindings to a set or let expression.
--- For example:
--- adding      `[a = 1, b = 2]`
--- to       `let               c = 3; in 4`
--- produces `let a = 1; b = 2; c = 3; in 4`.
+{- | Append a list of bindings to a set or let expression.
+For example:
+adding      `[a = 1, b = 2]`
+to       `let               c = 3; in 4`
+produces `let a = 1; b = 2; c = 3; in 4`.
+-}
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) =
-  case e of
-    NLet bindings e'    -> mkLets (bindings <> newBindings) e'
-    NSet recur bindings -> Fix $ NSet recur (bindings <> newBindings)
-    _                   -> error "Can only append bindings to a set or a let"
+    case e of
+        NLet bindings e' -> mkLets (bindings <> newBindings) e'
+        NSet recur bindings -> Fix $ NSet recur (bindings <> newBindings)
+        _ -> error "Can only append bindings to a set or a let"
 
 -- | Applies a transformation to the body of a Nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
@@ -327,126 +355,169 @@ attrsE pairs = mkNonRecSet $ uncurry ($=) <$> pairs
 recAttrsE :: [(Text, NExpr)] -> NExpr
 recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
-
 -- * Nix binary operators
 
-(@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
-  :: NExpr -> NExpr -> NExpr
+(@@)
+    , ($==)
+    , ($!=)
+    , ($<)
+    , ($<=)
+    , ($>)
+    , ($>=)
+    , ($&&)
+    , ($||)
+    , ($->)
+    , ($//)
+    , ($+)
+    , ($-)
+    , ($*)
+    , ($/)
+    , ($++) ::
+        NExpr -> NExpr -> NExpr
+
 --  2021-07-10: NOTE: Probably the presedence of some operators is still needs to be tweaked.
 
 -- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
 (@.) = getRefOrDefault Nothing
+
 infix 9 @.
 
--- | Dot-reference into an attribute set with alternative if the key does not exist.
---
--- > s.x or y
---  @since 0.15.0
+{- | Dot-reference into an attribute set with alternative if the key does not exist.
+
+> s.x or y
+ @since 0.15.0
+-}
 (@.<|>) :: NExpr -> Text -> NExpr -> NExpr
-(@.<|>) obj name alt = getRefOrDefault (pure alt ) obj name
+(@.<|>) obj name alt = getRefOrDefault (pure alt) obj name
+
 infix 9 @.<|>
 
 -- | Function application (@' '@ in @f x@)
 (@@) = mkApp
+
 infixl 8 @@
 
 -- | List concatenation: @++@
 ($++) = mkOp2 NConcat
+
 infixr 7 $++
 
 -- | Multiplication: @*@
-($*)  = mkOp2 NMult
+($*) = mkOp2 NMult
+
 infixl 6 $*
 
 -- | Division: @/@
-($/)  = mkOp2 NDiv
+($/) = mkOp2 NDiv
+
 infixl 6 $/
 
 -- | Addition: @+@
-($+)  = mkOp2 NPlus
+($+) = mkOp2 NPlus
+
 infixl 5 $+
 
 -- | Subtraction: @-@
-($-)  = mkOp2 NMinus
+($-) = mkOp2 NMinus
+
 infixl 5 $-
 
 -- | Extend/override the left attr set, with the right one: @//@
 ($//) = mkOp2 NUpdate
+
 infixr 5 $//
 
 -- | Greater than: @>@
-($>)  = mkOp2 NGt
+($>) = mkOp2 NGt
+
 infix 4 $>
 
 -- | Greater than OR equal: @>=@
 infix 4 $>=
+
 ($>=) = mkOp2 NGte
 
 -- | Less than OR equal: @<=@
 ($<=) = mkOp2 NLte
+
 infix 4 $<=
 
 -- | Less than: @<@
-($<)  = mkOp2 NLt
+($<) = mkOp2 NLt
+
 infix 4 $<
 
 -- | Equality: @==@
 ($==) = mkOp2 NEq
+
 infix 3 $==
 
 -- | Inequality: @!=@
 ($!=) = mkOp2 NNEq
+
 infix 3 $!=
 
 -- | AND: @&&@
 ($&&) = mkOp2 NAnd
+
 infixl 2 $&&
 
 -- | OR: @||@
 ($||) = mkOp2 NOr
+
 infixl 2 $||
 
 -- | Logical implication: @->@
 ($->) = mkOp2 NImpl
+
 infix 1 $->
 
--- | Lambda function, analog of Haskell's @\\ x -> x@:
---
--- +---------------+-----------+
--- | Haskell       | Nix       |
--- +===============+===========+
--- | @x ==> expr @ | @x: expr@ |
--- +---------------+-----------+
+{- | Lambda function, analog of Haskell's @\\ x -> x@:
+
++---------------+-----------+
+| Haskell       | Nix       |
++===============+===========+
+| @x ==> expr @ | @x: expr@ |
++---------------+-----------+
+-}
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
-infixr 1 ==>
 
+infixr 1 ==>
 
 -- * Under deprecation
 
 -- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use `mkOp`
--- Put an unary operator.
+
+{- | __@Deprecated@__: Please, use `mkOp`
+Put an unary operator.
+-}
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper = mkOp
 
 -- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use `mkOp2`
--- | Put a binary operator.
+
+{- | __@Deprecated@__: Please, use `mkOp2`
+| Put a binary operator.
+-}
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 = mkOp2
 
 -- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use `mkOp2`
--- | Nix binary operator builder.
+
+{- | __@Deprecated@__: Please, use `mkOp2`
+| Nix binary operator builder.
+-}
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop = mkOp2
 
 -- NOTE: Remove after 2023-07
--- | __@Deprecated@__: Please, use:
---   * `mkParamSet` is for closed sets;
---   * `mkVariadicSet` is for variadic;
---   * `mkGeneralParamSet` a general constructor.
+
+{- | __@Deprecated@__: Please, use:
+  * `mkParamSet` is for closed sets;
+  * `mkVariadicSet` is for variadic;
+  * `mkGeneralParamSet` a general constructor.
+-}
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (coerce params)

@@ -1,25 +1,28 @@
-{-# language CPP #-}
+{-# LANGUAGE CPP #-}
 
 module Nix.Json where
 
-import           Nix.Prelude
-import qualified Data.Aeson                    as A
-import qualified Data.Aeson.Encoding           as A
-import qualified Data.Vector                   as V
-import qualified Data.HashMap.Strict           as HM
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Encoding as A
+import qualified Data.HashMap.Strict as HM
+import qualified Data.Vector as V
+import Nix.Prelude
+{- FOURMOLU_DISABLE -}
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key                as AKM
 import qualified Data.Aeson.KeyMap             as AKM
 #endif
-import           Nix.Atoms
-import           Nix.Effects
-import           Nix.Exec
-import           Nix.Frames
-import           Nix.String
-import           Nix.Value
-import           Nix.Value.Monad
-import           Nix.Expr.Types
+{- FOURMOLU_ENABLE -}
+import Nix.Atoms
+import Nix.Effects
+import Nix.Exec
+import Nix.Expr.Types
+import Nix.Frames
+import Nix.String
+import Nix.Value
+import Nix.Value.Monad
 
+{- FOURMOLU_DISABLE -}
 -- This was moved from Utils.
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
@@ -36,19 +39,20 @@ toEncodingSorted = \case
             m
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
+{- FOURMOLU_ENABLE -}
 
-toJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
+toJSONNixString :: (MonadNix e t f m) => NValue t f m -> m NixString
 toJSONNixString =
-  runWithStringContextT .
-    fmap
-      ( decodeUtf8
-      -- This is completely not optimal, but seems we do not have better encoding analog (except for @unsafe*@), Aeson gatekeeps through this.
-      . A.encodingToLazyByteString
-      . toEncodingSorted
-      )
+    runWithStringContextT
+        . fmap
+            ( decodeUtf8
+                -- This is completely not optimal, but seems we do not have better encoding analog (except for @unsafe*@), Aeson gatekeeps through this.
+                . A.encodingToLazyByteString
+                . toEncodingSorted
+            )
+        . toJSON
 
-      . toJSON
-
+{- FOURMOLU_DISABLE -}
 toJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
 toJSON = \case
   NVConstant (NInt   n) -> pure $ A.toJSON n
@@ -80,3 +84,4 @@ toJSON = \case
  where
   intoJson :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
   intoJson nv = join $ lift $ toJSON <$> demand nv
+{- FOURMOLU_ENABLE -}

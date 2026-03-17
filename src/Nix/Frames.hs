@@ -1,58 +1,58 @@
-{-# language ConstraintKinds #-}
-{-# language ExistentialQuantification #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 -- | Definitions of Frames. Frames are messages that gather and ship themself with a context related to the message. For example - the message about some exception would also gather, keep and bring with it the tracing information.
-module Nix.Frames
-  ( NixLevel(..)
-  , Frames
-  , askFrames
-  , Framed
-  , NixFrame(..)
-  , NixException(..)
-  , withFrame
-  , throwError
-  , module Data.Typeable
-  )
+module Nix.Frames (
+    NixLevel (..),
+    Frames,
+    askFrames,
+    Framed,
+    NixFrame (..),
+    NixException (..),
+    withFrame,
+    throwError,
+    module Data.Typeable,
+)
 where
 
-import           Nix.Prelude
-import           Data.Typeable           hiding ( typeOf )
-import           Control.Monad.Catch            ( MonadThrow(..) )
+import Control.Monad.Catch (MonadThrow (..))
+import Data.Typeable hiding (typeOf)
+import Nix.Prelude
 import qualified Text.Show
 
 data NixLevel = Fatal | Error | Warning | Info | Debug
-  deriving (Ord, Eq, Bounded, Enum, Show)
+    deriving (Ord, Eq, Bounded, Enum, Show)
 
-data NixFrame =
-  NixFrame
+data NixFrame
+    = NixFrame
     { frameLevel :: NixLevel
-    , frame      :: SomeException
+    , frame :: SomeException
     }
 
 instance Show NixFrame where
-  show (NixFrame level f) =
-    "Nix frame at level " <> show level <> ": " <> show f
+    show (NixFrame level f) =
+        "Nix frame at level " <> show level <> ": " <> show f
 
 type Frames = [NixFrame]
 
-askFrames :: forall e m . (MonadReader e m, Has e Frames) => m Frames
+askFrames :: forall e m. (MonadReader e m, Has e Frames) => m Frames
 askFrames = askLocal
 
 type Framed e m = (MonadReader e m, Has e Frames, MonadThrow m)
 
 newtype NixException = NixException Frames
-  deriving Show
+    deriving (Show)
 
 instance Exception NixException
 
-withFrame
-  :: forall s e m a . (Framed e m, Exception s) => NixLevel -> s -> m a -> m a
+withFrame ::
+    forall s e m a. (Framed e m, Exception s) => NixLevel -> s -> m a -> m a
 withFrame level f = local $ over hasLens (NixFrame level (toException f) :)
 
-throwError
-  :: forall s e m a . (Framed e m, Exception s, MonadThrow m) => s -> m a
+throwError ::
+    forall s e m a. (Framed e m, Exception s, MonadThrow m) => s -> m a
 throwError err =
-  do
-    context <- askLocal
-    traceM "Throwing fail..."
-    throwM $ NixException $ NixFrame Error (toException err) : context
+    do
+        context <- askLocal
+        traceM "Throwing fail..."
+        throwM $ NixException $ NixFrame Error (toException err) : context
