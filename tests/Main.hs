@@ -5,7 +5,6 @@ module Main where
 import qualified Control.Exception as Exc
 import Data.Fix
 import Data.List (isSuffixOf, lookup)
-import qualified Data.String as String
 import Data.Time
 import qualified EvalTests
 import GHC.Err (errorWithoutStackTrace)
