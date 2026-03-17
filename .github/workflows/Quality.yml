@@ -13,21 +13,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
       - name: "Check Haskell formatting"
-        run: |
-          nix shell nixpkgs#haskellPackages.fourmolu nixpkgs#findutils -c \
-            sh -c 'find src main tests benchmarks -name "*.hs" -exec fourmolu --mode check {} +'
+        run: nix build .#checks.x86_64-linux.formatting --print-build-logs
       - name: "Check shell script formatting"
-        run: |
-          nix shell nixpkgs#shfmt -c shfmt -d build.sh
+        run: nix build .#checks.x86_64-linux.shell-formatting --print-build-logs
 
   shellcheck:
     name: "ShellCheck"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v25
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
       - name: "Lint shell scripts"
-        run: shellcheck build.sh
+        run: nix build .#checks.x86_64-linux.shellcheck --print-build-logs
 
   warnings:
     name: "Build (warnings as errors)"
