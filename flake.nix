@@ -34,9 +34,9 @@
                     cabal = {};
                     hlint = {};
                     haskell-language-server = {};
-                    fourmolu = {};
                   };
                   buildInputs = with pkgs; [
+                    haskellPackages.fourmolu
                     pkg-config
                     shellcheck
                     shfmt
