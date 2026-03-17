@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  commands:
+    fourmolu:
+      glob: "*.hs"
+      run: "command -v fourmolu > /dev/null && fourmolu --mode check {staged_files} || echo 'fourmolu not found (run: nix develop)'"
+    hlint:
+      glob: "*.hs"
+      run: "command -v hlint > /dev/null && hlint {staged_files} || echo 'hlint not found (run: nix develop)'"
+    shellcheck:
+      glob: "*.sh"
+      run: "command -v shellcheck > /dev/null && shellcheck {staged_files} || echo 'shellcheck not found (run: nix develop)'"
+    shfmt:
+      glob: "*.sh"
+      run: "command -v shfmt > /dev/null && shfmt -d {staged_files} || echo 'shfmt not found (run: nix develop)'"
+    cabal-check:
+      glob: "*.{hs,cabal}"
+      run: "cabal v2-build --ghc-options=-Werror 2>&1 && cabal v2-test 2>&1"
+    nix-check:
+      glob: "*.{hs,nix,cabal}"
+      run: "nix flake check --no-warn-dirty --allow-import-from-derivation 2>&1"
