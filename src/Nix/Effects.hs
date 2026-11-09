@@ -34,6 +34,7 @@ import System.Process
 
 import Data.Default.Class (def)
 import Data.Some.Newtype (Some (..))
+import qualified System.Nix.ContentAddress as Store.ContentAddress
 import qualified System.Nix.Hash as Store.Hash
 import qualified System.Nix.Nar as Store.Nar
 import qualified System.Nix.Store.Remote as Store.Remote
@@ -391,8 +392,8 @@ instance MonadStore IO where
             Right pathName -> do
                 let ingestionMethod =
                         if recursive
-                            then Store.Remote.FileIngestionMethod_FileRecursive
-                            else Store.Remote.FileIngestionMethod_Flat
+                            then Store.ContentAddress.ContentAddressMethod_NixArchive
+                            else Store.ContentAddress.ContentAddressMethod_Flat
                     repairMode =
                         if repair
                             then Store.Remote.RepairMode_DoRepair
@@ -406,6 +407,7 @@ instance MonadStore IO where
                             (toNarSource content)
                             ingestionMethod
                             hashAlgo
+                            mempty
                             repairMode
                 either
                     Left -- err
